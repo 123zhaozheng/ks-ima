@@ -14,7 +14,7 @@
       <q-toolbar-title>{{ workspace?.name }}</q-toolbar-title>
     </q-toolbar>
     <q-tabs
-      v-if="workspace?.member?.role === 'owner'"
+      v-if="workspace?.member?.role === 'owner' || workspace?.member?.role === 'admin'"
       active-color="primary"
       align="left"
       no-caps
@@ -24,16 +24,12 @@
         to="/workspace"
       />
       <q-route-tab
-        :label="t('Plans')"
-        to="/workspace/plans"
+        :label="t('Connectors')"
+        to="/workspace/connectors"
       />
       <q-route-tab
         :label="t('Logs')"
         to="/workspace/usage"
-      />
-      <q-route-tab
-        :label="t('Orders')"
-        to="/workspace/orders"
       />
     </q-tabs>
   </q-header>

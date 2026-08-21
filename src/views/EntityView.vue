@@ -11,20 +11,8 @@
     v-else-if="type === 'page'"
     :id
   />
-  <translation-view-wrapper
-    v-else-if="type === 'translation'"
-    :id
-  />
-  <channel-view-wrapper
-    v-else-if="type === 'channel'"
-    :id
-  />
   <item-view-wrapper
     v-else-if="type === 'item'"
-    :id
-  />
-  <plugin-view-wrapper
-    v-else-if="type === 'mcpPlugin'"
     :id
   />
   <provider-view-wrapper
@@ -48,10 +36,7 @@ import ChatViewWrapper from './ChatViewWrapper.vue'
 import SearchViewWrapper from './SearchViewWrapper.vue'
 import PageViewWrapper from './PageViewWrapper.vue'
 import DirView from './DirView.vue'
-import TranslationViewWrapper from './TranslationViewWrapper.vue'
-import ChannelViewWrapper from './ChannelViewWrapper.vue'
 import ItemViewWrapper from './ItemViewWrapper.vue'
-import PluginViewWrapper from './PluginViewWrapper.vue'
 import ProviderViewWrapper from './ProviderViewWrapper.vue'
 import AssistantViewWrapper from './AssistantViewWrapper.vue'
 

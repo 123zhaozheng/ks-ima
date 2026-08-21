@@ -140,4 +140,9 @@ export const relations = defineRelations(schema, r => ({
   entityAccess: {
     entity: r.one.entity({ from: r.entityAccess.entityId, to: r.entity.id }),
   },
+  connector: {
+    workspace: r.one.workspace({ from: r.connector.workspaceId, to: r.workspace.id }),
+    createdByUser: r.one.user({ from: r.connector.createdBy, to: r.user.id }),
+    folderRoot: r.one.entity({ from: r.connector.folderRootId, to: r.entity.id }),
+  },
 }))

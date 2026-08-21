@@ -405,6 +405,25 @@ export const entityAccess = pgTable('entityAccess', {
   index().on(t.userId, t.time.desc()),
 ])
 
+export const connector = pgTable('connector', {
+  id: id().primaryKey(),
+  workspaceId: id().notNull().references(() => workspace.id, { onDelete: 'cascade' }),
+  createdBy: text().notNull().references(() => user.id, { onDelete: 'cascade' }),
+  name: text().notNull(),
+  note: text(),
+  keyHash: text().notNull(),
+  keyPrefix: text().notNull(),
+  mode: text().notNull().$type<'read' | 'readwrite'>(),
+  folderRootId: id().references(() => entity.id, { onDelete: 'set null' }),
+  expiresAt: timestamp(),
+  revokedAt: timestamp(),
+  lastUsedAt: timestamp(),
+  createdAt: timestamp().notNull(),
+}, t => [
+  index().on(t.workspaceId),
+  index().on(t.keyHash),
+])
+
 export const globalSettings = pgTable('globalSettings', {
   id: text().primaryKey(),
   defaultChatModel: id().references(() => model.id, { onDelete: 'set null' }),

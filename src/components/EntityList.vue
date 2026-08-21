@@ -137,16 +137,15 @@
             />
             <template v-if="selectedOne">
               <menu-item
-                v-if="selectedOne.pubRoot"
-                :label="t('Manage Publication')"
-                icon="sym_o_publish"
-                to="/published"
+                v-if="selectedOne.type === 'folder'"
+                :label="t('Permissions')"
+                icon="sym_o_lock"
+                @click="editAcl(selectedOne)"
               />
               <menu-item
-                v-else
-                :label="t('Publish')"
-                icon="sym_o_publish"
-                @click="publish"
+                :label="t('Tags')"
+                icon="sym_o_label"
+                @click="editTags(selectedOne)"
               />
               <menu-item
                 :label="t('Properties')"
@@ -190,7 +189,7 @@ import { arrayToMap, displayLength, entityRoute, expandAncestors, spliceList } f
 import { computed, onUnmounted, reactive, ref, useTemplateRef, watch } from 'vue'
 import EntityItem from './EntityItem.vue'
 import { t } from 'src/utils/i18n'
-import { copyToClipboard, QList, QMenu, useQuasar } from 'quasar'
+import { QList, QMenu, useQuasar } from 'quasar'
 import MenuItem from './MenuItem.vue'
 import { mutators } from 'app/src-shared/mutators'
 import { useWorkspaceStore } from 'src/stores/workspace'
@@ -206,6 +205,8 @@ import { genId } from 'app/src-shared/utils/id'
 import { upload } from 'src/utils/blob-cache'
 import { generateChatTitle } from 'src/services/generate-chat-title'
 import { useEntityConf } from 'src/composables/entity-conf'
+import { useEntityAcl } from 'src/composables/acl'
+import FolderAclDialog from './FolderAclDialog.vue'
 
 const emit = defineEmits<{
   entityClick: [entity: FullEntity]
@@ -222,6 +223,7 @@ const selected = reactive(props.selected ?? new Set<string>())
 
 const dirId = defineModel<string>({ required: true })
 const workspaceStore = useWorkspaceStore()
+const { filterVisible } = useEntityAcl()
 const listOptions = ref<EntityListOptions>({
   type: null,
   hidden: false,
@@ -246,7 +248,9 @@ watch([dirId, listOptions], () => {
 })
 
 function spliceChildren(val: FullEntity[], options: SpliceListOptions) {
-  spliceList(children, val, [['sortPriority', 'desc'], listOptions.value.orderBy, ['id', 'asc']], options)
+  const hiddenTypes = new Set(['translation', 'channel', 'mcpPlugin'])
+  const cleaned = filterVisible(val).filter(e => !hiddenTypes.has(e.type) && !['$translations', '$channels', '$mcpPlugins'].includes(e.name ?? ''))
+  spliceList(children, cleaned, [['sortPriority', 'desc'], listOptions.value.orderBy, ['id', 'asc']], options)
 }
 watch(() => dir.value?.children, val => {
   val && spliceChildren(val, { noMore: val.length < 40 })
@@ -407,28 +411,28 @@ function moveSelected() {
     }))
   })
 }
-function publish() {
-  const entity = selectedOne.value!
+function editAcl(entity: FullEntity) {
   $q.dialog({
-    title: t('Publish'),
-    message: t('After publishing it, "{0}" and all its sub-items will be publicly visible.', entityName(entity)),
+    component: FolderAclDialog,
+    componentProps: { entity },
+  })
+}
+function editTags(entity: FullEntity) {
+  const current = (entity.conf?.tags ?? []).join(', ')
+  $q.dialog({
+    title: t('Tags'),
+    prompt: {
+      model: current,
+      label: t('Comma-separated tags'),
+    },
     cancel: true,
-    ok: t('Publish'),
-  }).onOk(() => {
-    mutate(mutators.publishEntity(entity.id)).client.then(() => {
-      $q.notify({
-        message: t('Published'),
-        color: 'inv-sur',
-        textColor: 'inv-on-sur',
-        actions: [{
-          label: t('Copy Link'),
-          handler() {
-            copyToClipboard(`${location.origin}/${entity.type}/${entity.id}`)
-          },
-          textColor: 'inv-pri',
-        }],
-      })
-    })
+    ok: t('Save'),
+  }).onOk((value: string) => {
+    const tags = value.split(',').map(s => s.trim()).filter(Boolean)
+    mutate(mutators.updateEntityConf({
+      id: entity.id,
+      updates: { tags },
+    }))
   })
 }
 function editShortcut(id: string) {

@@ -88,57 +88,6 @@
           />
         </setting-item>
         <setting-item
-          :label="t('Translation model')"
-          :modified-in="state.translationModelId.modifiedIn"
-          @reset="reset('translationModelId')"
-        >
-          <model-select
-            :workspace-id="workspaceStore.id"
-            :model-value="state.translationModelId.value"
-            @update:model-value="update('translationModelId', $event)"
-            dense
-            filled
-          />
-        </setting-item>
-        <setting-item
-          :label="t('Translation primary language')"
-          :modified-in="state.translationPrimaryLanguage.modifiedIn"
-          @reset="reset('translationPrimaryLanguage')"
-        >
-          <autocomplete-input
-            :options="translationLanguageOptions"
-            :model-value="state.translationPrimaryLanguage.value"
-            @update:model-value="update('translationPrimaryLanguage', $event)"
-            dense
-            filled
-          />
-        </setting-item>
-        <setting-item
-          :label="t('Translation secondary language')"
-          :modified-in="state.translationSecondaryLanguage.modifiedIn"
-          @reset="reset('translationSecondaryLanguage')"
-        >
-          <autocomplete-input
-            :options="translationLanguageOptions"
-            :model-value="state.translationSecondaryLanguage.value"
-            @update:model-value="update('translationSecondaryLanguage', $event)"
-            dense
-            filled
-          />
-        </setting-item>
-        <setting-item
-          :label="t('Translation language options')"
-          :modified-in="state.translationSecondaryLanguage.modifiedIn"
-          @reset="reset('translationSecondaryLanguage')"
-        >
-          <list-input
-            :model-value="state.translationLanguageOptions.value"
-            @update:model-value="update('translationLanguageOptions', $event)"
-            new-value-mode="add-unique"
-            filled
-          />
-        </setting-item>
-        <setting-item
           :label="t('Search assistant prompt')"
           :modified-in="state.searchAssistantPrompt.modifiedIn"
           @reset="reset('searchAssistantPrompt')"
@@ -146,19 +95,6 @@
           <a-input
             :model-value="state.searchAssistantPrompt.value"
             @change="update('searchAssistantPrompt', $event)"
-            filled
-            autogrow
-            class="w-full"
-          />
-        </setting-item>
-        <setting-item
-          :label="t('Translation prompt')"
-          :modified-in="state.translationPrompt.modifiedIn"
-          @reset="reset('translationPrompt')"
-        >
-          <a-input
-            :model-value="state.translationPrompt.value"
-            @change="update('translationPrompt', $event)"
             filled
             autogrow
             class="w-full"
@@ -198,9 +134,6 @@ import CommonItem from 'src/components/CommonItem.vue'
 import { mutate } from 'src/utils/zero-session'
 import { mutators } from 'app/src-shared/mutators'
 import DenseItem from 'src/components/DenseItem.vue'
-import { translationLanguageOptions } from 'src/utils/values'
-import AutocompleteInput from 'src/components/AutocompleteInput.vue'
-import ListInput from 'src/components/ListInput.vue'
 import AInput from 'src/components/AInput'
 import CommonToolbar from 'src/components/CommonToolbar.vue'
 import ATip from 'src/components/ATip.vue'

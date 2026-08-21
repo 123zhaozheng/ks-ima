@@ -36,19 +36,9 @@
             to="/search"
           />
           <menu-item
-            :label="t('Page')"
+            :label="t('Note')"
             icon="sym_o_note_stack_add"
             @click="createEntity(rightDirStore.dirId!, 'page')"
-          />
-          <menu-item
-            :label="t('Translation')"
-            icon="sym_o_translate"
-            @click="createEntity(rightDirStore.dirId!, 'translation')"
-          />
-          <menu-item
-            :label="t('Channel')"
-            icon="sym_o_tag"
-            @click="createEntity(rightDirStore.dirId!, 'channel')"
           />
           <menu-item
             :label="t('Files')"
@@ -64,11 +54,6 @@
             :label="t('Assistant')"
             icon="sym_o_robot_2"
             @click="createEntity(rightDirStore.dirId!, 'assistant')"
-          />
-          <menu-item
-            :label="t('MCP')"
-            icon="sym_o_extension"
-            @click="createEntity(rightDirStore.dirId!, 'mcpPlugin')"
           />
           <menu-item
             :label="t('Provider')"
@@ -113,18 +98,8 @@ const mainBtnProps = computed<Partial<QBtnProps>>(() => {
     }
   } else if (type === 'page') {
     return {
-      label: t('New Page'),
+      label: t('New Note'),
       icon: 'sym_o_note_stack_add',
-    }
-  } else if (type === 'translation') {
-    return {
-      label: t('New Translation'),
-      icon: 'sym_o_add',
-    }
-  } else if (type === 'channel') {
-    return {
-      label: t('New Channel'),
-      icon: 'sym_o_add',
     }
   } else if (type === 'item') {
     return {
@@ -141,11 +116,6 @@ const mainBtnProps = computed<Partial<QBtnProps>>(() => {
     return {
       label: t('New Provider'),
       icon: 'sym_o_domain_add',
-    }
-  } else if (type === 'mcpPlugin') {
-    return {
-      label: t('MCP Plugin'),
-      icon: 'sym_o_add',
     }
   }
   return {

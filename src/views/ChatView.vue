@@ -235,7 +235,11 @@ const { data: assistant } = useQuery(() => conf.value.chatAssistantId ? queries.
 const modelId = computed(() => props.chat.modelId ?? assistant.value?.modelId ?? conf.value.chatModelId)
 const { data: model } = useQuery(() => modelId.value ? queries.fullModel(modelId.value) : null)
 
-const pluginIds = computed(() => props.chat.plugins ?? assistant.value?.plugins ?? [])
+const pluginIds = computed(() => {
+  const ids = props.chat.plugins ?? assistant.value?.plugins
+  if (ids && ids.length) return ids
+  return ['workspace', 'mermaid']
+})
 const { plugins, pluginsPrompt } = usePlugins(pluginIds)
 const activePluginCount = computed(() => Object.values(plugins.value).filter(({ status }) => status === 'ready').length)
 

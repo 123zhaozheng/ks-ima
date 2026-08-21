@@ -79,18 +79,6 @@
         </q-item-section>
       </q-item>
       <q-item
-        to="/published"
-        item-rd
-        min-h="40px"
-      >
-        <q-item-section avatar>
-          <q-icon name="sym_o_publish" />
-        </q-item-section>
-        <q-item-section>
-          {{ t('Published Items') }}
-        </q-item-section>
-      </q-item>
-      <q-item
         to="/trash"
         item-rd
         min-h="40px"

@@ -9,6 +9,7 @@ import { assertAuthorized, withMember, withRole, withWritable, workspaceContentT
 import { zeroToZod } from './utils/zero-to-zod'
 import { z } from 'zod'
 import { avatarSchema, entityTypeSchema, mcpTransportSchema, memberDataSchema, modelInputTypesSchema, promptRoleSchema, searchResultSchema, shortcutActionSchema, toolCallStatusSchema, workspaceRoleSchema } from './utils/validators'
+import { personalAcl } from './utils/acl'
 import { DEFAULT_PLAN_ID } from './utils/config'
 import { addMonths } from 'date-fns'
 
@@ -314,6 +315,7 @@ const createChat = defineMutator(
       parentId,
       name,
       avatar,
+      conf: { acl: personalAcl(ctx.userId) },
     })
     await tx.mutate.chat.insert({
       id,
@@ -352,7 +354,7 @@ const createAssistant = defineMutator(
       promptRole: 'system',
       contextNum: 10,
       streamSettings: {},
-      plugins: [],
+      plugins: ['workspace', 'mermaid'],
     })
   },
 )
@@ -1025,6 +1027,17 @@ const updateShortcut = defineMutator(
     await tx.mutate.shortcut.update({ id, ...updates })
   },
 )
+const updatePage = defineMutator(
+  z.object({
+    id: z.string(),
+    text: z.string(),
+  }),
+  async ({ tx, ctx, args: { id, text } }) => {
+    assertAuthorized(ctx.userId)
+    await requireWritable.page(tx, ctx, id)
+    await tx.mutate.page.update({ id, text })
+  },
+)
 const updateTranslation = defineMutator(
   updateSchema(tables.translation),
   async ({ tx, ctx, args: { id, ...updates } }) => {
@@ -1191,11 +1204,13 @@ const createWorkspace = defineMutator(
       ...folderProps,
       id: translationsFolderId,
       name: '$translations',
+      hidden: true,
     })
     await tx.mutate.entity.insert({
       ...folderProps,
       id: channelsFolderId,
       name: '$channels',
+      hidden: true,
     })
     await tx.mutate.entity.insert({
       ...folderProps,
@@ -1211,6 +1226,7 @@ const createWorkspace = defineMutator(
       ...folderProps,
       id: pluginsFolderId,
       name: '$mcpPlugins',
+      hidden: true,
     })
     await tx.mutate.entity.insert({
       ...folderProps,
@@ -1222,11 +1238,11 @@ const createWorkspace = defineMutator(
       chatShortcutId,
       searchShortcutId,
       pageShortcutId,
-      translationShortcutId,
-      channelShortcutId,
+      _translationShortcutId,
+      _channelShortcutId,
       fileShortcutId,
       assistantShortcutId,
-      pluginShortcutId,
+      _pluginShortcutId,
       providersShortcutId,
     ] = ids.slice(13, 22)
     await createShortcutBase(tx, id, null, {
@@ -1257,24 +1273,6 @@ const createWorkspace = defineMutator(
       action: 'openLast',
     })
     await createShortcutBase(tx, id, null, {
-      id: translationShortcutId,
-      parentId: shortcutsFolderId,
-      name: '$translations',
-      dirId: translationsFolderId,
-      avatar: typeAvatar('translation'),
-      type: 'translation',
-      action: 'createNew',
-    })
-    await createShortcutBase(tx, id, null, {
-      id: channelShortcutId,
-      parentId: shortcutsFolderId,
-      name: '$channels',
-      dirId: channelsFolderId,
-      avatar: typeAvatar('channel'),
-      type: 'channel',
-      action: 'openLast',
-    })
-    await createShortcutBase(tx, id, null, {
       id: fileShortcutId,
       parentId: shortcutsFolderId,
       name: '$files',
@@ -1290,15 +1288,6 @@ const createWorkspace = defineMutator(
       dirId: assistantsFolderId,
       avatar: typeAvatar('assistant'),
       type: 'assistant',
-      action: 'openLast',
-    })
-    await createShortcutBase(tx, id, null, {
-      id: pluginShortcutId,
-      parentId: shortcutsFolderId,
-      name: '$mcpPlugins',
-      dirId: pluginsFolderId,
-      avatar: typeAvatar('mcpPlugin'),
-      type: 'mcpPlugin',
       action: 'openLast',
     })
     await createShortcutBase(tx, id, null, {
@@ -1622,6 +1611,7 @@ export const mutators = defineMutators({
   createModels,
   createPage,
   createPagePatch,
+  updatePage,
   createTranslation,
   createChannel,
   createShortcut,

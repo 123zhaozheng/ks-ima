@@ -16,12 +16,6 @@ async function getDownloadUrl(id: string, userId?: string) {
       blobId: { isNotNull: true },
       OR: [
         ...userId ? [{ member: { userId } }] : [],
-        {
-          entity: {
-            pubRoot: { isNotNull: true },
-            workspace: true,
-          },
-        },
       ],
     },
     with: {

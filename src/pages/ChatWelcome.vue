@@ -55,13 +55,6 @@
             @click="addProvider"
             rd
           />
-          <common-item
-            :label="t('Add MCP servers')"
-            :caption="t('Connect to MCP servers to extend AI capabilities.')"
-            clickable
-            @click="addMcp"
-            rd
-          />
         </q-list>
       </q-card-section>
     </q-card>
@@ -88,10 +81,6 @@ const runShortcut = useRunShortcut()
 const activeEntitiesStore = useActiveEntitiesStore()
 function addProvider() {
   const shortcut = activeEntitiesStore.shortcuts.find(s => s.type === 'provider')
-  shortcut && runShortcut(shortcut)
-}
-function addMcp() {
-  const shortcut = activeEntitiesStore.shortcuts.find(s => s.type === 'mcpPlugin')
   shortcut && runShortcut(shortcut)
 }
 

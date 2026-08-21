@@ -7,7 +7,7 @@ import { useWorkspaceStore } from 'src/stores/workspace'
 const searchInputSchema = z.object({
   searches: z.array(z.object({
     q: z.string().describe('The search query'),
-    types: z.array(z.enum(['chat', 'channel', 'page', 'item'])).optional().describe('The types of content to search. If omitted, searches all types.'),
+    types: z.array(z.enum(['chat', 'page', 'item'])).optional().describe('Types to search: chat, page (notes), item (files).'),
     limit: z.int().min(1).max(100).default(15),
   })),
 })
@@ -15,14 +15,15 @@ const searchInputSchema = z.object({
 export const workspacePlugin: BuiltinPluginManifest = {
   id: 'workspace',
   type: 'builtin',
-  name: t('Workspace Search'),
+  name: t('Knowledge Search'),
   avatar: { type: 'icon', icon: 'sym_o_manage_search', hue: 135 },
-  description: t('Enable AI to search inside the current workspace (chats, channels, pages, and files).'),
+  description: t('Search notes and files in the current knowledge base. Always cite sources.'),
+  prompt: `You are a knowledge-base librarian. Use the search tool before answering internal facts. If nothing is found, say the knowledge base does not contain it. Cite titles of notes/files you used.`,
   tools: [
     {
       name: 'search',
       inputSchema: z.toJSONSchema(searchInputSchema) as any,
-      description: 'Search content in the user\'s current workspace. Can search multiple queries simultaneously. Valid types are "chat" (user conversations with AI), "channel" (workspace member group chats), "page" (collaborative documents/notes), and "item" (files and text attachments). By default, it searches all types.',
+      description: 'Search notes (page) and files (item) in the current workspace. Default searches notes and files.',
       async execute({ searches }: z.infer<typeof searchInputSchema>) {
         const workspaceStore = useWorkspaceStore()
         if (!workspaceStore.id) {
@@ -33,7 +34,9 @@ export const workspacePlugin: BuiltinPluginManifest = {
           const result = await client.api.search.$post({
             json: {
               workspaceId: workspaceStore.id!,
-              ...args,
+              types: args.types ?? ['page', 'item'],
+              q: args.q,
+              limit: args.limit,
             },
           })
           const results = await result.json()

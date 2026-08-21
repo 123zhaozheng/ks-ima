@@ -32,7 +32,7 @@
           <dense-item
             :avatar="typeAvatar('search')"
             :label="t('Search')"
-            :caption="t('Search the web with AI')"
+            :caption="t('Search the knowledge base')"
             clickable
             @click="goto('search')"
             rd
@@ -40,8 +40,8 @@
           />
           <dense-item
             :avatar="typeAvatar('page')"
-            :label="t('Pages')"
-            :caption="t('Take notes & collaborate')"
+            :label="t('Notes')"
+            :caption="t('Write Markdown notes in the directory')"
             clickable
             @click="goto('page')"
             rd

@@ -17,12 +17,9 @@ const options = [
   { label: t('All'), value: null },
   { label: t('Chat'), value: 'chat' },
   { label: t('Search'), value: 'search' },
-  { label: t('Page'), value: 'page' },
-  { label: t('Channel'), value: 'channel' },
-  { label: t('Translation'), value: 'translation' },
+  { label: t('Note'), value: 'page' },
   { label: t('File'), value: 'item' },
   { label: t('Assistant'), value: 'assistant' },
-  { label: t('MCP Plugin'), value: 'mcpPlugin' },
   { label: t('Provider'), value: 'provider' },
   { label: t('Folder'), value: 'folder' },
 ]

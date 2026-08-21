@@ -43,12 +43,7 @@ export function withReadable<Q extends Query<WorkspaceContentTable, DefaultSchem
     ...userId
       ? [exists('member', q => q.where('userId', userId))]
       : [],
-    exists('entity', q => q
-      .where(({ or, and, cmp, exists }) => or(
-        and(cmp('pubRoot', 'IS NOT', null), exists('workspace')), // ensure it is not in the trash
-        cmp('id', PUBLIC_ROOT_ID),
-      )),
-    ),
+    exists('entity', q => q.where('id', PUBLIC_ROOT_ID)),
   )) as Q
 }
 export function withWritable<Q extends Query<WorkspaceContentTable, DefaultSchema, any>>(q: Q, userId: string) {

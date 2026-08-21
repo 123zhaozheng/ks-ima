@@ -6,7 +6,6 @@ import router from 'src/router'
 import { Dialog } from 'quasar'
 import { t } from './i18n'
 import { providerTypes } from './values'
-import CreateMcpDialog from 'src/components/CreateMcpDialog.vue'
 import CreateShortcutDialog from 'src/components/CreateShortcutDialog.vue'
 
 export async function createEntity(parentId: string, type: EntityType) {
@@ -24,21 +23,6 @@ export async function createEntity(parentId: string, type: EntityType) {
       parentId,
     })).client
     router.push(`/page/${id}`)
-  } else if (type === 'translation') {
-    const id = genId()
-    await mutate(mutators.createTranslation({
-      id,
-      parentId,
-    })).client
-    router.push(`/translation/${id}`)
-  } else if (type === 'channel') {
-    const id = genId()
-    await mutate(mutators.createChannel({
-      id,
-      parentId,
-      draftMessageId: genId(),
-    })).client
-    router.push(`/channel/${id}`)
   } else if (type === 'provider') {
     const defaultType = 'openaiCompatible'
     const id = genId()
@@ -59,20 +43,6 @@ export async function createEntity(parentId: string, type: EntityType) {
       parentId,
     })).client
     router.push(`/assistant/${id}`)
-  } else if (type === 'mcpPlugin') {
-    Dialog.create({
-      component: CreateMcpDialog,
-    }).onOk(({ name, url }) => {
-      mutate(mutators.createMcpPlugin({
-        id: genId(),
-        name,
-        parentId,
-        transport: {
-          type: 'http',
-          url,
-        },
-      }))
-    })
   } else if (type === 'shortcut') {
     Dialog.create({
       component: CreateShortcutDialog,

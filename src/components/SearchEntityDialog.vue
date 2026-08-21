@@ -33,9 +33,7 @@
           multiple
           :options="[
             { label: t('Chat'), value: 'chat' },
-            { label: t('Page'), value: 'page' },
-            { label: t('Channel'), value: 'channel' },
-            { label: t('Translation'), value: 'translation' },
+            { label: t('Note'), value: 'page' },
             { label: t('File'), value: 'item' },
           ]"
           map-options

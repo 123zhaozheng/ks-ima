@@ -40,17 +40,6 @@
         </q-item-section>
       </q-item>
       <q-item
-        to="/plan-prices"
-        item-rd
-      >
-        <q-item-section avatar>
-          <q-icon name="sym_o_attach_money" />
-        </q-item-section>
-        <q-item-section>
-          {{ t('Plan Prices') }}
-        </q-item-section>
-      </q-item>
-      <q-item
         to="/models"
         item-rd
       >

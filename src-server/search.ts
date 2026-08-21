@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { auth } from './auth/auth'
 import { db } from './utils/db'
 import { entity, item, message, page, translationRecord } from './schema'
+import { actorFromSession, can } from './utils/permissions'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { entityTypeSchema } from '../src-shared/utils/validators'
 import { unionAll } from 'drizzle-orm/pg-core'
@@ -180,19 +181,24 @@ const app = new Hono().post('/',
       .limit(limit)
 
     const results = await finalQuery
-    return c.json(results.map(r => {
+    const actor = await actorFromSession(session.user.id, workspaceId)
+    if (!actor) return c.json({ error: 'Workspace not found' }, 400)
+    const filtered = []
+    for (const r of results) {
+      if (!(await can(actor, r.entityId, 'view'))) continue
       const words = new Set<string>()
       r.highlighted?.matchAll(/<mark>(.*?)<\/mark>/gi).forEach(m => words.add(m[1]))
-      return {
+      filtered.push({
         id: r.id,
         entityId: r.entityId,
-        type: r.type,
+        type: r.type === 'page' ? 'page' : r.type,
         name: r.name,
         content: r.content,
         words: Array.from(words),
         rank: r.rank,
-      }
-    }) as SearchResult[])
+      })
+    }
+    return c.json(filtered as SearchResult[])
   },
 )
 

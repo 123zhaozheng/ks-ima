@@ -7,12 +7,12 @@
     >
       <q-card-section>
         <div class="text-h6">
-          {{ t('Pages: Notes & Collaborative Documents') }}
+          {{ t('Notes') }}
         </div>
       </q-card-section>
       <q-card-section>
         <div>
-          {{ t('Pages can be used for personal notes, team collaboration documents, and more.') }}
+          {{ t('Lightweight Markdown notes stored in the knowledge directory. Ask Copilot with citations, or expose them to other agents via connectors.') }}
         </div>
         <div mt-2>
           {{ t('Features:') }}
@@ -20,26 +20,11 @@
             pl-4
             my-2
           >
-            <li>{{ t('Full Markdown support') }}</li>
-            <li>{{ t('Import from / export as .docx file') }}</li>
-            <li>{{ t('Version control: Browse/revert to historical versions at any time.') }}</li>
-            <li>{{ t('Publishing pages to the public internet') }}</li>
+            <li>{{ t('Markdown editing with autosave') }}</li>
+            <li>{{ t('Folders and tags') }}</li>
+            <li>{{ t('Full-text search and knowledge Q&A') }}</li>
           </ul>
         </div>
-        <div v-html="hint" />
-      </q-card-section>
-      <q-card-section p-0>
-        <q-list>
-          <q-item-label header>
-            {{ t('Further') }}
-          </q-item-label>
-          <common-item
-            :label="t('Invite members')"
-            :caption="t('Invite your team to this workspace for collaboration.')"
-            to="/workspace"
-            rd
-          />
-        </q-list>
       </q-card-section>
     </q-card>
   </welcome-wrapper>
@@ -47,8 +32,5 @@
 
 <script setup lang="ts">
 import WelcomeWrapper from './WelcomeWrapper.vue'
-import CommonItem from 'src/components/CommonItem.vue'
 import { t } from 'src/utils/i18n'
-
-const hint = t('Click <strong>"New Page"</strong> in the right sidebar to create a page.')
 </script>

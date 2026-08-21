@@ -19,26 +19,20 @@ export function entityName(entity: PartialEntity | null | undefined) {
   if (!entity) return ''
   if (entity.name === '$chat') return t('Chat')
   if (entity.name === '$search') return t('Search')
-  if (entity.name === '$pages') return t('Pages')
-  if (entity.name === '$channels') return t('Channels')
-  if (entity.name === '$translations') return t('Translations')
+  if (entity.name === '$pages') return t('Notes')
   if (entity.name === '$files') return t('Files')
   if (entity.name === '$assistants') return t('Assistants')
-  if (entity.name === '$mcpPlugins') return t('MCP Plugins')
   if (entity.name === '$providers') return t('Providers')
   if (entity.name === '$shortcuts') return t('Shortcuts')
   if (entity.name === '$defaultAssistant') return t('Default Assistant')
 
   if (entity.name) return entity.name
   if (entity.type === 'folder') return t('New folder')
-  if (entity.type === 'channel') return t('New channel')
   if (entity.type === 'search') return t('New search')
   if (entity.type === 'chat') return t('New chat')
-  if (entity.type === 'page') return t('New page')
-  if (entity.type === 'translation') return t('New translation')
+  if (entity.type === 'page') return t('New note')
   if (entity.type === 'provider') return t('New provider')
   if (entity.type === 'assistant') return t('New assistant')
-  if (entity.type === 'mcpPlugin') return t('MCP Plugin')
   if (entity.type === 'item') return t('New item')
   return ''
 }

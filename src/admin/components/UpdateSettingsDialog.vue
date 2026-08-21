@@ -26,13 +26,6 @@
               dense
             />
           </common-item>
-          <common-item :label="t('Default translation model')">
-            <model-select
-              :model-value="value.defaultTranslationModel"
-              @update:model-value="updates.defaultTranslationModel = $event"
-              dense
-            />
-          </common-item>
           <common-item :label="t('Default search chat model')">
             <model-select
               :model-value="value.defaultSearchChatModel"
@@ -76,18 +69,6 @@
               multiple
               dense
               class="min-w-100px"
-            />
-          </common-item>
-          <common-item
-            :label="t('Search Engines')"
-            :caption="t('The search engines used when using SearXNG; separated by commas')"
-          >
-            <q-input
-              :model-value="value.searchEngines"
-              @update:model-value="updates.searchEngines = $event"
-              dense
-              min-w-100px
-              field-sizing-content
             />
           </common-item>
           <common-item :label="t('TOS Link')">

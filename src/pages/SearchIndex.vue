@@ -40,7 +40,7 @@
           v-model="q"
           autofocus
           enterkeyhint="search"
-          :placeholder="t('Search the web...')"
+          :placeholder="t('Search notes and files…')"
         />
       </form>
       <div h="100px" />

@@ -1,1 +1,7 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/index.md", "reason": "Discover active backend database, error, logging, quality, foundation, and identity contracts before implementation."}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "Preserve import-safe FastAPI, explicit Alembic, PostgreSQL, OpenAPI, deployment, and forced-integration-test contracts."}
+{"file": ".trellis/spec/backend/identity-platform-contracts.md", "reason": "Reuse local session/CSRF/audit/platform-role boundaries and preserve the rule that platform roles never imply content access."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Discover active Vue quality, type, generated client, and identity UI conventions."}
+{"file": ".trellis/spec/frontend/openapi-client-contracts.md", "reason": "Extend the single generated OpenAPI client and Vue Query boundary without duplicate DTOs or transports."}
+{"file": ".trellis/spec/frontend/identity-admin-contracts.md", "reason": "Preserve the verified session store, CSRF client, role-aware UX, component test, and Playwright conventions."}
+{"file": ".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md", "reason": "Use the repository-backed legacy workspace, Zero, folder ACL, search/RAG, schema, and deployment inventory."}

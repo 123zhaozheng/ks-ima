@@ -1,1 +1,11 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify migrations, schemas, constraints, transaction/locking boundaries, indexes, and legacy isolation."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify non-discovering authorization failures and all new public failures use safe Problem Details."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify invitation material, hidden names/paths, content, secrets, and sensitive ACL data never enter logs or audit."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify Ruff, mypy, tests, import safety, no placeholders, and no unowned duplicate policy implementation."}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "Verify Alembic, PostgreSQL, OpenAPI, Caddy/Compose, and zero-skip integration gates remain intact."}
+{"file": ".trellis/spec/backend/identity-platform-contracts.md", "reason": "Verify account/session lifecycle, CSRF, recent auth, audit, and platform/content separation under workspace mutations."}
+{"file": ".trellis/spec/frontend/openapi-client-contracts.md", "reason": "Verify generated DTO/client drift, Vue Query state, cancellation, and exact Python routing."}
+{"file": ".trellis/spec/frontend/identity-admin-contracts.md", "reason": "Verify capability-aware workspace UI and real component/Playwright coverage without treating hidden controls as authorization proof."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify frontend quality checks, complete user states, production builds, and no duplicate product state or clients."}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Verify generated types remain authoritative and components do not introduce broad casts or handwritten DTOs."}
+{"file": ".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md", "reason": "Check CodeGraph-identified legacy search/RAG/Zero consumers, migration equivalence, and complete residue ownership."}

@@ -3,7 +3,7 @@
   "name": "workspace-authorization-core",
   "title": "Workspace authorization core",
   "description": "Implement centrally governed workspaces, memberships, groups, folder hierarchy, canonical ACL policy evaluation, and audit foundations.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

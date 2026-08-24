@@ -49,3 +49,25 @@ Made Python the browser identity authority; added local sessions, TOTP/recovery,
 ### Status
 
 [OK] **Completed**
+
+
+## Session 3: Workspace authorization core
+
+**Date**: 2026-08-25
+**Task**: Workspace authorization core
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Implemented Python-owned workspaces, memberships, groups, folder hierarchy, normalized ACLs, canonical set-based policy SQL, resumable legacy authorization migration, fail-closed Bun coexistence, generated Vue administration, and exhaustive PostgreSQL/browser gates; captured executable backend/frontend contracts and archived the child task.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6b76756` | (see git log) |
+| `29ee52d` | (see git log) |
+
+### Status
+
+[OK] **Completed**

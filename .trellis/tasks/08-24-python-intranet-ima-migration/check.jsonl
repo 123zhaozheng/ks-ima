@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Discover all backend specifications relevant to each implementation slice."}
+{"file": ".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md", "reason": "Compare implementation and deletion results against the verified current-state inventory."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend completeness, maintainability, and UI-state review."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Discover all frontend specifications relevant to the migrated Vue slice."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify stable safe errors across REST, SSE, OAuth, jobs, and MCP."}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Verify generated API contracts replace duplicated or loosely cast frontend payloads."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Trace and verify authorization/data behavior across every transport and storage boundary."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Find duplicate implementations, expired shims, dead code, and legacy dependencies before acceptance."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality and forbidden-pattern checks for Python API, workers, migrations, and tests."}
+{"file": ".trellis/tasks/08-24-python-intranet-ima-migration/research/mcp-oauth-auth.md", "reason": "Check standards compliance and the full MCP OAuth/service-principal security matrix."}

@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend guideline index for the Python API, worker, database, security, and operations migration."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "The migration spans API, SSE, OAuth, MCP, policy, database, worker, storage, and Vue contracts."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend guideline index for retaining Vue 3 while replacing Zero and redesigning server-state flows."}
+{"file": ".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md", "reason": "Evidence-backed inventory of the current architecture, recent intranet changes, reusable behavior, coupling, and risks."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Transport adapters must reuse application and policy services, and every replacement needs a residue search."}
+{"file": ".trellis/tasks/08-24-python-intranet-ima-migration/research/mcp-oauth-auth.md", "reason": "Standards research and exact OAuth/MCP discovery, PKCE, token, client, redirect, scope, service-principal, and test requirements."}

@@ -1,1 +1,9 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "Verify foundation settings, migrations, health, containers, and no startup side effects remain correct."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify isolated identity tables, transactions, locks, migrations, and legacy projection safety."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify safe Problem Details and non-enumerating auth failures."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify recursive redaction and safe auth/audit telemetry."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify Python quality, tests, no placeholders, and no duplicate implementations."}
+{"file": ".trellis/spec/frontend/openapi-client-contracts.md", "reason": "Verify generated identity DTOs, central client, auth store, and complete Vue states."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify account/admin UX and production builds."}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Verify Better Auth types are removed and Python generated contracts are authoritative."}
+{"file": ".trellis/tasks/08-24-local-identity-platform-admin/research/identity-bridge.md", "reason": "Check PHC/TOTP migration evidence, session bridge, role invariants, deletion gate, and security matrix."}

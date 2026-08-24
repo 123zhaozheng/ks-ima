@@ -1,1 +1,6 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/index.md", "reason": "Discover backend database, error, logging, quality, and identity-relevant conventions."}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "Preserve the verified Python API, settings, migration, queue, and deployment foundation."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Discover Vue component, state, quality, and type-safety conventions."}
+{"file": ".trellis/spec/frontend/openapi-client-contracts.md", "reason": "Extend generated OpenAPI/client/Vue Query boundaries without duplicating DTOs."}
+{"file": ".trellis/tasks/08-24-local-identity-platform-admin/research/identity-bridge.md", "reason": "Repository-backed local auth, migration, Bun/Zero bridge, security, deletion, and test research."}
+{"file": ".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md", "reason": "Current Bun/Zero/Better Auth topology and migration constraints."}

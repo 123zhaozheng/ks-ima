@@ -21,6 +21,7 @@ This directory contains guidelines for frontend development. Fill in each file w
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Active |
 | [Type Safety](./type-safety.md) | Type patterns, validation | Active |
 | [OpenAPI Client Contracts](./openapi-client-contracts.md) | Generated schema, runtime client, Vue Query, and cross-layer tests | Active |
+| [Identity And Administration](./identity-admin-contracts.md) | Generated identity client, role-aware UI, account security, and E2E | Active |
 
 ---
 

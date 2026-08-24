@@ -20,6 +20,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Active |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | Active |
 | [Python Foundation Contracts](./python-foundation-contracts.md) | Executable API, config, DB, queue, deployment, and test contracts | Active |
+| [Identity And Platform Contracts](./identity-platform-contracts.md) | Local identity, roles, migration, bridge, and security invariants | Active |
 
 ---
 

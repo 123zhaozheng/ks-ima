@@ -49,7 +49,7 @@ import { useDialogPluginComponent, useQuasar } from 'quasar'
 import { t } from 'src/utils/i18n'
 import { reactive, ref } from 'vue'
 import SetPasswordInputs from './SetPasswordInputs.vue'
-import { authClient } from 'src/utils/auth-client'
+import { identityClient } from 'src/utils/identity-client'
 
 defineEmits([
   ...useDialogPluginComponent.emits,
@@ -68,10 +68,9 @@ const loading = ref(false)
 const $q = useQuasar()
 async function update() {
   loading.value = true
-  const { error } = await authClient.changePassword({
+  const { error } = await identityClient.changePassword({
     currentPassword: password.old,
-    newPassword: password.new,
-    revokeOtherSessions: revokeOtherSessions.value,
+    password: password.new,
   })
   loading.value = false
   if (error) {

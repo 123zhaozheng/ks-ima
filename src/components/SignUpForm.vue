@@ -39,10 +39,9 @@
 <script setup lang="ts">
 import { useQuasar } from 'quasar'
 import { t } from 'src/utils/i18n'
-import { authClient } from 'src/utils/auth-client'
+import { identityClient } from 'src/utils/identity-client'
 import { reactive, ref, watch } from 'vue'
 import SetPasswordInputs from './SetPasswordInputs.vue'
-import VerifyEmailDialog from './VerifyEmailDialog.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { user } from 'src/utils/zero-session'
 import PolicyLinks from './PolicyLinks.vue'
@@ -62,12 +61,11 @@ function getRedirect() {
 }
 async function signUp() {
   loading.value = true
-  const { data, error } = await authClient.signUp.email(({
-    name: input.name,
+  const { error } = await identityClient.register({
+    displayName: input.name,
     email: input.email,
     password: input.password,
-    callbackURL: `${location.origin}/auth/email-verified`,
-  }))
+  })
   loading.value = false
   if (error) {
     console.error(error)
@@ -77,15 +75,8 @@ async function signUp() {
     })
     return
   }
-  if (!data.token) {
-    $q.dialog({
-      component: VerifyEmailDialog,
-      componentProps: {
-        email: input.email,
-        password: input.password,
-      },
-    })
-  }
+  $q.notify({ message: t('Account created. You can now sign in.'), color: 'positive' })
+  router.push('/auth/sign-in')
 }
 
 watch(() => user.id, id => {

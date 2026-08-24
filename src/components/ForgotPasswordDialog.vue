@@ -43,7 +43,7 @@
 
 <script setup lang="ts">
 import { useDialogPluginComponent, useQuasar } from 'quasar'
-import { authClient } from 'src/utils/auth-client'
+import { identityClient } from 'src/utils/identity-client'
 import { t } from 'src/utils/i18n'
 import { ref } from 'vue'
 
@@ -60,9 +60,8 @@ const loading = ref(false)
 async function send() {
   loading.value = true
 
-  const { error } = await authClient.requestPasswordReset({
+  const { error } = await identityClient.requestPasswordReset({
     email: email.value,
-    redirectTo: `${location.origin}/auth/reset-password`,
   })
   loading.value = false
   if (error) {

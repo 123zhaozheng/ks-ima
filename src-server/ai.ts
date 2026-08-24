@@ -9,7 +9,7 @@ import type { InferSelectModel } from 'drizzle-orm'
 import { eq, sql } from 'drizzle-orm'
 import { PUBLIC_ROOT_ID } from 'app/src-shared/utils/config'
 import { OPENAI_API_KEY, OPENAI_BASE_URL } from './utils/config'
-import { auth } from './auth/auth'
+import { getSession } from './auth/session'
 import { checkRateLimit } from './utils/rate-limiter'
 import { genId } from 'app/src-shared/utils/id'
 import { getGlobalSettings } from './utils/settings'
@@ -78,7 +78,7 @@ app.post('/chat/completions',
     messages: messagesSchema,
   })),
   async (c) => {
-    const session = await auth.api.getSession({ headers: c.req.header() })
+    const session = await getSession(c.req.raw.headers)
     if (!session) return c.json({ error: 'Unauthorized' }, 401)
 
     const body = c.req.valid('json')

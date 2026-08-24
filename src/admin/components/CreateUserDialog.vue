@@ -29,13 +29,7 @@
             <q-input
               v-model="model.password"
               type="password"
-              dense
-            />
-          </common-item>
-          <common-item :label="t('Role')">
-            <q-select
-              v-model="model.role"
-              :options="['user', 'admin']"
+              :rules="[val => val.length >= 12 || t('Password must be at least 12 characters long')]"
               dense
             />
           </common-item>
@@ -53,6 +47,7 @@
           color="primary"
           :label="t('Create')"
           @click="createUser"
+          :disable="!model.name || !model.email || model.password.length < 12"
           :loading
         />
       </q-card-actions>
@@ -64,7 +59,7 @@
 import { useDialogPluginComponent, useQuasar } from 'quasar'
 import { t } from 'src/utils/i18n'
 import { reactive, ref } from 'vue'
-import { authClient } from 'src/utils/auth-client'
+import { identityClient } from 'src/utils/identity-client'
 import CommonItem from '../../components/CommonItem.vue'
 
 defineEmits([
@@ -75,25 +70,28 @@ const model = reactive({
   name: '',
   email: '',
   password: '',
-  role: 'user' as 'user' | 'admin',
 })
 
 const { dialogRef, onDialogHide, onDialogOK, onDialogCancel } = useDialogPluginComponent()
 
 const loading = ref(false)
 const $q = useQuasar()
-function createUser() {
+async function createUser() {
   loading.value = true
-  authClient.admin.createUser(model).then(() => {
+  const result = await identityClient.createUser({
+    email: model.email,
+    displayName: model.name,
+    temporaryPassword: model.password,
+    sendInvite: false,
+  })
+  if (!result.error) {
     onDialogOK()
-  }).catch(err => {
-    console.error(err)
+  } else {
     $q.notify({
-      message: t('Failed to create user: {0}', err.message),
+      message: t('Failed to create user: {0}', result.error.message),
       color: 'negative',
     })
-  }).finally(() => {
-    loading.value = false
-  })
+  }
+  loading.value = false
 }
 </script>

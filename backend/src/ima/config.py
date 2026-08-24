@@ -8,7 +8,7 @@ from ipaddress import ip_network
 from typing import Annotated, Literal
 from urllib.parse import urlparse
 
-from pydantic import SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -35,6 +35,25 @@ class Settings(BaseSettings):
     worker_lag_warning_seconds: int = 120
     diagnostic_queue: str = "diagnostic"
     worker_name: str = "diagnostic-worker"
+    session_cookie_name: str = "ima_session"
+    csrf_cookie_name: str = "ima_csrf"
+    session_pepper: SecretStr = SecretStr("development-session-pepper-change-me")
+    token_pepper: SecretStr = SecretStr("development-token-pepper-change-me")
+    totp_encryption_key: SecretStr = SecretStr("development-totp-key-change-me-32bytes!")
+    bridge_token: SecretStr = SecretStr("development-bridge-token-change-me")
+    python_api_internal_url: str = "http://api:8000"
+    bridge_timeout_ms: int = 1500
+    session_idle_seconds: int = 86400
+    session_absolute_seconds: int = 2592000
+    recent_auth_seconds: int = 900
+    login_window_seconds: int = 300
+    login_max_attempts: int = 10
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = Field(default=None, repr=False)
+    smtp_from: str | None = None
+    allow_registration: bool = False
 
     @field_validator("public_origin")
     @classmethod
@@ -108,6 +127,14 @@ class Settings(BaseSettings):
                 raise ValueError("production requires explicit CORS origins")
             if self.database_url.get_secret_value().endswith("postgres:pass@localhost:5432/app"):
                 raise ValueError("production cannot use the development database credential")
+            for key, value in {
+                "session_pepper": self.session_pepper,
+                "token_pepper": self.token_pepper,
+                "totp_encryption_key": self.totp_encryption_key,
+                "bridge_token": self.bridge_token,
+            }.items():
+                if "change-me" in value.get_secret_value() or len(value.get_secret_value()) < 32:
+                    raise ValueError(f"production requires a high-entropy {key}")
         return self
 
     @property

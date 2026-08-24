@@ -17,8 +17,19 @@
 		reverse_proxy {$PYTHON_API_URL}
 	}
 
+	@ima_identity path /api/v1/auth/* /api/v1/account/* /api/v1/admin/*
+	handle @ima_identity {
+		reverse_proxy {$PYTHON_API_URL}
+	}
+
+	# The Python bridge is private Bun-to-API traffic, never a browser route.
+	@ima_internal_forbidden path /api/v1/internal/*
+	handle @ima_internal_forbidden {
+		respond "Not Found" 404
+	}
+
 	@forbidden {
-		path /api/admin* /api/auth/admin* /api/zero*
+		path /api/admin* /api/zero*
 	}
 	handle @forbidden {
 		respond "Forbidden" 403
@@ -52,6 +63,16 @@
 	@ima_system path /api/v1/system/*
 	handle @ima_system {
 		reverse_proxy {$PYTHON_API_URL}
+	}
+
+	@ima_identity path /api/v1/auth/* /api/v1/account/* /api/v1/admin/*
+	handle @ima_identity {
+		reverse_proxy {$PYTHON_API_URL}
+	}
+
+	@ima_internal_forbidden path /api/v1/internal/*
+	handle @ima_internal_forbidden {
+		respond "Not Found" 404
 	}
 
 	handle /api/zero* {

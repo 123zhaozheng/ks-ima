@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: nyaai-db:foundation
+    shm_size: 1g
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: identity-gate-password
+      POSTGRES_DB: app
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - identity-gate-data:/var/lib/postgresql
+
+volumes:
+  identity-gate-data:

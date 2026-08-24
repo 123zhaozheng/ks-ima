@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { auth } from './auth/auth'
+import { getSession } from './auth/session'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { db } from './utils/db'
@@ -44,7 +44,7 @@ const app = new Hono()
     'sha-256-proof': z.base64(),
   })), async c => {
     const id = c.req.param('id')
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    const session = await getSession(c.req.raw.headers)
     const req = c.req.raw
     if (!session) return c.json({ error: 'Unauthorized' }, 401)
     const { 'content-length': contentLength, 'sha-256': sha256, 'sha-256-proof': sha256Proof } = c.req.valid('header')
@@ -145,7 +145,7 @@ const app = new Hono()
   .get('/items/:id', async c => {
     const id = c.req.param('id')
 
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    const session = await getSession(c.req.raw.headers)
     if (!session) return c.json({ error: 'Unauthorized' }, 401)
     const res = await getDownloadUrl(id, session?.user.id)
     if (!res) return c.json({ error: 'Not found' }, 404)
@@ -153,7 +153,7 @@ const app = new Hono()
   })
   .get('/items/:id/url', async c => {
     const id = c.req.param('id')
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    const session = await getSession(c.req.raw.headers)
     if (!session) return c.json({ error: 'Unauthorized' }, 401)
 
     const res = await getDownloadUrl(id, session.user.id)

@@ -5,79 +5,114 @@
         flex
         gap-2
       >
-        <a-input
-          v-model="query.ownerId"
-          :label="t('Owner ID')"
-          :debounce="200"
+        <q-input
+          v-model="search"
           dense
-          clearable
+          outlined
+          label="Search workspaces"
         />
-        <plan-select
-          v-model="query.planId"
-          :label="t('Plan')"
-          dense
-          clearable
-          class="w-120px"
+        <template v-if="canManage">
+          <q-input
+            v-model="newName"
+            dense
+            outlined
+            label="New workspace"
+          />
+          <q-btn
+            icon="add"
+            flat
+            :disable="!newName"
+            @click="create"
+          />
+        </template>
+        <q-btn
+          icon="refresh"
+          flat
+          @click="load"
         />
       </div>
+      <q-banner
+        v-if="error"
+        bg-err-c
+        text-on-err-c
+      >
+        {{ error }} <q-btn
+          icon="refresh"
+          flat
+          @click="load"
+        />
+      </q-banner>
       <q-table
-        :rows
-        :columns
-        table-class="cursor-pointer"
-        hide-bottom
-        :pagination="{ rowsPerPage: Infinity }"
-        @row-click="(event, row) => updateWorkspace(row)"
-        binary-state-sort
+        :rows="rows"
+        :columns="columns"
         row-key="id"
         flat
-        bg-sur-c-low
         mt-4
-      />
+        :loading="loading"
+      >
+        <template #body-cell-actions="props">
+          <q-td v-if="canManage">
+            <q-btn
+              v-if="props.row.isActive"
+              icon="archive"
+              flat
+              @click="archive(props.row.id)"
+            />
+            <q-btn
+              v-else
+              icon="restore"
+              flat
+              @click="restore(props.row.id)"
+            />
+            <q-btn
+              icon="delete"
+              flat
+              @click="remove(props.row.id)"
+            />
+          </q-td>
+        </template>
+      </q-table>
     </q-page>
   </q-page-container>
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import type { QTableColumn } from 'quasar'
-import { useQuasar } from 'quasar'
-import { t } from 'src/utils/i18n'
-import { useQuery } from 'src/composables/zero/query'
-import { queries } from 'app/src-shared/queries'
-import type { Row } from '@rocicorp/zero'
-import UpdateWorkspaceDialog from '../components/UpdateWorkspaceDialog.vue'
-import { idDateString } from 'app/src-shared/utils/id'
-import { formatBytes } from 'src/utils/functions'
-import { reactive } from 'vue'
-import { useRoute } from 'vue-router'
-import AInput from 'src/components/AInput'
-import PlanSelect from '../components/PlanSelect.vue'
+import type { components } from 'src/api/generated/schema'
+import { identityClient, session } from 'src/utils/identity-client'
 
+type Workspace = components['schemas']['WorkspaceInfo']
+const rows = ref<Workspace[]>([])
+const search = ref('')
+const newName = ref('')
+const loading = ref(false)
+const error = ref('')
+const canManage = computed(() => session.value.data?.user.platformRoles?.some(role => role === 'super_admin' || role === 'platform_admin') ?? false)
 const columns: QTableColumn[] = [
-  { name: 'name', label: t('Name'), field: 'name', align: 'left' },
-  { name: 'ownerId', label: t('Owner ID'), field: 'ownerId' },
-  { name: 'plan', label: t('Plan'), field: 'plan', format: plan => plan?.name },
-  { name: 'quotaUsed', label: t('Quota Used'), field: 'quotaUsed', format: q => `$${q.toFixed(3)}` },
-  { name: 'storageUsed', label: t('Storage Used'), field: 'storageUsed', format: formatBytes },
-  { name: 'resetAt', label: t('Reset At'), field: 'resetAt', format: resetAt => new Date(resetAt).toLocaleString() },
-  { name: 'createdAt', label: t('Created At'), field: 'id', format: id => idDateString(id) },
+  { name: 'name', label: 'Name', field: 'name', align: 'left' },
+  { name: 'status', label: 'Status', field: row => row.isActive ? 'Active' : 'Archived' },
+  { name: 'created', label: 'Created', field: row => new Date(row.createdAt).toLocaleString() },
+  { name: 'actions', label: 'Actions', field: 'id' },
 ]
 
-const route = useRoute()
-const query = reactive({
-  ownerId: typeof route.query.ownerId === 'string' ? route.query.ownerId : null,
-  planId: null as string | null,
-})
-
-const { data: rows } = useQuery(() => queries.adminWorkspaces({ ...query }))
-
-const $q = useQuasar()
-
-function updateWorkspace(workspace: Row['workspace']) {
-  $q.dialog({
-    component: UpdateWorkspaceDialog,
-    componentProps: {
-      workspace,
-    },
-  })
+async function create() {
+  const result = await identityClient.createWorkspace({ name: newName.value })
+  if (result.error) { error.value = result.error.message; return }
+  newName.value = ''
+  await load()
 }
+async function archive(id: string) { const result = await identityClient.archiveWorkspace(id); if (result.error) error.value = result.error.message; else await load() }
+async function restore(id: string) { const result = await identityClient.restoreWorkspace(id); if (result.error) error.value = result.error.message; else await load() }
+async function remove(id: string) { const result = await identityClient.deleteWorkspace(id); if (result.error) error.value = result.error.message; else await load() }
+
+async function load() {
+  loading.value = true
+  error.value = ''
+  const result = await identityClient.listWorkspaces(search.value)
+  rows.value = result.data?.items ?? []
+  if (result.error) error.value = result.error.message
+  loading.value = false
+}
+load().catch(() => undefined)
 </script>

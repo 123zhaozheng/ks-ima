@@ -55,10 +55,10 @@
 
 import { useQuasar } from 'quasar'
 import { t } from 'src/utils/i18n'
-import { authClient, session } from 'src/utils/auth-client'
+import { identityClient, session } from 'src/utils/identity-client'
 import { reactive, ref, watch } from 'vue'
 import ForgotPasswordDialog from './ForgotPasswordDialog.vue'
-import VerifyEmailDialog from './VerifyEmailDialog.vue'
+import VerifyTotpDialog from './VerifyTotpDialog.vue'
 import { useRoute, useRouter } from 'vue-router'
 import PolicyLinks from './PolicyLinks.vue'
 
@@ -76,28 +76,25 @@ function getRedirect() {
 }
 async function signIn() {
   loading.value = true
-  const { error } = await authClient.signIn.email(({
+  const result = await identityClient.signIn({
     email: input.email,
     password: input.password,
-  }))
+  })
   loading.value = false
-  if (error) {
-    if (error.code === 'EMAIL_NOT_VERIFIED') {
-      $q.dialog({
-        component: VerifyEmailDialog,
-        componentProps: {
-          email: input.email,
-          password: input.password,
-        },
-        persistent: true,
-      })
-    } else {
-      console.error(error)
-      $q.notify({
-        message: t('Failed to sign in: {0}', error.message),
-        color: 'negative',
-      })
-    }
+  if (result.data?.status === 'totp_required' && result.data.challenge) {
+    $q.dialog({
+      component: VerifyTotpDialog,
+      componentProps: {
+        challenge: result.data.challenge,
+      },
+      persistent: true,
+    })
+  } else if (result.error) {
+    console.error(result.error)
+    $q.notify({
+      message: t('Failed to sign in: {0}', result.error.message),
+      color: 'negative',
+    })
   }
 }
 

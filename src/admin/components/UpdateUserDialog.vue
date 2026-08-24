@@ -25,16 +25,6 @@
               dense
             />
           </common-item>
-          <common-item :label="t('Email Verified')">
-            <q-toggle v-model="model.emailVerified" />
-          </common-item>
-          <common-item :label="t('Role')">
-            <q-select
-              v-model="model.role"
-              :options="['user', 'admin']"
-              dense
-            />
-          </common-item>
         </q-list>
       </q-card-section>
       <q-card-actions align="right">
@@ -60,10 +50,10 @@
 import { useDialogPluginComponent, useQuasar } from 'quasar'
 import { t } from 'src/utils/i18n'
 import { reactive, ref } from 'vue'
-import { authClient } from 'src/utils/auth-client'
-import type { UserWithRole } from 'better-auth/plugins'
-import { diff, pick } from 'app/src-shared/utils/functions'
 import CommonItem from '../../components/CommonItem.vue'
+import { identityClient } from 'src/utils/identity-client'
+
+type UserWithRole = { id: string, displayName: string, email: string }
 
 defineEmits([
   ...useDialogPluginComponent.emits,
@@ -73,27 +63,23 @@ const props = defineProps<{
   user: UserWithRole
 }>()
 
-const model = reactive(pick(props.user, ['name', 'email', 'emailVerified', 'role']))
+const model = reactive({ name: props.user.displayName, email: props.user.email })
 
 const { dialogRef, onDialogHide, onDialogOK, onDialogCancel } = useDialogPluginComponent()
 
 const loading = ref(false)
 const $q = useQuasar()
-function updateUser() {
+async function updateUser() {
   loading.value = true
-  authClient.admin.updateUser({
-    userId: props.user.id,
-    data: diff(props.user, model),
-  }).then(() => {
+  const result = await identityClient.updateUser(props.user.id, { displayName: model.name, email: model.email })
+  if (!result.error) {
     onDialogOK()
-  }).catch(err => {
-    console.error(err)
+  } else {
     $q.notify({
-      message: t('Failed to update user: {0}', err.message),
+      message: t('Failed to update user: {0}', result.error.message),
       color: 'negative',
     })
-  }).finally(() => {
-    loading.value = false
-  })
+  }
+  loading.value = false
 }
 </script>

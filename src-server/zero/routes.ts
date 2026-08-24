@@ -4,7 +4,7 @@ import {
   handleQueryRequest,
 } from '@rocicorp/zero/pg'
 import { schema } from 'app/src-shared/schema.gen'
-import { auth } from '../auth/auth'
+import { getSession } from '../auth/session'
 import { mustGetMutator, mustGetQuery } from '@rocicorp/zero'
 import { queries } from 'app/src-shared/queries'
 import { zdb } from './db'
@@ -13,11 +13,11 @@ import type { Context } from 'app/src-shared/utils/types'
 import { serverMutators } from './mutators'
 
 async function getCtx(headers: Headers): Promise<Context> {
-  const session = await auth.api.getSession({ headers })
+  const session = await getSession(headers)
   return {
     userId: session?.user.id,
     locale: getLocaleFromHeaders(headers),
-    isAdmin: session?.user.role === 'admin',
+    isAdmin: session?.user.platformRoles.some(role => role === 'super_admin' || role === 'platform_admin') ?? false,
   }
 }
 

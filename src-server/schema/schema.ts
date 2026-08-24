@@ -1,12 +1,12 @@
 import type { LanguageModelUsage } from 'ai'
 import type { OrderProvider, Payment, ToolResultItem } from 'app/src-shared/utils/types'
 import { bigint, boolean, foreignKey, index, integer, jsonb, pgTable, serial, text, timestamp, unique, varchar, doublePrecision, real, primaryKey, numeric, customType } from 'drizzle-orm/pg-core'
-import { user } from './auth.gen'
+import { user } from './legacy-user'
 import type { MessageType, Avatar, WorkspaceRole, EntityType, ShortcutAction, SearchResult, McpTransport, ToolCallStatus, ModelInputTypes, PlanInterval, PaymentProvider, PromptRole } from 'app/src-shared/utils/validators'
 import type { SQL } from 'drizzle-orm'
 import { sql } from 'drizzle-orm'
 
-export * from './auth.gen'
+export * from './legacy-user'
 
 const id = () => varchar({ length: 16 })
 

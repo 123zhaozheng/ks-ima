@@ -11,4 +11,7 @@ export const { SMTP_USER, SMTP_PASSWORD, SMTP_HOST, SMTP_FROM } = process.env
 export const SMTP_PORT = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : undefined
 export const SMTP_SECURE = process.env.SMTP_SECURE === 'true'
 export const SITE_NAME = process.env.SITE_NAME!
-export const REQUIRE_EMAIL_VERIFICATION = process.env.REQUIRE_EMAIL_VERIFICATION === 'true'
+export const REQUIRE_EMAIL_VERIFICATION = false
+export const PYTHON_API_INTERNAL_URL = process.env.PYTHON_API_INTERNAL_URL
+export const IMA_BRIDGE_TOKEN = process.env.IMA_BRIDGE_TOKEN
+export const IMA_BRIDGE_TIMEOUT_MS = process.env.IMA_BRIDGE_TIMEOUT_MS ? Number(process.env.IMA_BRIDGE_TIMEOUT_MS) : 1500

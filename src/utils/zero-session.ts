@@ -1,6 +1,6 @@
 import { Zero } from '@rocicorp/zero'
 import { schema } from 'app/src-shared/schema.gen'
-import { session } from 'src/utils/auth-client'
+import { session } from 'src/utils/identity-client'
 import { ref, watch } from 'vue'
 import { mutators } from 'app/src-shared/mutators'
 import { locale, t } from 'src/utils/i18n'

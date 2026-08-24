@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
-import { auth } from './auth/auth'
+import { getSession } from './auth/session'
 import { db } from './utils/db'
-import { user, model, workspace, globalSettings } from './schema'
+import { model, workspace, globalSettings } from './schema'
 import { and, eq } from 'drizzle-orm'
 import { zValidator } from '@hono/zod-validator'
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod'
@@ -21,21 +21,11 @@ const adminModelSchema = createInsertSchema(model).omit({
 export type AdminModel = z.infer<typeof adminModelSchema>
 
 const app = new Hono()
-  .post('/aquireRole', async c => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    if (!session) return c.json({ error: 'Unauthorized' }, 401)
-    const admin = await db.query.user.findFirst({
-      where: { role: 'admin' },
-    })
-    if (admin) return c.json({ error: 'Admin already exists' }, 400)
-    await db.update(user).set({ role: 'admin' }).where(eq(user.id, session.user.id))
-    return c.json({ message: 'Admin role acquired' })
-  })
   .post('/addModel',
     zValidator('json', adminModelSchema),
     async c => {
-      const session = await auth.api.getSession({ headers: c.req.raw.headers })
-      if (session?.user.role !== 'admin') return c.json({ error: 'Unauthorized' }, 401)
+      const session = await getSession(c.req.raw.headers)
+      if (!session || !session.user.platformRoles.some(role => role === 'super_admin' || role === 'platform_admin')) return c.json({ error: 'Unauthorized' }, 401)
       const props = c.req.valid('json')
       await db.insert(model).values({
         id: genId(),
@@ -49,8 +39,8 @@ const app = new Hono()
   .post('/updateModel',
     zValidator('json', adminModelSchema.partial().extend({ id: z.string() })),
     async c => {
-      const session = await auth.api.getSession({ headers: c.req.raw.headers })
-      if (session?.user.role !== 'admin') return c.json({ error: 'Unauthorized' }, 401)
+      const session = await getSession(c.req.raw.headers)
+      if (!session || !session.user.platformRoles.some(role => role === 'super_admin' || role === 'platform_admin')) return c.json({ error: 'Unauthorized' }, 401)
       const { id, ...updates } = c.req.valid('json')
       await db.update(model).set(updates).where(and(
         eq(model.id, id),
@@ -62,8 +52,8 @@ const app = new Hono()
   .post('/deleteModel',
     zValidator('json', z.object({ id: z.string() })),
     async c => {
-      const session = await auth.api.getSession({ headers: c.req.raw.headers })
-      if (session?.user.role !== 'admin') return c.json({ error: 'Unauthorized' }, 401)
+      const session = await getSession(c.req.raw.headers)
+      if (!session || !session.user.platformRoles.some(role => role === 'super_admin' || role === 'platform_admin')) return c.json({ error: 'Unauthorized' }, 401)
       const { id } = c.req.valid('json')
       await db.delete(model).where(and(
         eq(model.id, id),
@@ -79,8 +69,8 @@ const app = new Hono()
       planId: z.string().optional(),
     })),
     async c => {
-      const session = await auth.api.getSession({ headers: c.req.raw.headers })
-      if (session?.user.role !== 'admin') return c.json({ error: 'Unauthorized' }, 401)
+      const session = await getSession(c.req.raw.headers)
+      if (!session || !session.user.platformRoles.some(role => role === 'super_admin' || role === 'platform_admin')) return c.json({ error: 'Unauthorized' }, 401)
       const { id, ...updates } = c.req.valid('json')
       await db.update(workspace).set(updates).where(eq(workspace.id, id))
       return c.json({ message: 'Workspace updated' })
@@ -89,8 +79,8 @@ const app = new Hono()
   .post('/deleteWorkspace',
     zValidator('json', z.object({ id: z.string() })),
     async c => {
-      const session = await auth.api.getSession({ headers: c.req.raw.headers })
-      if (session?.user.role !== 'admin') return c.json({ error: 'Unauthorized' }, 401)
+      const session = await getSession(c.req.raw.headers)
+      if (!session || !session.user.platformRoles.some(role => role === 'super_admin' || role === 'platform_admin')) return c.json({ error: 'Unauthorized' }, 401)
       const { id } = c.req.valid('json')
       await db.delete(workspace).where(eq(workspace.id, id))
       return c.json({ message: 'Workspace deleted' })
@@ -101,8 +91,8 @@ const app = new Hono()
       .omit({ oauthProviders: true, searchEngines: true })
       .required({ id: true })),
     async c => {
-      const session = await auth.api.getSession({ headers: c.req.raw.headers })
-      if (session?.user.role !== 'admin') return c.json({ error: 'Unauthorized' }, 401)
+      const session = await getSession(c.req.raw.headers)
+      if (!session || !session.user.platformRoles.some(role => role === 'super_admin' || role === 'platform_admin')) return c.json({ error: 'Unauthorized' }, 401)
       const { id, ...updates } = c.req.valid('json')
       await db.update(globalSettings).set(updates).where(eq(globalSettings.id, id))
       return c.json({ message: 'Global settings updated' })

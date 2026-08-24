@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { auth } from './auth/auth'
+import { getSession } from './auth/session'
 import { actorFromApiKey, actorFromSession, can, type Actor } from './utils/permissions'
 import {
   kbAsk,
@@ -27,7 +27,7 @@ async function getActor(headers: Headers, workspaceId?: string): Promise<Actor |
   if (authz?.startsWith('Bearer ima_')) {
     return actorFromApiKey(authz.slice('Bearer '.length).trim(), workspaceId)
   }
-  const session = await auth.api.getSession({ headers })
+  const session = await getSession(headers)
   if (!session || !workspaceId) return null
   return actorFromSession(session.user.id, workspaceId)
 }

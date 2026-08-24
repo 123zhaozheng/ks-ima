@@ -2,74 +2,50 @@
   <q-dialog
     ref="dialogRef"
     @hide="onDialogHide"
-    no-refocus
   >
-    <q-card style="width: min(90vw, 500px)">
+    <q-card style="width: min(90vw, 520px)">
       <q-card-section>
         <div class="text-h6">
-          {{ t('Global Settings') }}
+          Platform security settings
         </div>
       </q-card-section>
-      <q-card-section p-0>
-        <q-list v-if="value">
-          <common-item :label="t('Default chat model')">
-            <model-select
-              :model-value="value.defaultChatModel"
-              @update:model-value="updates.defaultChatModel = $event"
-              dense
-            />
-          </common-item>
-          <common-item :label="t('Default chat title model')">
-            <model-select
-              :model-value="value.defaultChatTitleModel"
-              @update:model-value="updates.defaultChatTitleModel = $event"
-              dense
-            />
-          </common-item>
-          <common-item
-            :label="t('Embedding model')"
-            :caption="t('Platform default. A workspace can override this under Models.')"
-          >
-            <model-select
-              :model-value="value.embeddingModelId"
-              @update:model-value="updates.embeddingModelId = $event"
-              dense
-            />
-          </common-item>
-          <common-item
-            :label="t('Rerank model')"
-            :caption="t('Platform default. A workspace can override this under Models.')"
-          >
-            <model-select
-              :model-value="value.rerankModelId"
-              @update:model-value="updates.rerankModelId = $event"
-              dense
-            />
-          </common-item>
-          <common-item :label="t('Max workspaces per user')">
-            <q-input
-              :model-value="value.maxWorkspacesPerUser"
-              @update:model-value="updates.maxWorkspacesPerUser = parseInt($event as string)"
-              type="number"
-              dense
-              class="w-100px"
-            />
-          </common-item>
-        </q-list>
+      <q-card-section>
+        <q-toggle
+          v-model="form.allowRegistration"
+          label="Allow open registration"
+        />
+        <q-input
+          v-model.number="form.sessionIdleSeconds"
+          type="number"
+          label="Session idle seconds"
+        />
+        <q-input
+          v-model.number="form.sessionAbsoluteSeconds"
+          type="number"
+          label="Session absolute seconds"
+        />
+        <q-input
+          v-model.number="form.recentAuthSeconds"
+          type="number"
+          label="Recent authentication window"
+        />
+        <q-banner
+          mt-3
+          dense
+        >
+          SMTP delivery is {{ smtpEnabled ? 'configured' : 'unavailable' }}.
+        </q-banner>
       </q-card-section>
       <q-card-actions align="right">
         <q-btn
           flat
-          color="primary"
-          :label="t('Cancel')"
+          label="Cancel"
           @click="onDialogCancel"
-        />
-        <q-btn
-          flat
+        /><q-btn
           color="primary"
-          :label="t('Update')"
-          @click="updateSettings"
-          :loading
+          label="Save"
+          :loading="loading"
+          @click="save"
         />
       </q-card-actions>
     </q-card>
@@ -78,47 +54,24 @@
 
 <script setup lang="ts">
 import { useDialogPluginComponent, useQuasar } from 'quasar'
-import { t } from 'src/utils/i18n'
-import { computed, reactive, ref } from 'vue'
-import CommonItem from '../../components/CommonItem.vue'
-import { queries } from 'app/src-shared/queries'
-import { useQuery } from 'src/composables/zero/query'
-import ModelSelect from 'src/components/ModelSelect.vue'
-import { client } from 'src/utils/hc'
+import { onMounted, reactive, ref } from 'vue'
+import { identityClient } from 'src/utils/identity-client'
 
-defineEmits([
-  ...useDialogPluginComponent.emits,
-])
-
-const { data: settings } = useQuery(() => queries.globalSettings())
-const updates = reactive<Record<string, any>>({})
-const value = computed(() => settings.value && {
-  ...settings.value,
-  ...updates,
-})
-
+defineEmits([...useDialogPluginComponent.emits])
 const { dialogRef, onDialogHide, onDialogOK, onDialogCancel } = useDialogPluginComponent()
-
-const loading = ref(false)
 const $q = useQuasar()
-function updateSettings() {
+const loading = ref(false)
+const smtpEnabled = ref(false)
+const form = reactive({ allowRegistration: false, sessionIdleSeconds: 86400, sessionAbsoluteSeconds: 2592000, recentAuthSeconds: 900 })
+onMounted(async () => {
+  const result = await identityClient.getSettings()
+  if (result.data) { Object.assign(form, result.data); smtpEnabled.value = result.data.smtpEnabled }
+})
+async function save() {
   loading.value = true
-  client.api.admin.updateGlobalSettings.$post({
-    json: {
-      id: settings.value!.id,
-      ...updates,
-    },
-  }).then(async res => {
-    const data = await res.json()
-    if ('error' in data) throw new Error(data.error)
-    onDialogOK()
-  }).catch(err => {
-    $q.notify({
-      message: t('Failed to update settings: {0}', err.message),
-      color: 'negative',
-    })
-  }).finally(() => {
-    loading.value = false
-  })
+  const result = await identityClient.updateSettings(form)
+  if (result.error) $q.notify({ type: 'negative', message: result.error.message })
+  else onDialogOK()
+  loading.value = false
 }
 </script>

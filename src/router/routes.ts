@@ -13,6 +13,7 @@ import WorkspaceUsage from 'src/pages/WorkspaceUsage.vue'
 import WorkspaceConnectors from 'src/pages/WorkspaceConnectors.vue'
 import AccountLayout from 'src/layouts/AccountLayout.vue'
 import RedirectToFolder from 'src/pages/RedirectToFolder.vue'
+import AccountSecurity from 'src/pages/AccountSecurity.vue'
 import WorkspaceModels from 'src/pages/WorkspaceModels.vue'
 import { t } from 'src/utils/i18n'
 
@@ -95,9 +96,12 @@ const routes: RouteRecordRaw[] = [
       {
         path: '/account',
         component: AccountLayout,
-        meta: {
-          title: t('Account'),
-        },
+        meta: { title: t('Account') },
+      },
+      {
+        path: '/account/security',
+        component: AccountSecurity,
+        meta: { title: t('Account Security') },
       },
       authRoute,
       // Always leave this as last one,

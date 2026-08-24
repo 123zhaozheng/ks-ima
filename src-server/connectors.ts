@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { auth } from './auth/auth'
+import { getSession } from './auth/session'
 import { db } from './utils/db'
 import { connector } from './schema'
 import { actorFromSession, generateApiKey } from './utils/permissions'
@@ -17,7 +17,7 @@ function agentOriginFromRequest(reqUrl: string) {
 
 const app = new Hono()
   .get('/workspaces', async c => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    const session = await getSession(c.req.raw.headers)
     if (!session) return c.json({ error: 'Unauthorized' }, 401)
     const rows = await db.query.member.findMany({
       where: { userId: session.user.id },
@@ -30,7 +30,7 @@ const app = new Hono()
     })))
   })
   .get('/', async c => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    const session = await getSession(c.req.raw.headers)
     if (!session) return c.json({ error: 'Unauthorized' }, 401)
     const workspaceId = c.req.query('workspaceId')
     if (!workspaceId) return c.json({ error: 'workspaceId required' }, 400)
@@ -53,7 +53,7 @@ const app = new Hono()
     folderRootId: z.string().nullable().optional(),
     expiresAt: z.string().datetime().nullable().optional(),
   })), async c => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    const session = await getSession(c.req.raw.headers)
     if (!session) return c.json({ error: 'Unauthorized' }, 401)
     const body = c.req.valid('json')
     const actor = await actorFromSession(session.user.id, body.workspaceId)
@@ -92,7 +92,7 @@ const app = new Hono()
     })
   })
   .delete('/:id', async c => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    const session = await getSession(c.req.raw.headers)
     if (!session) return c.json({ error: 'Unauthorized' }, 401)
     const id = c.req.param('id')
     const row = await db.query.connector.findFirst({ where: { id } })
@@ -105,7 +105,7 @@ const app = new Hono()
     return c.json({ ok: true })
   })
   .post('/:id/rotate', async c => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    const session = await getSession(c.req.raw.headers)
     if (!session) return c.json({ error: 'Unauthorized' }, 401)
     const id = c.req.param('id')
     const row = await db.query.connector.findFirst({ where: { id } })

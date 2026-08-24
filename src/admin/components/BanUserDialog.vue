@@ -55,10 +55,10 @@
 import { useDialogPluginComponent, useQuasar } from 'quasar'
 import { t } from 'src/utils/i18n'
 import { ref } from 'vue'
-import { authClient } from 'src/utils/auth-client'
-import type { UserWithRole } from 'better-auth/plugins'
-import { timeMs } from 'app/src-shared/utils/functions'
 import CommonItem from '../../components/CommonItem.vue'
+import { identityClient } from 'src/utils/identity-client'
+
+type UserWithRole = { id: string, displayName: string, email: string, isActive: boolean }
 
 defineEmits([
   ...useDialogPluginComponent.emits,
@@ -75,22 +75,17 @@ const { dialogRef, onDialogHide, onDialogOK, onDialogCancel } = useDialogPluginC
 
 const loading = ref(false)
 const $q = useQuasar()
-function banUser() {
+async function banUser() {
   loading.value = true
-  authClient.admin.banUser({
-    userId: props.user.id,
-    banReason: reason.value,
-    banExpiresIn: periodDays.value ? periodDays.value * timeMs('1d') : undefined,
-  }).then(() => {
+  const result = await identityClient.disableUser(props.user.id)
+  if (!result.error) {
     onDialogOK()
-  }).catch(err => {
-    console.error(err)
+  } else {
     $q.notify({
-      message: t('Failed to ban user: {0}', err.message),
+      message: t('Failed to ban user: {0}', result.error.message),
       color: 'negative',
     })
-  }).finally(() => {
-    loading.value = false
-  })
+  }
+  loading.value = false
 }
 </script>

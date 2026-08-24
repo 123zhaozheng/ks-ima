@@ -1,7 +1,7 @@
 import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { auth } from './auth/auth'
+import { getSession } from './auth/session'
 import { db } from './utils/db'
 import { entity, item } from './schema'
 import { actorFromSession, listVisibleEntityIds } from './utils/permissions'
@@ -19,7 +19,7 @@ const app = new Hono().post('/',
     limit: z.int().min(1).max(100).default(40),
   })),
   async c => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    const session = await getSession(c.req.raw.headers)
     if (!session) return c.json({ error: 'Unauthorized' }, 401)
 
     const { workspaceId, q, types, limit } = c.req.valid('json')

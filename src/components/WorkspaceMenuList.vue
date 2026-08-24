@@ -83,7 +83,7 @@ import MenuItem from './MenuItem.vue'
 import { toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import WorkspaceItem from './WorkspaceItem.vue'
-import { authClient } from 'src/utils/auth-client'
+import { identityClient } from 'src/utils/identity-client'
 
 const workspaceStore = useWorkspaceStore()
 const workspace = toRef(workspaceStore, 'workspace')
@@ -135,7 +135,7 @@ function signOut() {
       flat: true,
     },
   }).onOk(async () => {
-    await authClient.signOut()
+    await identityClient.signOut()
     workspaceStore.id = null
     router.push('/auth/sign-in')
   })

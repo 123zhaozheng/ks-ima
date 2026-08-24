@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { authClient } from 'src/utils/auth-client'
+import { identityClient } from 'src/utils/identity-client'
 import SetPasswordInputs from './SetPasswordInputs.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { t } from 'src/utils/i18n'
@@ -41,8 +41,8 @@ const router = useRouter()
 const loading = ref(false)
 async function resetPassword() {
   loading.value = true
-  const { error } = await authClient.resetPassword({
-    newPassword: password.value,
+  const { error } = await identityClient.resetPassword({
+    password: password.value,
     token: route.query.token as string,
   })
   loading.value = false
@@ -58,6 +58,6 @@ async function resetPassword() {
     message: t('Password reset successfully'),
     color: 'positive',
   })
-  router.push('/login')
+  router.push('/auth/sign-in')
 }
 </script>

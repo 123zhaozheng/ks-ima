@@ -8,6 +8,7 @@ import MainLayout from 'src/admin/layouts/MainLayout.vue'
 import { authRoute } from 'src/router/auth'
 import ModelsPage from './pages/ModelsPage.vue'
 import WorkspacesPage from './pages/WorkspacesPage.vue'
+import AuditPage from './pages/AuditPage.vue'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -43,6 +44,11 @@ const routes: RouteRecordRaw[] = [
             meta: {
               title: t('Models'),
             },
+          },
+          {
+            path: '/audit',
+            component: AuditPage,
+            meta: { title: t('Audit') },
           },
           {
             path: '/:catchAll(.*)*',

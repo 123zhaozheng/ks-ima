@@ -7,6 +7,7 @@
   >
     <q-list>
       <q-item
+        v-if="canManageUsers"
         to="/users"
         item-rd
       >
@@ -29,6 +30,7 @@
         </q-item-section>
       </q-item>
       <q-item
+        v-if="canManageUsers"
         to="/models"
         item-rd
       >
@@ -40,6 +42,16 @@
         </q-item-section>
       </q-item>
       <q-item
+        to="/audit"
+        item-rd
+      >
+        <q-item-section avatar>
+          <q-icon name="sym_o_history" />
+        </q-item-section>
+        <q-item-section>{{ t('Audit') }}</q-item-section>
+      </q-item>
+      <q-item
+        v-if="canManageSettings"
         clickable
         @click="openSettings"
         item-rd
@@ -71,14 +83,18 @@
 
 <script setup lang="ts">
 import { useQuasar } from 'quasar'
-import { authClient } from 'src/utils/auth-client'
+import { identityClient, session } from 'src/utils/identity-client'
 import { t } from 'src/utils/i18n'
 import { useRouter } from 'vue-router'
 import UpdateSettingsDialog from './UpdateSettingsDialog.vue'
+import { computed } from 'vue'
+
+const canManageUsers = computed(() => session.value.data?.user.platformRoles.includes('super_admin') || session.value.data?.user.platformRoles.includes('platform_admin'))
+const canManageSettings = canManageUsers
 
 const router = useRouter()
 function signOut() {
-  authClient.signOut()
+  identityClient.signOut()
   router.push('/auth/sign-in')
 }
 

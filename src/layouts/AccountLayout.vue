@@ -10,8 +10,7 @@
         round
         icon="sym_o_menu"
         @click="uiStateStore.toggleMainDrawer"
-      />
-      <q-toolbar-title>{{ t('Account') }}</q-toolbar-title>
+      /><q-toolbar-title>Account</q-toolbar-title>
     </q-toolbar>
   </q-header>
   <q-page-container>
@@ -22,29 +21,26 @@
       py-2
     >
       <q-list>
-        <common-item :label="t('Name')">
+        <common-item label="Name">
           <a-input
-            :model-value="user.name"
+            :model-value="user.displayName"
             @change="updateName"
             dense
             filled
           />
         </common-item>
-        <common-item
-          :label="t('Avatar')"
-          clickable
-          @click="pickAvatar"
-        >
-          <a-avatar :avatar="userAvatar(user)" />
-        </common-item>
-        <common-item :label="t('Email')">
+        <common-item label="Email">
           {{ user.email }}
         </common-item>
-        <common-item :label="t('Created At')">
-          {{ new Date(user.createdAt).toLocaleString() }}
+        <common-item
+          label="Security and sessions"
+          clickable
+          @click="$router.push('/account/security')"
+        >
+          <q-icon name="sym_o_security" />
         </common-item>
         <common-item
-          :label="t('Change Password')"
+          label="Change password"
           clickable
           @click="changePassword"
         >
@@ -52,58 +48,44 @@
         </common-item>
       </q-list>
     </q-page>
+    <q-page
+      v-else-if="loading"
+      flex
+      items-center
+      justify-center
+    >
+      <q-spinner />
+    </q-page>
+    <q-page
+      v-else
+      flex
+      items-center
+      justify-center
+    >
+      <q-banner>Account session expired or unavailable.</q-banner>
+    </q-page>
   </q-page-container>
 </template>
 
 <script setup lang="ts">
-import { useWorkspaceStore } from 'src/stores/workspace'
-import { computed } from 'vue'
-import { t } from 'src/utils/i18n'
-import { useUiStateStore } from 'src/stores/ui-state'
+import { computed, ref } from 'vue'
 import CommonItem from 'src/components/CommonItem.vue'
 import AInput from 'src/components/AInput'
-import { mutate } from 'src/utils/zero-session'
-import { mutators } from 'app/src-shared/mutators'
-import AAvatar from 'src/components/AAvatar.vue'
-import { userAvatar } from 'src/utils/defaults'
-import { useQuasar } from 'quasar'
-import FileInputDialog from 'src/admin/components/FileInputDialog.vue'
-import { cropSquareImage } from 'src/utils/image-process'
 import ChangePasswordDialog from 'src/components/ChangePasswordDialog.vue'
-import { useRequireLogin } from 'src/composables/require-login'
-
-useRequireLogin()
+import { useUiStateStore } from 'src/stores/ui-state'
+import { identityClient, session } from 'src/utils/identity-client'
+import { useQuasar } from 'quasar'
 
 const uiStateStore = useUiStateStore()
-const workspaceStore = useWorkspaceStore()
-const user = computed(() => workspaceStore.member?.user)
-
-function updateName(name: string) {
-  mutate(mutators.updateUser({ name }))
-}
 const $q = useQuasar()
-function pickAvatar() {
-  $q.dialog({
-    component: FileInputDialog,
-    componentProps: {
-      image: true,
-    },
-  }).onOk(async (file: File) => {
-    file = await cropSquareImage(file, 72)
-    const url = await new Promise<string>((resolve) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.readAsDataURL(file)
-    })
-    mutate(mutators.updateUser({
-      image: url,
-    }))
-  })
+const loading = ref(session.value.isPending)
+const user = computed(() => session.value.data?.user)
+async function updateName(displayName: string) {
+  loading.value = true
+  const result = await identityClient.updateProfile({ displayName })
+  if (result.error) $q.notify({ type: 'negative', message: result.error.message })
+  else await identityClient.getSession()
+  loading.value = false
 }
-
-function changePassword() {
-  $q.dialog({
-    component: ChangePasswordDialog,
-  })
-}
+function changePassword() { $q.dialog({ component: ChangePasswordDialog }) }
 </script>

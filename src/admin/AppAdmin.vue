@@ -8,9 +8,8 @@
 import { useSetTheme } from 'src/composables/set-theme'
 import { watch } from 'vue'
 import { DEFAULT_HUE } from 'src/utils/config'
-import { authClient, session } from 'src/utils/auth-client'
+import { session } from 'src/utils/identity-client'
 import { useRouter } from 'vue-router'
-import { client } from 'src/utils/hc'
 import { useQuasar } from 'quasar'
 import { t } from 'src/utils/i18n'
 
@@ -18,23 +17,19 @@ useSetTheme(DEFAULT_HUE)
 
 const router = useRouter()
 const $q = useQuasar()
-watch(() => session.value.data?.user.id, async () => {
+watch(() => [session.value.isPending, session.value.data?.user.id] as const, () => {
   const { data, isPending } = session.value
   if (isPending) return
   if (!data) {
     router.replace('/auth/sign-in')
     return
   }
-  if (data.user.role !== 'admin') {
-    const res = await client.api.admin.aquireRole.$post()
-    if (!res.ok) {
-      $q.notify({
-        message: t('You need to be an admin to access this page'),
-        color: 'negative',
-      })
-      return
-    }
-    await authClient.getSession({ query: { disableCookieCache: true } })
+  if (!data.user.platformRoles?.some(role => role === 'super_admin' || role === 'platform_admin' || role === 'security_auditor')) {
+    $q.notify({
+      message: t('You need to be an admin to access this page'),
+      color: 'negative',
+    })
+    router.replace('/auth/sign-in')
   }
 }, { immediate: true })
 </script>

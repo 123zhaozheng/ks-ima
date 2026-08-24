@@ -31,6 +31,7 @@
           </template>
         </q-input>
         <q-btn
+          v-if="canManageUsers"
           icon="sym_o_add"
           :label="t('Create User')"
           @click="createUser"
@@ -42,6 +43,25 @@
           shrink-0
         />
       </div>
+      <q-banner
+        v-if="session.data?.user.platformRoles.includes('super_admin')"
+        dense
+        mt-2
+      >
+        Super administrator role management enabled.
+      </q-banner>
+      <q-banner
+        v-if="errorMessage"
+        bg-err-c
+        text-on-err-c
+        mt-2
+      >
+        {{ errorMessage }} <q-btn
+          icon="refresh"
+          flat
+          @click="refresh"
+        />
+      </q-banner>
       <q-table
         class="users-table"
         ref="tableRef"
@@ -62,47 +82,78 @@
             :props
             text-on-sur-var
           >
-            <q-btn
-              icon="sym_o_edit"
-              :title="t('Edit Info')"
-              flat
-              round
-              size="sm"
-              @click="editUser(props.row)"
-            />
-            <q-btn
-              icon="sym_o_more_vert"
-              :title="t('Actions')"
-              flat
-              round
-              size="sm"
-            >
-              <q-menu>
-                <q-list>
-                  <menu-item
-                    :label="t('View Workspaces')"
-                    :to="`/workspaces?ownerId=${props.row.id}`"
-                  />
-                  <menu-item
-                    :label="t('Reset Password')"
-                    @click="resetPassword(props.row)"
-                  />
-                  <menu-item
-                    :label="t('Revoke Sessions')"
-                    @click="revokeSessions(props.row)"
-                  />
-                  <menu-item
-                    :label="t('Ban User')"
-                    @click="banUser(props.row)"
-                  />
-                  <menu-item
-                    :label="t('Delete User')"
-                    @click="deleteUser(props.row)"
-                    hover:text-err
-                  />
-                </q-list>
-              </q-menu>
-            </q-btn>
+            <template v-if="canManageUsers">
+              <q-btn
+                icon="sym_o_edit"
+                :title="t('Edit Info')"
+                flat
+                round
+                size="sm"
+                @click="editUser(props.row)"
+              />
+              <q-btn
+                icon="sym_o_more_vert"
+                :title="t('Actions')"
+                flat
+                round
+                size="sm"
+              >
+                <q-menu>
+                  <q-list>
+                    <menu-item
+                      :label="t('View Workspaces')"
+                      :to="`/workspaces?ownerId=${props.row.id}`"
+                    />
+                    <menu-item
+                      :label="t('Reset Password')"
+                      @click="resetPassword(props.row)"
+                    />
+                    <menu-item
+                      :label="t('Revoke Sessions')"
+                      @click="revokeSessions(props.row)"
+                    />
+                    <menu-item
+                      v-if="props.row.isActive"
+                      :label="t('Disable User')"
+                      @click="banUser(props.row)"
+                    />
+                    <menu-item
+                      v-else
+                      :label="t('Restore User')"
+                      @click="identityClient.restoreUser(props.row.id).then(refresh)"
+                    />
+                    <menu-item
+                      :label="t('Reset TOTP')"
+                      @click="resetTotp(props.row)"
+                    />
+                    <template v-if="session.data?.user.platformRoles.includes('super_admin')">
+                      <q-separator />
+                      <menu-item
+                        label="Grant platform admin"
+                        @click="identityClient.grantRole(props.row.id, 'platform_admin').then(refresh)"
+                      />
+                      <menu-item
+                        label="Grant security auditor"
+                        @click="identityClient.grantRole(props.row.id, 'security_auditor').then(refresh)"
+                      />
+                      <menu-item
+                        label="Revoke platform admin"
+                        @click="identityClient.revokeRole(props.row.id, 'platform_admin').then(refresh)"
+                      />
+                      <menu-item
+                        label="Revoke security auditor"
+                        @click="identityClient.revokeRole(props.row.id, 'security_auditor').then(refresh)"
+                      />
+                    </template>
+                    <menu-item
+                      :label="t('Delete User')"
+                      @click="deleteUser(props.row)"
+                      hover:text-err
+                    />
+                  </q-list>
+                </q-menu>
+              </q-btn>
+            </template>
           </q-td>
         </template>
       </q-table>
@@ -111,31 +162,24 @@
 </template>
 
 <script setup lang="ts">
-import type { UserWithRole } from 'better-auth/plugins'
 import type { QTableColumn, QTableProps } from 'quasar'
 import { useQuasar } from 'quasar'
-import { authClient } from 'src/utils/auth-client'
+import { identityClient, session } from 'src/utils/identity-client'
 import { t } from 'src/utils/i18n'
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import UpdateUserDialog from '../components/UpdateUserDialog.vue'
 import MenuItem from 'src/components/MenuItem.vue'
 import BanUserDialog from '../components/BanUserDialog.vue'
 import CreateUserDialog from '../components/CreateUserDialog.vue'
+import type { components } from 'src/api/generated/schema'
 
-function formatDate(date?: Date) {
-  return date ? date.toLocaleString() : ''
-}
+type UserWithRole = components['schemas']['IdentityUser']
 
 const columns: QTableColumn[] = [
   { name: 'id', label: t('ID'), field: 'id', sortable: true, align: 'left' },
-  { name: 'name', label: t('Name'), field: 'name', sortable: true },
+  { name: 'name', label: t('Name'), field: 'displayName', sortable: true },
   { name: 'email', label: t('Email'), field: 'email', sortable: true },
-  { name: 'emailVerified', label: t('Email Verified'), field: 'emailVerified', sortable: true },
-  { name: 'createdAt', label: t('Created At'), field: 'createdAt', format: formatDate, sortable: true },
-  { name: 'updatedAt', label: t('Updated At'), field: 'updatedAt', format: formatDate, sortable: true },
-  { name: 'role', label: t('Role'), field: 'role', sortable: true },
-  { name: 'banReason', label: t('Ban Reason'), field: 'banReason', sortable: true },
-  { name: 'banExpires', label: t('Ban Expires'), field: 'banExpires', format: formatDate, sortable: true },
+  { name: 'roles', label: t('Roles'), field: row => row.platformRoles.join(', '), sortable: true },
   { name: 'actions', label: t('Actions'), field: () => null },
 ]
 
@@ -143,6 +187,8 @@ const rows = ref<UserWithRole[]>([])
 const searchValue = ref('')
 const searchField = ref<('email' | 'name')>('email')
 const loading = ref(false)
+const errorMessage = ref('')
+const canManageUsers = computed(() => session.value.data?.user.platformRoles.some(role => role === 'super_admin' || role === 'platform_admin') ?? false)
 const pagination = ref<QTableProps['pagination']>({
   sortBy: 'createdAt',
   descending: true,
@@ -155,19 +201,10 @@ const onRequest: QTableProps['onRequest'] = async ({
   pagination: { sortBy, descending, page, rowsPerPage },
 }) => {
   loading.value = true
-  const { data, error } = await authClient.admin.listUsers({
-    query: {
-      searchValue: searchValue.value ?? undefined,
-      searchField: searchField.value,
-      searchOperator: 'contains',
-      sortBy,
-      sortDirection: descending ? 'desc' : 'asc',
-      limit: rowsPerPage,
-      offset: (page - 1) * rowsPerPage,
-    },
-  })
+  const { data, error } = await identityClient.listUsers(searchValue.value ?? '')
   loading.value = false
   if (error) {
+    errorMessage.value = error.message
     console.error(error)
     $q.notify({
       message: t('Failed to fetch users: {0}', error.message),
@@ -175,14 +212,15 @@ const onRequest: QTableProps['onRequest'] = async ({
     })
     return
   }
+  if (!data) return
   pagination.value = {
     sortBy,
     descending,
     page,
     rowsPerPage,
-    rowsNumber: data.total,
+    rowsNumber: data.items.length,
   }
-  rows.value = data.users
+  rows.value = data.items
 }
 
 const tableRef = ref()
@@ -203,20 +241,17 @@ function editUser(user: UserWithRole) {
     },
   }).onOk(refresh)
 }
-function resetPassword({ id, name }: UserWithRole) {
+function resetPassword({ id, displayName }: UserWithRole) {
   $q.dialog({
     title: t('Reset Password'),
-    message: t('Set new password for user "{0}":', name),
+    message: t('Set new password for user "{0}":', displayName),
     prompt: {
       model: '',
       type: 'password',
     },
     cancel: true,
   }).onOk(newPassword => {
-    authClient.admin.setUserPassword({
-      userId: id,
-      newPassword,
-    }).catch(err => {
+    identityClient.setPassword(id, newPassword).catch(err => {
       console.error(err)
       $q.notify({
         message: t('Failed to reset password: {0}', err.message),
@@ -225,14 +260,17 @@ function resetPassword({ id, name }: UserWithRole) {
     })
   })
 }
-function revokeSessions({ id, name }: UserWithRole) {
+function resetTotp({ id }: UserWithRole) {
+  identityClient.resetTotp(id).then(refresh)
+}
+function revokeSessions({ id, displayName }: UserWithRole) {
   $q.dialog({
     title: t('Revoke Sessions'),
-    message: t('Are you sure you want to revoke all sessions for "{0}"?', name),
+    message: t('Are you sure you want to revoke all sessions for "{0}"?', displayName),
     cancel: true,
     ok: t('Revoke'),
   }).onOk(() => {
-    authClient.admin.revokeUserSessions({ userId: id }).catch(err => {
+    identityClient.revokeSessions(id).catch(err => {
       console.error(err)
       $q.notify({
         message: t('Failed to revoke sessions: {0}', err.message),
@@ -249,10 +287,10 @@ function banUser(user: UserWithRole) {
     },
   }).onOk(refresh)
 }
-function deleteUser({ id, name }: UserWithRole) {
+function deleteUser({ id, displayName }: UserWithRole) {
   $q.dialog({
     title: t('Delete User'),
-    message: t('Are you sure you want to delete user "{0}"? Note that you must delete all workspaces created by this user before you can delete the user.', name),
+    message: t('Are you sure you want to delete user "{0}"? Note that you must delete all workspaces created by this user before you can delete the user.', displayName),
     cancel: true,
     ok: {
       label: t('Delete'),
@@ -260,7 +298,7 @@ function deleteUser({ id, name }: UserWithRole) {
       flat: true,
     },
   }).onOk(() => {
-    authClient.admin.removeUser({ userId: id }).then(refresh).catch(err => {
+    identityClient.deleteUser(id).then(refresh).catch(err => {
       console.error(err)
       $q.notify({
         message: t('Failed to delete user: {0}', err.message),

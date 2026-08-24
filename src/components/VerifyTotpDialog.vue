@@ -10,24 +10,20 @@
         </div>
       </q-card-section>
       <q-card-section py-0>
-        {{ t('Please enter the TOTP code from your authenticator app.') }}
+        {{ recoveryMode ? t('Enter one unused recovery code.') : t('Please enter the TOTP code from your authenticator app.') }}
       </q-card-section>
       <q-card-section py-2>
         <q-input
           v-model="totp"
-          :label="t('TOTP code')"
-          type="number"
-        />
-        <q-checkbox
-          v-model="trustDevice"
-          :label="t('Trust this device')"
+          :label="recoveryMode ? t('Recovery code') : t('TOTP code')"
+          :type="recoveryMode ? 'text' : 'number'"
         />
       </q-card-section>
       <q-card-actions>
         <q-btn
           flat
           color="primary"
-          :label="t('Use backup code')"
+          :label="recoveryMode ? t('Use authenticator code') : t('Use recovery code')"
           @click="useBackupCode"
         />
         <q-space />
@@ -45,7 +41,7 @@
 
 <script setup lang="ts">
 import { useDialogPluginComponent, useQuasar } from 'quasar'
-import { authClient } from 'src/utils/auth-client'
+import { identityClient } from 'src/utils/identity-client'
 import { t } from 'src/utils/i18n'
 import { ref } from 'vue'
 
@@ -53,20 +49,21 @@ defineEmits([
   ...useDialogPluginComponent.emits,
 ])
 
-const { dialogRef, onDialogHide, onDialogOK, onDialogCancel } = useDialogPluginComponent()
+const { dialogRef, onDialogHide, onDialogOK } = useDialogPluginComponent()
+const props = defineProps<{ challenge: string }>()
 
 const totp = ref('')
-const trustDevice = ref(false)
+const recoveryMode = ref(false)
 
 const $q = useQuasar()
 const loading = ref(false)
 async function verify() {
   loading.value = true
 
-  const { error } = await authClient.twoFactor.verifyTotp({
-    code: totp.value,
-    trustDevice: trustDevice.value,
-  })
+  const result = recoveryMode.value
+    ? await identityClient.verifyRecovery({ code: totp.value, challenge: props.challenge })
+    : await identityClient.verifyTotp({ code: totp.value, challenge: props.challenge })
+  const { error } = result
   loading.value = false
   if (error) {
     console.error(error)
@@ -79,8 +76,5 @@ async function verify() {
   onDialogOK()
 }
 
-function useBackupCode() {
-  // TODO: use backup code
-  onDialogCancel()
-}
+function useBackupCode() { recoveryMode.value = !recoveryMode.value; totp.value = '' }
 </script>

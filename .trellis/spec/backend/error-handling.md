@@ -16,7 +16,8 @@ Questions to answer:
 - How are errors returned to clients?
 -->
 
-(To be filled by the team)
+HTTP errors are normalized as RFC 9457 Problem Details. Internal exception text,
+settings, connection strings, and secrets are never returned to clients.
 
 ---
 
@@ -24,7 +25,8 @@ Questions to answer:
 
 <!-- Custom error classes/types -->
 
-(To be filled by the team)
+`ProblemDetails` is the public contract. Stable `code` values identify errors;
+`correlationId` is returned in both the body and `X-Correlation-ID` header.
 
 ---
 
@@ -32,7 +34,8 @@ Questions to answer:
 
 <!-- Try-catch patterns, error propagation -->
 
-(To be filled by the team)
+Map Starlette HTTP and validation exceptions centrally. Log unexpected failures
+with correlation context and return a generic `INTERNAL_ERROR` response.
 
 ---
 
@@ -40,7 +43,8 @@ Questions to answer:
 
 <!-- Standard error response format -->
 
-(To be filled by the team)
+Use media type `application/problem+json` with `type`, `title`, `status`,
+`detail`, `instance`, `code`, `correlationId`, and optional field errors.
 
 ---
 
@@ -48,4 +52,5 @@ Questions to answer:
 
 <!-- Error handling mistakes your team has made -->
 
-(To be filled by the team)
+Do not expose Pydantic raw validation payloads, database errors, stack traces, or
+secret-bearing URLs. Add contract tests for every new public error shape.

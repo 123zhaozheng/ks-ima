@@ -1,0 +1,9 @@
+FROM abcfy2/zhparser:18
+
+# The target database must provide both the existing Chinese parser and pgvector.
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y build-essential ca-certificates git postgresql-server-dev-18 \
+    && git clone --depth 1 --branch v0.8.6 https://github.com/pgvector/pgvector.git /tmp/pgvector \
+    && make -C /tmp/pgvector \
+    && make -C /tmp/pgvector install \
+    && rm -rf /tmp/pgvector /var/lib/apt/lists/*

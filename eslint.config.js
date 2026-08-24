@@ -105,5 +105,5 @@ export default defineConfigWithVueTs(
       },
     },
   },
-  globalIgnores(['**/*.gen.ts']),
+  globalIgnores(['**/*.gen.ts', 'src/api/generated/**']),
 )

@@ -1,6 +1,8 @@
 services:
   db:
-    image: abcfy2/zhparser:18 # Postgres with chinese tokenizer for FTS
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     environment:
       POSTGRES_PASSWORD: pass
       POSTGRES_INITDB_ARGS: '--locale=C  --encoding=UTF8'
@@ -36,6 +38,76 @@ services:
       db:
         condition: service_healthy
 
+  ima-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: api
+    environment:
+      IMA_DATABASE_URL: postgresql+asyncpg://postgres:pass@db:5432/app
+      IMA_PUBLIC_ORIGIN: ${IMA_PUBLIC_ORIGIN:-http://localhost:8080}
+      IMA_ENVIRONMENT: ${IMA_ENVIRONMENT:-development}
+      IMA_BUILD_VERSION: ${IMA_BUILD_VERSION:-dev}
+      IMA_TASK_SCHEMA: ima_jobs
+      IMA_CORS_ORIGINS: ${IMA_CORS_ORIGINS:-http://localhost:8080}
+      IMA_DIAGNOSTIC_QUEUE: ${IMA_DIAGNOSTIC_QUEUE:-diagnostic}
+      IMA_WORKER_NAME: ${IMA_WORKER_NAME:-diagnostic-worker}
+    depends_on:
+      ima-migrate:
+        condition: service_completed_successfully
+
+  ima-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: worker
+    environment:
+      IMA_DATABASE_URL: postgresql+asyncpg://postgres:pass@db:5432/app
+      IMA_ENVIRONMENT: ${IMA_ENVIRONMENT:-development}
+      IMA_PUBLIC_ORIGIN: ${IMA_PUBLIC_ORIGIN:-http://localhost:8080}
+      IMA_CORS_ORIGINS: ${IMA_CORS_ORIGINS:-http://localhost:8080}
+      IMA_BUILD_VERSION: ${IMA_BUILD_VERSION:-dev}
+      IMA_TASK_SCHEMA: ima_jobs
+      IMA_DIAGNOSTIC_QUEUE: ${IMA_DIAGNOSTIC_QUEUE:-diagnostic}
+      IMA_WORKER_NAME: ${IMA_WORKER_NAME:-diagnostic-worker}
+    depends_on:
+      ima-migrate:
+        condition: service_completed_successfully
+
+  ima-migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: base
+    command: ["uv", "run", "--project", "backend", "ima", "migrate"]
+    environment:
+      IMA_DATABASE_URL: postgresql+asyncpg://postgres:pass@db:5432/app
+      IMA_ENVIRONMENT: ${IMA_ENVIRONMENT:-development}
+      IMA_PUBLIC_ORIGIN: ${IMA_PUBLIC_ORIGIN:-http://localhost:8080}
+      IMA_CORS_ORIGINS: ${IMA_CORS_ORIGINS:-http://localhost:8080}
+      IMA_TASK_SCHEMA: ima_jobs
+    depends_on:
+      db:
+        condition: service_healthy
+
+  ima-integration:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: base
+    command: ["sh", "-c", "cd backend && uv run --project . ima migrate && uv run --project . pytest -s -m postgres"]
+    environment:
+      IMA_DATABASE_URL: postgresql+asyncpg://postgres:pass@db:5432/app
+      IMA_TEST_DATABASE_URL: postgresql+asyncpg://postgres:pass@db:5432/app
+      IMA_ENVIRONMENT: test
+      IMA_TASK_SCHEMA: ima_jobs
+      IMA_DIAGNOSTIC_QUEUE: diagnostic-integration
+      IMA_WORKER_NAME: diagnostic-integration-worker
+      IMA_REQUIRE_POSTGRES: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+
   web:
     image: krytro/nyaai-web:latest
     # or build from source:
@@ -48,6 +120,7 @@ services:
     environment:
       SERVER_URL: http://server:3000
       ZERO_CACHE_URL: http://zero-cache:4848
+      PYTHON_API_URL: http://ima-api:8000
  
   zero-cache:
     image: rocicorp/zero:0.26.1

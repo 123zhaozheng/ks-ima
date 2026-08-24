@@ -1,0 +1,13 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Discover backend quality, database, error, logging, and structure checks."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify Python quality tooling, tests, forbidden patterns, and no placeholders."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify Alembic isolation, transactions, naming, and legacy schema safety."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify RFC 9457 mapping and no internal/secret leakage."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify structured logging, correlation, redaction, and health noise policy."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Discover frontend quality and type-safety checks for the generated client integration."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify Vue integration states and build quality."}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Verify generated OpenAPI DTO use and absence of duplicate casts."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Verify the full Vue-to-worker foundation data flow and coexistence routing."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Verify no duplicate scaffolds, unused dependencies, or expired spike code."}
+{"file": ".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md", "reason": "Confirm legacy routes, runtime, and data remain intact during coexistence."}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "Verify every executable foundation signature, validation matrix, and test assertion."}
+{"file": ".trellis/spec/frontend/openapi-client-contracts.md", "reason": "Verify generated/handwritten client ownership, UI states, and frontend gates."}

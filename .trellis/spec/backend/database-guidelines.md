@@ -16,7 +16,9 @@ Questions to answer:
 - How do you handle transactions?
 -->
 
-(To be filled by the team)
+The foundation uses SQLAlchemy 2 async for runtime probes and future domain
+queries, psycopg for Alembic/operational commands, and PostgreSQL schemas `ima`
+and `ima_jobs`. Legacy public tables are outside this child's ownership.
 
 ---
 
@@ -24,7 +26,9 @@ Questions to answer:
 
 <!-- How should queries be written? Batch operations? -->
 
-(To be filled by the team)
+Use bound parameters with SQLAlchemy `text()` for foundation queries. Keep task
+library connections on the validated `ima_jobs` search path and do not interpolate
+untrusted identifiers.
 
 ---
 
@@ -32,7 +36,10 @@ Questions to answer:
 
 <!-- How to create and run migrations -->
 
-(To be filled by the team)
+Migrations run only through `ima migrate` or an explicit Alembic invocation.
+`ima` is bootstrapped and committed before Alembic creates `ima.alembic_version`.
+The Procrastinate schema is installed only when its marker table is absent.
+Runtime startup never upgrades the database.
 
 ---
 
@@ -40,7 +47,9 @@ Questions to answer:
 
 <!-- Table names, column names, index names -->
 
-(To be filled by the team)
+Schema/table names are snake_case; foundation schemas are `ima` and `ima_jobs`.
+Alembic's version table is in `ima`; task tables and enums are on the `ima_jobs`
+search path. Foundation timestamps are UTC `timestamptz` values.
 
 ---
 
@@ -48,4 +57,6 @@ Questions to answer:
 
 <!-- Database-related mistakes your team has made -->
 
-(To be filled by the team)
+Do not point foundation migrations at `public`, drop legacy schemas, or assume
+that a successful Alembic log means bootstrap SQL committed. Verify schema,
+version, extension, and task marker state on a clean PostgreSQL instance.

@@ -7,6 +7,16 @@
 :8080 {
 	root * /srv/front
 
+	@ima_health path /health/*
+	handle @ima_health {
+		reverse_proxy {$PYTHON_API_URL}
+	}
+
+	@ima_system path /api/v1/system/*
+	handle @ima_system {
+		reverse_proxy {$PYTHON_API_URL}
+	}
+
 	@forbidden {
 		path /api/admin* /api/auth/admin* /api/zero*
 	}
@@ -33,6 +43,16 @@
 
 :8081 {
 	root * /srv/admin
+
+	@ima_health path /health/*
+	handle @ima_health {
+		reverse_proxy {$PYTHON_API_URL}
+	}
+
+	@ima_system path /api/v1/system/*
+	handle @ima_system {
+		reverse_proxy {$PYTHON_API_URL}
+	}
 
 	handle /api/zero* {
 		respond "Forbidden" 403

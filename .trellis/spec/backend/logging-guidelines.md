@@ -16,7 +16,8 @@ Questions to answer:
 - What should NOT be logged (PII, secrets)?
 -->
 
-(To be filled by the team)
+The backend uses Python logging with `python-json-logger`. Application logging is
+configured once by the app factory and emits JSON records.
 
 ---
 
@@ -24,7 +25,9 @@ Questions to answer:
 
 <!-- When to use each level: debug, info, warn, error -->
 
-(To be filled by the team)
+Use INFO for lifecycle/request/job completion, WARNING for degraded dependencies,
+and ERROR/exception for unexpected failures. Health probes should not create
+unbounded high-volume logs.
 
 ---
 
@@ -32,7 +35,9 @@ Questions to answer:
 
 <!-- Log format, required fields -->
 
-(To be filled by the team)
+Request records include operation/path, result status, duration, and correlation
+ID. Worker diagnostics include the job operation and correlation context.
+`RedactingFormatter` recursively masks secret-like keys.
 
 ---
 
@@ -40,7 +45,8 @@ Questions to answer:
 
 <!-- Important events to log -->
 
-(To be filled by the team)
+Log request completion, migration/worker lifecycle failures, retry outcomes, and
+readiness degradation with low-cardinality fields.
 
 ---
 
@@ -48,4 +54,6 @@ Questions to answer:
 
 <!-- Sensitive data, PII, secrets -->
 
-(To be filled by the team)
+Never log passwords, tokens, API keys, authorization headers, private keys,
+connection strings, request bodies, or document content. Redaction is based on
+secret-like field names and must remain recursive.

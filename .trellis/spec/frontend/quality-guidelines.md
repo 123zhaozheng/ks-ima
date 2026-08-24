@@ -16,7 +16,8 @@ Questions to answer:
 - What code review standards apply?
 -->
 
-(To be filled by the team)
+The retained Vue 3/TypeScript frontend uses Quasar and TanStack Vue Query. Run
+`bun test`, `bun run lint`, and the relevant Quasar build before handoff.
 
 ---
 
@@ -24,7 +25,8 @@ Questions to answer:
 
 <!-- Patterns that should never be used and why -->
 
-(To be filled by the team)
+Do not hand-edit generated OpenAPI files, duplicate API clients, or migrate
+product state into Vue Query during the foundation phase.
 
 ---
 
@@ -32,7 +34,8 @@ Questions to answer:
 
 <!-- Patterns that must always be used -->
 
-(To be filled by the team)
+Register shared query behavior in `src/boot/vue-query.ts`; keep API calls in the
+generated client/composables and preserve existing product stores.
 
 ---
 
@@ -40,7 +43,9 @@ Questions to answer:
 
 <!-- What level of testing is expected -->
 
-(To be filled by the team)
+Generated files are checked for OpenAPI drift; source code must pass ESLint and
+the target Quasar build. Keep generated `src/api/generated/**` excluded from
+style rules while still compiling it.
 
 ---
 
@@ -48,4 +53,5 @@ Questions to answer:
 
 <!-- What reviewers should check -->
 
-(To be filled by the team)
+Verify browser-to-Caddy-to-FastAPI paths, query loading/error states, generated
+client changes, and that legacy routes remain untouched.

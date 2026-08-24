@@ -13,6 +13,7 @@
         @click="drawerOpen = !drawerOpen"
       />
       <q-toolbar-title>{{ $route.meta.title }}</q-toolbar-title>
+      <system-status-indicator />
     </q-toolbar>
   </q-header>
   <router-view />
@@ -21,6 +22,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import AdminDrawer from '../components/AdminDrawer.vue'
+import SystemStatusIndicator from '../components/SystemStatusIndicator.vue'
 
 const drawerOpen = ref(false)
 </script>

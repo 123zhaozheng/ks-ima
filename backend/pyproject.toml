@@ -1,0 +1,58 @@
+[project]
+name = "ima-backend"
+version = "0.1.0"
+description = "Intranet IMA API and durable worker foundation"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "alembic==1.16.5",
+  "asyncpg==0.30.0",
+  "fastapi==0.116.1",
+  "procrastinate==3.6.0",
+  "psycopg[binary]==3.2.9",
+  "pydantic-settings==2.10.1",
+  "python-json-logger==3.3.0",
+  "sqlalchemy[asyncio]==2.0.43",
+  "uvicorn[standard]==0.35.0",
+]
+
+[dependency-groups]
+dev = [
+  "mypy==1.17.1",
+  "httpx==0.28.1",
+  "pytest==8.4.1",
+  "pytest-asyncio==1.1.0",
+  "pytest-cov==6.2.1",
+  "ruff==0.12.9",
+]
+
+[project.scripts]
+ima = "ima.cli:main"
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ima"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = []
+files = ["src/ima"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--strict-markers --strict-config"
+markers = [
+  "postgres: requires IMA_TEST_DATABASE_URL and a PostgreSQL image with vector and zhparser",
+]

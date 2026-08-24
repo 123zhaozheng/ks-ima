@@ -1,3 +1,6 @@
 node_modules
+backend/.venv
+**/__pycache__
+.pytest_cache
 .git
 dist

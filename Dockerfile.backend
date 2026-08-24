@@ -1,0 +1,20 @@
+FROM python:3.13-slim AS base
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 UV_SYSTEM_PYTHON=1
+WORKDIR /app
+COPY backend/pyproject.toml backend/uv.lock ./backend/
+RUN pip install --no-cache-dir uv && uv sync --project backend --frozen --no-dev --no-install-project
+COPY backend ./backend
+RUN uv sync --project backend --frozen --no-dev
+
+FROM base AS api
+RUN useradd --create-home --uid 10001 ima && chown -R ima:ima /app
+USER ima
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["uv", "run", "--project", "backend", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3)"]
+CMD ["uv", "run", "--project", "backend", "uvicorn", "ima.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+FROM base AS worker
+RUN useradd --create-home --uid 10001 ima && chown -R ima:ima /app
+USER ima
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["uv", "run", "--project", "backend", "ima", "check-worker"]
+CMD ["uv", "run", "--project", "backend", "python", "-m", "ima.workers.main"]

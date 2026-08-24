@@ -702,4 +702,3 @@ At the end of every child task:
 | Intranet deployment uses HTTP | Production OAuth readiness fails without trusted HTTPS issuer |
 | Admin becomes implicit reader | Separate platform/workspace roles; explicit membership/emergency grant only |
 | Scope expands through "full implementation" | Full means every accepted requirement is complete; deferred items remain explicitly out of scope |
-

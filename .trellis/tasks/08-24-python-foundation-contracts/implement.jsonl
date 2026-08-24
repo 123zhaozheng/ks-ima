@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Load all backend guidelines before creating the Python project, database, worker, errors, logging, and quality tooling."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Load frontend conventions before adding the generated client and Vue Query foundation integration."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Trace generated contracts and health/job data across Vue, Caddy, API, database, and worker."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Search existing settings, proxy, health, and build helpers and remove duplicate spike code."}
+{"file": ".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md", "reason": "Preserve the verified legacy topology and exact coexistence constraints."}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "Executable foundation API, environment, database, queue, deployment, and test contract established by this child."}
+{"file": ".trellis/spec/frontend/openapi-client-contracts.md", "reason": "Executable OpenAPI generation, handwritten client, Vue Query, and frontend validation contract."}

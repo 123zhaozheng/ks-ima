@@ -16,7 +16,10 @@ Questions to answer:
 - How do you handle type inference?
 -->
 
-(To be filled by the team)
+Frontend DTO types are generated from the checked backend OpenAPI document.
+The handwritten `src/api/ima-client.ts` adapter is the only typed runtime client
+for this foundation proof; it remains outside the generated tree so normal
+source linting covers its error handling and fetch behavior.
 
 ---
 
@@ -24,7 +27,8 @@ Questions to answer:
 
 <!-- Where types are defined, shared types vs local types -->
 
-(To be filled by the team)
+Keep generated DTOs under `src/api/generated/`; expose domain-specific query
+composables such as `useSystemInfo` from `src/composables/`.
 
 ---
 
@@ -32,7 +36,10 @@ Questions to answer:
 
 <!-- Runtime validation patterns (Zod, Yup, io-ts, etc.) -->
 
-(To be filled by the team)
+OpenAPI generation and drift checks provide compile-time contract safety, not
+runtime validation of untrusted JSON. Use the central client for HTTP failures
+and add a shared runtime decoder when a boundary requires validation; do not
+duplicate backend schemas or cast payloads independently in components.
 
 ---
 
@@ -40,7 +47,8 @@ Questions to answer:
 
 <!-- Type utilities, generics, type guards -->
 
-(To be filled by the team)
+Use Vue Query signal cancellation and typed client return values. Keep generated
+files immutable and avoid broad `any` or unchecked response transformations.
 
 ---
 
@@ -48,4 +56,5 @@ Questions to answer:
 
 <!-- any, type assertions, etc. -->
 
-(To be filled by the team)
+Do not hand-edit generated schema output, cast API payloads to unrelated domain
+types, or introduce a second client with overlapping endpoints.

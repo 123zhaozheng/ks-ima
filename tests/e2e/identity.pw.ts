@@ -78,6 +78,69 @@ test.describe('local identity journeys', () => {
     await expect(page.getByText('auth.sign_in').first()).toBeVisible()
   })
 
+  test('workspace roles use target ACLs and platform roles do not imply content access', async ({ page, browser }) => {
+    await login(page, accounts.super[0], accounts.super[1])
+    const create = await page.request.post('/api/v1/admin/workspaces', {
+      data: { name: `E2E Authorization ${Date.now()}`, initialAdminUserId: 'e2e-ordinary-id' },
+      headers: await csrfHeaders(page),
+    })
+    expect(create.ok()).toBeTruthy()
+    const workspace = await create.json() as { id: string }
+    expect((await page.request.get('/api/v1/workspaces')).ok()).toBeTruthy()
+
+    const ordinaryContext = await browser.newContext()
+    const ordinary = await ordinaryContext.newPage()
+    try {
+      await login(ordinary, accounts.ordinary[0], accounts.ordinary[1])
+      const listed = await ordinary.request.get('/api/v1/workspaces')
+      expect(listed.ok()).toBeTruthy()
+      const members = await ordinary.request.get(`/api/v1/workspaces/${workspace.id}/members`)
+      expect(members.ok()).toBeTruthy()
+      const child = await ordinary.request.post(`/api/v1/workspaces/${workspace.id}/folders`, {
+        data: { parentId: workspace.id, name: 'E2E Private Folder' },
+        headers: await csrfHeaders(ordinary),
+      })
+      expect(child.ok()).toBeTruthy()
+      const folder = await child.json() as { id: string, version: number }
+      const firstAcl = await ordinary.request.put(`/api/v1/workspaces/${workspace.id}/folders/${folder.id}/acl`, {
+        data: {
+          inherit: false,
+          entries: [
+            { subjectType: 'role', subjectId: 'workspace_admin', action: 'manage_acl' },
+            { subjectType: 'role', subjectId: 'workspace_admin', action: 'view_metadata' },
+            { subjectType: 'role', subjectId: 'workspace_admin', action: 'view_content' },
+          ],
+          expectedVersion: 1,
+        },
+        headers: await csrfHeaders(ordinary),
+      })
+      expect(firstAcl.ok()).toBeTruthy()
+      const firstAclBody = await firstAcl.json() as { version: number }
+      const currentAcl = await ordinary.request.put(`/api/v1/workspaces/${workspace.id}/folders/${folder.id}/acl`, {
+        data: { inherit: false, entries: [{ subjectType: 'role', subjectId: 'workspace_admin', action: 'manage_acl' }, { subjectType: 'role', subjectId: 'workspace_admin', action: 'view_metadata' }, { subjectType: 'role', subjectId: 'workspace_admin', action: 'view_content' }], expectedVersion: firstAclBody.version },
+        headers: await csrfHeaders(ordinary),
+      })
+      expect(currentAcl.ok()).toBeTruthy()
+      const stale = await ordinary.request.put(`/api/v1/workspaces/${workspace.id}/folders/${folder.id}/acl`, {
+        data: { inherit: false, entries: [{ subjectType: 'role', subjectId: 'workspace_admin', action: 'manage_acl' }], expectedVersion: firstAclBody.version },
+        headers: await csrfHeaders(ordinary),
+      })
+      expect(stale.status()).toBe(409)
+    } finally {
+      await ordinaryContext.close()
+    }
+
+    const platformContext = await browser.newContext()
+    const platform = await platformContext.newPage()
+    try {
+      await login(platform, accounts.platform[0], accounts.platform[1])
+      const folders = await platform.request.get(`/api/v1/workspaces/${workspace.id}/folders`)
+      expect(folders.status()).toBe(404)
+    } finally {
+      await platformContext.close()
+    }
+  })
+
   test('platform admin can manage ordinary users but cannot grant platform roles', async ({ page }) => {
     await login(page, accounts.platform[0], accounts.platform[1])
     const userId = 'e2e-ordinary-id'
@@ -90,7 +153,7 @@ test.describe('local identity journeys', () => {
     expect((await page.request.get('/api/v1/admin/audit-events')).ok()).toBeTruthy()
     await page.goto(`${adminOrigin}/audit`)
     await expect(page.getByText('auth.sign_in').first()).toBeVisible()
-    const response = await page.request.post('/api/v1/admin/workspaces', { data: { name: 'auditor-must-not-create' }, headers: await csrfHeaders(page) })
+    const response = await page.request.post('/api/v1/admin/workspaces', { data: { name: 'auditor-must-not-create', initialAdminUserId: 'e2e-ordinary-id' }, headers: await csrfHeaders(page) })
     expect(response.status()).toBe(403)
   })
 

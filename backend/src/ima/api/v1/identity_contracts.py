@@ -153,6 +153,7 @@ class RoleRequest(IdentityModel):
 
 class WorkspaceRequest(IdentityModel):
     name: str = Field(min_length=1, max_length=200)
+    initial_admin_user_id: str = Field(alias="initialAdminUserId", min_length=1, max_length=64)
 
 
 class SettingPatch(IdentityModel):

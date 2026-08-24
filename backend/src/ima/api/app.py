@@ -18,6 +18,7 @@ from ima.api.errors import (
     unhandled_exception_handler,
     validation_exception_handler,
 )
+from ima.api.internal.authorization_bridge import router as authorization_bridge_router
 from ima.api.internal.session_bridge import router as bridge_router
 from ima.api.middleware import BodyLimitMiddleware, CorrelationMiddleware, RequestTimingMiddleware
 from ima.api.v1.account import router as account_router
@@ -25,6 +26,10 @@ from ima.api.v1.admin import router as admin_router
 from ima.api.v1.auth import router as auth_router
 from ima.api.v1.system import readiness
 from ima.api.v1.system import router as system_router
+from ima.api.v1.workspaces import admin_router as workspace_admin_router
+from ima.api.v1.workspaces import invitation_router
+from ima.api.v1.workspaces import router as workspace_router
+from ima.application.authorization import WorkspaceError, WorkspaceService
 from ima.application.identity import IdentityError, IdentityService
 from ima.config import Settings, get_settings
 from ima.infrastructure.db.engine import create_engine
@@ -44,6 +49,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = app_settings
         app.state.job_service = service
         app.state.identity_service = IdentityService(engine, app_settings)
+        app.state.workspace_service = WorkspaceService(engine, app_settings)
         await service.start()
         try:
             yield
@@ -75,6 +81,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.add_exception_handler(IdentityError, identity_exception_handler)  # type: ignore[arg-type]
+
+    async def workspace_exception_handler(request: Request, exc: WorkspaceError) -> JSONResponse:
+        from ima.api.errors import make_problem
+
+        return make_problem(
+            request,
+            status=exc.status_code,
+            title="Workspace request failed",
+            detail=exc.detail,
+            code=exc.code,
+        )
+
+    app.add_exception_handler(WorkspaceError, workspace_exception_handler)  # type: ignore[arg-type]
     app.add_middleware(CorrelationMiddleware)
     app.add_middleware(RequestTimingMiddleware)
     if app_settings.trusted_proxies:
@@ -112,9 +131,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.include_router(auth_router)
     api.include_router(admin_router)
     api.include_router(account_router)
+    api.include_router(workspace_router)
+    api.include_router(invitation_router)
+    api.include_router(workspace_admin_router)
     # This router is intentionally excluded from the public Caddy matchers and
     # OpenAPI schema; Bun reaches it only on the private network.
     api.include_router(bridge_router)
+    api.include_router(authorization_bridge_router)
     app.include_router(api)
     # Route dependencies must use the same immutable settings instance as the
     # application factory, including in contract tests and embedded deployments.

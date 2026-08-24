@@ -41,6 +41,11 @@ export const serverMutators = defineMutators(mutators, {
   updateEntityConf: defineMutator(async ({ tx, ctx, args }) => {
     const input = args as { id: string, updates?: Record<string, unknown>, deletes?: string[] }
     const changesAcl = Object.hasOwn(input.updates ?? {}, 'acl') || input.deletes?.includes('acl')
+    if (changesAcl) {
+      // Python is the sole mutable ACL authority. The knowledge-tree child
+      // owns removal of the remaining legacy entity mutation surface.
+      throw new Error('Folder ACLs are managed by the Python workspace API')
+    }
     await requireEntityAction(ctx.userId, input.id, changesAcl ? 'manage' : 'edit')
     await mutators.updateEntityConf.fn({ tx, ctx, args: args as never })
   }),

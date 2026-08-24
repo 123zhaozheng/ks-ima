@@ -387,25 +387,10 @@ async def create_workspace(
 ) -> WorkspaceCreateResponse:
     session, actor = await require(request, "workspaces_manage", current_session)
     check_csrf(request, session)
-    from ima.application.identity import new_legacy_id
-
-    wid = new_legacy_id()
-    async with service(request).engine.begin() as conn:
-        await conn.execute(
-            text(
-                "INSERT INTO ima.workspaces(id,name,created_by,created_at,updated_at) VALUES (:id,:name,:actor,now(),now())"
-            ),
-            {"id": wid, "name": payload.name, "actor": actor.id},
-        )
-        await service(request)._audit(
-            conn,
-            actor.id,
-            "workspace.created",
-            "success",
-            target_type="workspace",
-            target_id=str(wid),
-        )
-    return WorkspaceCreateResponse(id=wid, name=payload.name, isActive=True)
+    workspace = await request.app.state.workspace_service.create_workspace(
+        actor.id, payload.name, payload.initial_admin_user_id
+    )
+    return WorkspaceCreateResponse(id=workspace["id"], name=workspace["name"], isActive=True)
 
 
 @router.post("/workspaces/{workspace_id}/archive", operation_id="adminArchiveWorkspace")
@@ -414,21 +399,7 @@ async def archive_workspace(
 ) -> dict[str, bool]:
     session, actor = await require(request, "workspaces_manage", current_session)
     check_csrf(request, session)
-    async with service(request).engine.begin() as conn:
-        await conn.execute(
-            text(
-                "UPDATE ima.workspaces SET is_active=false,archived_at=now(),updated_at=now() WHERE id=:id"
-            ),
-            {"id": workspace_id},
-        )
-        await service(request)._audit(
-            conn,
-            actor.id,
-            "workspace.archived",
-            "success",
-            target_type="workspace",
-            target_id=str(workspace_id),
-        )
+    await request.app.state.workspace_service.archive_workspace(actor.id, workspace_id)
     return {"archived": True}
 
 
@@ -438,21 +409,7 @@ async def restore_workspace(
 ) -> dict[str, bool]:
     session, actor = await require(request, "workspaces_manage", current_session)
     check_csrf(request, session)
-    async with service(request).engine.begin() as conn:
-        await conn.execute(
-            text(
-                "UPDATE ima.workspaces SET is_active=true,archived_at=NULL,updated_at=now() WHERE id=:id"
-            ),
-            {"id": workspace_id},
-        )
-        await service(request)._audit(
-            conn,
-            actor.id,
-            "workspace.restored",
-            "success",
-            target_type="workspace",
-            target_id=workspace_id,
-        )
+    await request.app.state.workspace_service.restore_workspace(actor.id, workspace_id)
     return {"restored": True}
 
 
@@ -462,26 +419,7 @@ async def delete_workspace(
 ) -> dict[str, bool]:
     session, actor = await require(request, "workspaces_manage", current_session)
     check_csrf(request, session)
-    async with service(request).engine.begin() as conn:
-        member_table = await conn.scalar(text("SELECT to_regclass('public.member')"))
-        dependencies = bool(
-            member_table
-            and await conn.scalar(
-                text('SELECT EXISTS(SELECT 1 FROM public.member WHERE "workspaceId"=:id)'),
-                {"id": workspace_id},
-            )
-        )
-        if dependencies:
-            raise HTTPException(409, "Workspace still has members or content dependencies")
-        await conn.execute(text("DELETE FROM ima.workspaces WHERE id=:id"), {"id": workspace_id})
-        await service(request)._audit(
-            conn,
-            actor.id,
-            "workspace.deleted",
-            "success",
-            target_type="workspace",
-            target_id=workspace_id,
-        )
+    await request.app.state.workspace_service.delete_archived_workspace(actor.id, workspace_id)
     return {"deleted": True}
 
 

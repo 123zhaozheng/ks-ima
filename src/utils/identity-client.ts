@@ -19,8 +19,27 @@ type ProfilePatch = components['schemas']['ProfilePatch']
 type SettingPatch = components['schemas']['SettingPatch']
 type WorkspaceRequest = components['schemas']['WorkspaceRequest']
 type WorkspaceList = components['schemas']['WorkspaceList']
+type MemberWorkspace = components['schemas']['MemberWorkspace']
 type PlatformSettings = components['schemas']['PlatformSettings']
 type AuditEventList = components['schemas']['AuditEventList']
+type WorkspaceMember = components['schemas']['WorkspaceMember']
+type WorkspaceGroup = components['schemas']['WorkspaceGroup']
+type Folder = components['schemas']['Folder']
+type FolderAcl = components['schemas']['FolderAcl']
+type MemberAddRequest = components['schemas']['MemberAddRequest']
+type MemberPatchRequest = components['schemas']['MemberPatchRequest']
+type FolderCreateRequest = components['schemas']['FolderCreateRequest']
+type FolderPatchRequest = components['schemas']['FolderPatchRequest']
+type FolderMoveRequest = components['schemas']['FolderMoveRequest']
+type FolderReorderRequest = components['schemas']['FolderReorderRequest']
+type FolderLifecycleRequest = components['schemas']['FolderLifecycleRequest']
+type AclReplaceRequest = components['schemas']['AclReplaceRequest']
+type GroupCreateRequest = components['schemas']['GroupCreateRequest']
+type InvitationCreateRequest = components['schemas']['InvitationCreateRequest']
+type Invitation = components['schemas']['Invitation']
+type UserSearchResult = components['schemas']['UserSearchResult']
+type AclSubject = components['schemas']['AclSubject']
+type PermissionPreviewRequest = components['schemas']['PermissionPreviewRequest']
 type Result<T> = { data?: T, error?: { code?: string, message: string } }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<Result<T>> {
@@ -94,4 +113,37 @@ export const identityClient = {
   getSettings: () => request<PlatformSettings>('/admin/settings'),
   updateSettings: (input: SettingPatch) => request<PlatformSettings>('/admin/settings', { method: 'PATCH', body: JSON.stringify(input) }),
   listAudit: (limit = 100) => request<AuditEventList>(`/admin/audit-events?limit=${limit}`),
+  listMemberWorkspaces: () => request<WorkspaceList>('/workspaces'),
+  getMemberWorkspace: (workspaceId: string) => request<MemberWorkspace>(`/workspaces/${encodeURIComponent(workspaceId)}`),
+  listWorkspaceMembers: (workspaceId: string, q = '') => request<WorkspaceMember[]>(`/workspaces/${encodeURIComponent(workspaceId)}/members?q=${encodeURIComponent(q)}`),
+  searchWorkspaceUsers: (workspaceId: string, q: string) => request<UserSearchResult[]>(`/workspaces/${encodeURIComponent(workspaceId)}/members/search?q=${encodeURIComponent(q)}`),
+  addWorkspaceMember: (workspaceId: string, input: MemberAddRequest) => request<WorkspaceMember>(`/workspaces/${encodeURIComponent(workspaceId)}/members`, { method: 'POST', body: JSON.stringify(input) }),
+  updateWorkspaceMember: (workspaceId: string, userId: string, input: MemberPatchRequest) => request<WorkspaceMember>(`/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  removeWorkspaceMember: (workspaceId: string, userId: string, expectedVersion?: number) => request(`/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}${expectedVersion ? `?expected_version=${expectedVersion}` : ''}`, { method: 'DELETE' }),
+  leaveWorkspaceMember: (workspaceId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/leave`, { method: 'POST', body: '{}' }),
+  listWorkspaceGroups: (workspaceId: string) => request<WorkspaceGroup[]>(`/workspaces/${encodeURIComponent(workspaceId)}/groups`),
+  createWorkspaceGroup: (workspaceId: string, input: GroupCreateRequest) => request<WorkspaceGroup>(`/workspaces/${encodeURIComponent(workspaceId)}/groups`, { method: 'POST', body: JSON.stringify(input) }),
+  listWorkspaceGroupMembers: (workspaceId: string, groupId: string) => request<UserSearchResult[]>(`/workspaces/${encodeURIComponent(workspaceId)}/groups/${encodeURIComponent(groupId)}/members`),
+  deleteWorkspaceGroup: (workspaceId: string, groupId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/groups/${encodeURIComponent(groupId)}`, { method: 'DELETE' }),
+  addWorkspaceGroupMember: (workspaceId: string, groupId: string, userId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, { method: 'PUT', body: '{}' }),
+  removeWorkspaceGroupMember: (workspaceId: string, groupId: string, userId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' }),
+  listWorkspaceFolders: (workspaceId: string, parentId?: string) => request<Folder[]>(`/workspaces/${encodeURIComponent(workspaceId)}/folders${parentId ? `?parent_id=${encodeURIComponent(parentId)}` : ''}`),
+  createWorkspaceFolder: (workspaceId: string, input: FolderCreateRequest) => request<Folder>(`/workspaces/${encodeURIComponent(workspaceId)}/folders`, { method: 'POST', body: JSON.stringify(input) }),
+  getWorkspaceFolder: (workspaceId: string, folderId: string) => request<Folder>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}`),
+  renameWorkspaceFolder: (workspaceId: string, folderId: string, input: FolderPatchRequest) => request<Folder>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  moveWorkspaceFolder: (workspaceId: string, folderId: string, input: FolderMoveRequest) => request<Folder>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/move`, { method: 'POST', body: JSON.stringify(input) }),
+  reorderWorkspaceFolder: (workspaceId: string, folderId: string, input: FolderReorderRequest) => request<Folder>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/reorder`, { method: 'POST', body: JSON.stringify(input) }),
+  trashWorkspaceFolder: (workspaceId: string, folderId: string, input: FolderLifecycleRequest) => request(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/trash`, { method: 'POST', body: JSON.stringify(input) }),
+  restoreWorkspaceFolder: (workspaceId: string, folderId: string, input: FolderLifecycleRequest) => request(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/restore`, { method: 'POST', body: JSON.stringify(input) }),
+  deleteWorkspaceFolder: (workspaceId: string, folderId: string, expectedVersion: number) => request(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}?expected_version=${expectedVersion}`, { method: 'DELETE' }),
+  getWorkspaceFolderAcl: (workspaceId: string, folderId: string) => request<FolderAcl>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/acl`),
+  searchWorkspaceAclSubjects: (workspaceId: string, q = '') => request<AclSubject[]>(`/workspaces/${encodeURIComponent(workspaceId)}/acl-subjects?q=${encodeURIComponent(q)}`),
+  replaceWorkspaceFolderAcl: (workspaceId: string, folderId: string, input: AclReplaceRequest) => request<FolderAcl>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/acl`, { method: 'PUT', body: JSON.stringify(input) }),
+  inheritWorkspaceFolderAcl: (workspaceId: string, folderId: string, expectedVersion?: number) => request<FolderAcl>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/acl${expectedVersion ? `?expected_version=${expectedVersion}` : ''}`, { method: 'DELETE' }),
+  issueWorkspaceInvitation: (workspaceId: string, input: InvitationCreateRequest) => request<Invitation>(`/workspaces/${encodeURIComponent(workspaceId)}/invitations`, { method: 'POST', body: JSON.stringify(input) }),
+  listWorkspaceInvitations: (workspaceId: string) => request<Invitation[]>(`/workspaces/${encodeURIComponent(workspaceId)}/invitations`),
+  revokeWorkspaceInvitation: (workspaceId: string, invitationId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/invitations/${encodeURIComponent(invitationId)}`, { method: 'DELETE' }),
+  acceptWorkspaceInvitation: (token: string) => request(`/workspace-invitations/${encodeURIComponent(token)}/accept`, { method: 'POST', body: '{}' }),
+  previewWorkspacePermissions: (workspaceId: string, input: PermissionPreviewRequest) => request<Folder[]>(`/workspaces/${encodeURIComponent(workspaceId)}/permission-preview`, { method: 'POST', body: JSON.stringify(input) }),
+  repairWorkspaceAdmin: (workspaceId: string, userId: string) => request(`/admin/workspaces/${encodeURIComponent(workspaceId)}/workspace-admin-repair`, { method: 'POST', body: JSON.stringify({ userId }) }),
 }

@@ -32,6 +32,9 @@ services:
       S3_ENDPOINT: update-this
       S3_REGION: update-this
       S3_BUCKET: update-this
+      PYTHON_API_INTERNAL_URL: http://ima-api:8000
+      IMA_BRIDGE_TOKEN: ${IMA_BRIDGE_TOKEN:?set a private bridge token}
+      IMA_BRIDGE_TIMEOUT_MS: ${IMA_BRIDGE_TIMEOUT_MS:-1500}
 
     depends_on:
       db:
@@ -51,6 +54,7 @@ services:
       IMA_CORS_ORIGINS: ${IMA_CORS_ORIGINS:-http://localhost:8080}
       IMA_DIAGNOSTIC_QUEUE: ${IMA_DIAGNOSTIC_QUEUE:-diagnostic}
       IMA_WORKER_NAME: ${IMA_WORKER_NAME:-diagnostic-worker}
+      IMA_BRIDGE_TOKEN: ${IMA_BRIDGE_TOKEN:?set a private bridge token}
     depends_on:
       ima-migrate:
         condition: service_completed_successfully
@@ -120,6 +124,9 @@ services:
       SERVER_URL: http://server:3000
       ZERO_CACHE_URL: http://zero-cache:4848
       PYTHON_API_URL: http://ima-api:8000
+      PYTHON_API_INTERNAL_URL: http://ima-api:8000
+      IMA_BRIDGE_TOKEN: ${IMA_BRIDGE_TOKEN:?set a private bridge token}
+      IMA_BRIDGE_TIMEOUT_MS: ${IMA_BRIDGE_TIMEOUT_MS:-1500}
  
   zero-cache:
     image: rocicorp/zero:0.26.1

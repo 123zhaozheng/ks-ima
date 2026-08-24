@@ -18,6 +18,12 @@
             outlined
             label="New workspace"
           />
+          <q-input
+            v-model="newAdminUserId"
+            dense
+            outlined
+            label="Initial workspace admin user ID"
+          />
           <q-btn
             icon="add"
             flat
@@ -86,6 +92,7 @@ type Workspace = components['schemas']['WorkspaceInfo']
 const rows = ref<Workspace[]>([])
 const search = ref('')
 const newName = ref('')
+const newAdminUserId = ref('')
 const loading = ref(false)
 const error = ref('')
 const canManage = computed(() => session.value.data?.user.platformRoles?.some(role => role === 'super_admin' || role === 'platform_admin') ?? false)
@@ -97,9 +104,10 @@ const columns: QTableColumn[] = [
 ]
 
 async function create() {
-  const result = await identityClient.createWorkspace({ name: newName.value })
+  const result = await identityClient.createWorkspace({ name: newName.value, initialAdminUserId: newAdminUserId.value })
   if (result.error) { error.value = result.error.message; return }
   newName.value = ''
+  newAdminUserId.value = ''
   await load()
 }
 async function archive(id: string) { const result = await identityClient.archiveWorkspace(id); if (result.error) error.value = result.error.message; else await load() }

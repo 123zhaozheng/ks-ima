@@ -246,6 +246,22 @@ export const item = pgTable('item', {
     foreignColumns: [entity.rootId, entity.id],
   }).onDelete('cascade').onUpdate('cascade'),
 ])
+/** RAG slices. Server-only (not synced to Zero). */
+export const chunk = pgTable('chunk', {
+  id: id().primaryKey(),
+  rootId: id().notNull(),
+  entityId: id().notNull().references(() => entity.id, { onDelete: 'cascade' }),
+  ordinal: integer().notNull(),
+  text: text().notNull(),
+  page: integer(),
+  embedding: jsonb().$type<number[]>(),
+  search: tsVector().generatedAlwaysAs(
+    (): SQL => sql`to_tsvector('mixed', left(${chunk.text}, 250000))`,
+  ),
+}, t => [
+  index().on(t.entityId),
+  index().on(t.rootId),
+])
 export const blob = pgTable('blob', {
   id: id().primaryKey(),
   sha256: text().notNull(),
@@ -405,6 +421,21 @@ export const entityAccess = pgTable('entityAccess', {
   index().on(t.userId, t.time.desc()),
 ])
 
+export const entityPermission = pgTable('entityPermission', {
+  workspaceId: id().notNull().references(() => workspace.id, { onDelete: 'cascade' }),
+  entityId: id().notNull().references(() => entity.id, { onDelete: 'cascade' }),
+  userId: text().notNull().references(() => user.id, { onDelete: 'cascade' }),
+  canView: boolean().notNull(),
+  canAsk: boolean().notNull(),
+  canEdit: boolean().notNull(),
+  canDelete: boolean().notNull(),
+  canManage: boolean().notNull(),
+}, t => [
+  primaryKey({ columns: [t.entityId, t.userId] }),
+  index().on(t.workspaceId, t.userId, t.canView),
+  index().on(t.userId, t.canView),
+])
+
 export const connector = pgTable('connector', {
   id: id().primaryKey(),
   workspaceId: id().notNull().references(() => workspace.id, { onDelete: 'cascade' }),
@@ -430,6 +461,8 @@ export const globalSettings = pgTable('globalSettings', {
   defaultChatTitleModel: id().references(() => model.id, { onDelete: 'set null' }),
   defaultTranslationModel: id().references(() => model.id, { onDelete: 'set null' }),
   defaultSearchChatModel: id().references(() => model.id, { onDelete: 'set null' }),
+  embeddingModelId: id().references(() => model.id, { onDelete: 'set null' }),
+  rerankModelId: id().references(() => model.id, { onDelete: 'set null' }),
   freeModelReqLimit: integer().notNull(),
   freeModelLimitWindow: integer().notNull(),
   maxWorkspacesPerUser: integer().notNull(),

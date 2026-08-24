@@ -153,13 +153,6 @@
                     :label="t('More Info')"
                     @click="moreInfo"
                   />
-                  <menu-item
-                    v-if="actions.directDelete"
-                    icon="sym_o_delete"
-                    :label="t('Delete')"
-                    @click="directDelete"
-                    hover:text-err
-                  />
                 </q-list>
               </q-menu>
             </q-btn>
@@ -230,23 +223,6 @@
                 no-caps
               />
 
-              <template v-if="!selected.text.includes('\n')">
-                <q-separator vertical />
-                <q-btn
-                  v-if="!selected.text.includes('\n')"
-                  icon="sym_o_search"
-                  :label="t('Search')"
-                  @click="search(selected.text)"
-                  no-caps
-                />
-              </template>
-              <q-separator vertical />
-              <q-btn
-                icon="sym_o_translate"
-                :label="t('Translate')"
-                @click="translate(selected.text)"
-                no-caps
-              />
               <template v-if="selected.markdown">
                 <q-separator vertical />
                 <q-btn
@@ -373,7 +349,7 @@ import CopyBtn from './CopyBtn.vue'
 import MenuItem from './MenuItem.vue'
 import type { FullMessage } from 'app/src-shared/queries'
 import { entityAvatar, entityName, userAvatar } from 'src/utils/defaults'
-import { allowDeleteMessage, allowEditMessageText, mutators } from 'app/src-shared/mutators'
+import { allowEditMessageText, mutators } from 'app/src-shared/mutators'
 import { tasks } from 'src/utils/tasks'
 import { mdExtensions } from 'src/utils/md-extensions'
 import { genId } from 'app/src-shared/utils/id'
@@ -381,9 +357,8 @@ import MessageImage from './MessageImage.vue'
 import MessageEntity from './MessageEntity.vue'
 import { usePerfsStore } from 'src/stores/perfs'
 import ToolCallItem from './ToolCallItem.vue'
-import { createSearch } from 'src/services/create-search'
 import { useRouter } from 'vue-router'
-import { entityRoute, wrapCode } from 'src/utils/functions'
+import { wrapCode } from 'src/utils/functions'
 
 const props = defineProps<{
   message: FullMessage
@@ -427,14 +402,12 @@ const actions = computed(() => ({
   regenerate: props.message.type.endsWith(':assistant'),
   edit: props.message.type === 'chat:user',
   directEdit: allowEditMessageText(props.message, user.id!),
-  directDelete: allowDeleteMessage(props.message, user.id!),
 }))
 
 function onAvatarClick() {
   const { message } = props
-  const to = message.type.endsWith(':assistant')
-    ? message.assistant && entityRoute('assistant', message.assistant.id)
-    : message.user && (message.user.id === user.id ? '/account' : '/workspace')
+  if (message.type.endsWith(':assistant')) return
+  const to = message.user && (message.user.id === user.id ? '/account' : '/workspace')
   to && router.push(to)
 }
 
@@ -488,21 +461,6 @@ function deleteBranch() {
     ...dialogOptions,
   }).onOk(() => {
     emit('deleteBranch')
-  })
-}
-function directDelete() {
-  $q.dialog({
-    title: t('Delete Message'),
-    message: t('Are you sure you want to delete this message?'),
-    cancel: true,
-    ok: {
-      label: t('Delete'),
-      color: 'err',
-      flat: true,
-    },
-    ...dialogOptions,
-  }).onOk(() => {
-    mutate(mutators.deleteMessage(props.message.id))
   })
 }
 function moreInfo() {
@@ -604,22 +562,6 @@ if (perfsStore.perfs.messageSelectionMenu) {
 }
 
 const router = useRouter()
-async function search(text: string) {
-  const id = await createSearch(text, props.message.entityId)
-  router.push(entityRoute('search', id, 'right'))
-}
-async function translate(text: string) {
-  const id = genId()
-  await mutate(mutators.createTranslation({
-    id,
-    parentId: props.message.entityId,
-    input: text,
-  })).client
-  router.push({
-    query: { rightEntity: JSON.stringify({ type: 'translation', id }) },
-    hash: '#translate',
-  })
-}
 </script>
 <style lang="scss">
 .reasoning-content-header {

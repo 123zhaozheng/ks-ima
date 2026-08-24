@@ -18,6 +18,7 @@ import type { Ref } from 'vue'
 import { inject, watchEffect } from 'vue'
 import type { LayoutPosition } from 'src/utils/types'
 import { useRouter } from 'vue-router'
+import { useWorkspaceStore } from 'src/stores/workspace'
 
 const props = defineProps<{
   data: T
@@ -26,12 +27,13 @@ const props = defineProps<{
 
 const position = inject<Ref<LayoutPosition>>('position')!
 const router = useRouter()
+const workspaceStore = useWorkspaceStore()
 watchEffect(() => {
   if (props.status === 'complete' && !props.data) {
     if (position.value === 'right') {
       router.replace({ query: {} })
     } else {
-      router.replace('/')
+      router.replace(workspaceStore.id ? `/folder/${workspaceStore.id}` : '/')
     }
   }
 })

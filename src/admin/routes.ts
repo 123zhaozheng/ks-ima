@@ -6,9 +6,7 @@ import EmptyPage from './pages/EmptyPage.vue'
 import NotFoundPage from 'src/pages/NotFoundPage.vue'
 import MainLayout from 'src/admin/layouts/MainLayout.vue'
 import { authRoute } from 'src/router/auth'
-import PlansPage from './pages/PlansPage.vue'
 import ModelsPage from './pages/ModelsPage.vue'
-import PlanPricesPage from './pages/PlanPricesPage.vue'
 import WorkspacesPage from './pages/WorkspacesPage.vue'
 
 const routes: RouteRecordRaw[] = [
@@ -37,20 +35,6 @@ const routes: RouteRecordRaw[] = [
             component: WorkspacesPage,
             meta: {
               title: t('Workspaces'),
-            },
-          },
-          {
-            path: '/plans',
-            component: PlansPage,
-            meta: {
-              title: t('Plans'),
-            },
-          },
-          {
-            path: '/plan-prices',
-            component: PlanPricesPage,
-            meta: {
-              title: t('Plan Prices'),
             },
           },
           {

@@ -80,7 +80,7 @@
       outlined
       autogrow
       clearable
-      :placeholder="t('Enter chat content...')"
+      :placeholder="placeholder ?? t('Enter chat content...')"
       @keydown.enter="onEnter"
       @paste="onTextPaste"
     />
@@ -115,6 +115,7 @@ const props = defineProps<{
   parentId: string
   inputTypes: string[]
   plugins?: Plugins
+  placeholder?: string
 }>()
 
 const emit = defineEmits<{

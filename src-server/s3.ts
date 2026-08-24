@@ -8,15 +8,16 @@ import { hashProofStream } from 'app/src-shared/utils/functions'
 import * as schema from './schema'
 import { randomId } from 'app/src-shared/utils/id'
 import { deleteObject, presignedGetObject, putObject } from './utils/s3'
+import { enqueueParse } from './kb/ingest'
+import { actorFromSession, can } from './utils/permissions'
 
 async function getDownloadUrl(id: string, userId?: string) {
+  if (!userId) return null
   const item = await db.query.item.findFirst({
     where: {
       id,
       blobId: { isNotNull: true },
-      OR: [
-        ...userId ? [{ member: { userId } }] : [],
-      ],
+      member: { userId },
     },
     with: {
       blob: true,
@@ -24,6 +25,8 @@ async function getDownloadUrl(id: string, userId?: string) {
     },
   })
   if (!item?.blob) return null
+  const actor = await actorFromSession(userId, item.rootId)
+  if (!actor || !(await can(actor, id, 'view'))) return null
   return {
     url: await presignedGetObject(item.blob.id, {
       expires: 1800,
@@ -89,6 +92,7 @@ const app = new Hono()
         await tx.update(schema.item).set({
           blobId: blob.id,
         }).where(eq(schema.item.id, id))
+        enqueueParse(id)
         return c.json({ success: true })
       }
     })
@@ -135,12 +139,14 @@ const app = new Hono()
       ))
     })
 
+    enqueueParse(id)
     return c.json({ success: true })
   })
   .get('/items/:id', async c => {
     const id = c.req.param('id')
 
     const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    if (!session) return c.json({ error: 'Unauthorized' }, 401)
     const res = await getDownloadUrl(id, session?.user.id)
     if (!res) return c.json({ error: 'Not found' }, 404)
     return c.redirect(res.url)

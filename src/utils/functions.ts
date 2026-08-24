@@ -82,10 +82,6 @@ export function filterOptions<T>(options: T[], q: string, getLabel: (option: T) 
   )
 }
 
-export function getFavicon(url: string) {
-  return `https://icons.duckduckgo.com/ip3/${new URL(url).hostname}.ico`
-}
-
 export function mimeTypeMatch(mimeType: string, mimeTypes: string[]) {
   return mimeTypes.some(t => {
     if (t === '*' || t === mimeType) return true

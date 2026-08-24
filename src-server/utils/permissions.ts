@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { db } from './db'
-import { connector, entity, member } from '../schema'
+import { connector, entity } from '../schema'
 import type { AclAction } from 'app/src-shared/utils/acl'
 import { canAction } from 'app/src-shared/utils/acl'
 import type { WorkspaceRole } from 'app/src-shared/utils/validators'
@@ -90,7 +90,7 @@ export async function resolveActor(headers: Headers, workspaceId?: string): Prom
   return null
 }
 
-async function isUnderFolderRoot(entityId: string, folderRootId: string) {
+export async function isUnderFolderRoot(entityId: string, folderRootId: string) {
   let currentId: string | null = entityId
   const seen = new Set<string>()
   while (currentId && !seen.has(currentId)) {
@@ -128,9 +128,13 @@ export async function filterVisibleIds(actor: Actor, ids: string[]) {
   return visible
 }
 
-export async function listVisibleEntityIds(actor: Actor) {
+export async function listVisibleEntityIds(actor: Actor, action: AclAction = 'view') {
   const rows = await db.select({ id: entity.id }).from(entity).where(eq(entity.rootId, actor.workspaceId))
-  return filterVisibleIds(actor, rows.map(r => r.id))
+  const visible: string[] = []
+  for (const row of rows) {
+    if (await can(actor, row.id, action)) visible.push(row.id)
+  }
+  return visible
 }
 
 export async function assertCan(actor: Actor, entityId: string, action: AclAction) {

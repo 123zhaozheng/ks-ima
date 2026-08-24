@@ -4,10 +4,16 @@ import { S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY } from '
 const aws = new AwsClient({
   accessKeyId: S3_ACCESS_KEY_ID,
   secretAccessKey: S3_SECRET_ACCESS_KEY,
+  service: 's3',
+  region: process.env.S3_REGION || 'us-east-1',
 })
 
 function objectUrl(key: string) {
-  return `https://${S3_BUCKET}.${S3_ENDPOINT}/${key}`
+  const endpoint = S3_ENDPOINT.replace(/\/$/, '')
+  if (/^https?:\/\//i.test(endpoint)) {
+    return `${endpoint}/${S3_BUCKET}/${key}`
+  }
+  return `https://${S3_BUCKET}.${endpoint}/${key}`
 }
 
 export async function presignedGetObject(key: string, { expires, contentDisposition }: {
@@ -23,6 +29,15 @@ export async function presignedGetObject(key: string, { expires, contentDisposit
     aws: { signQuery: true },
   })
   return signed.url
+}
+
+export async function getObject(key: string) {
+  const res = await aws.fetch(objectUrl(key), { method: 'GET' })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`S3 getObject failed: ${res.status} ${text.slice(0, 200)}`)
+  }
+  return res
 }
 
 export async function putObject(key: string, body: BodyInit, { size, metadata }: {

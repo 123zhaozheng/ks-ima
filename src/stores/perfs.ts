@@ -23,7 +23,6 @@ export const DefaultPerfs = {
   expandReasoningContent: true,
   codePasteOptimize: false,
   sendMessageKey: { key: 'Enter', withCtrl: true } as ShortcutKey,
-  translateKey: { key: 'Enter', withCtrl: true } as ShortcutKey,
   navigationPanelShortcut: { key: 'KeyP', withCtrl: true } as ShortcutKey,
   searchWorkspaceKey: null as ShortcutKey,
   regenerateCurrKey: { key: 'KeyR', withCtrl: true } as ShortcutKey,
@@ -37,7 +36,6 @@ export const DefaultPerfs = {
   messageSelectionMenu: true,
   autoGenChatTitle: true,
   chatScrollBtns: true,
-  channelScrollBtns: true,
 }
 
 export type Perfs = typeof DefaultPerfs

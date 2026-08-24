@@ -5,116 +5,122 @@
   >
     <common-toolbar>
       <q-toolbar-title text-lg>
-        {{ entityName(entity) }}
+        {{ folderTitle }}
       </q-toolbar-title>
+      <q-btn
+        unelevated
+        no-caps
+        icon="sym_o_create_new_folder"
+        :label="t('New folder')"
+        @click="createFolder"
+        bg-pri-c
+        text-on-pri-c
+      />
+      <q-btn
+        flat
+        no-caps
+        icon="sym_o_upload_file"
+        :label="t('Upload files')"
+        @click="selectFile(files => uploadKnowledge(currentId, files.map(file => ({ file, relativePath: file.name }))), { multiple: true })"
+      />
+      <q-btn
+        flat
+        no-caps
+        icon="sym_o_drive_folder_upload"
+        :label="t('Upload folder')"
+        @click="selectFolder(files => uploadKnowledge(currentId, files))"
+      />
+      <q-btn
+        flat
+        no-caps
+        icon="sym_o_chat"
+        :label="t('Ask')"
+        @click="askKnowledge"
+      />
     </common-toolbar>
-    <div of-y-auto>
-      <q-list py-2>
-        <common-item :label="t('Sort priority')">
-          <q-input
-            :model-value="entity?.sortPriority"
-            @update:model-value="$event && updateEntity({ sortPriority: parseInt($event as string) })"
-            type="number"
-            dense
-            filled
-            class="w-100px"
-          />
-        </common-item>
-        <common-item :label="t('Hidden')">
-          <q-toggle
-            :model-value="entity?.hidden"
-            @update:model-value="updateEntity({ hidden: $event })"
-          />
-        </common-item>
-        <q-separator spaced />
-        <a-tip
-          tip-key="dir-conf"
-          long
-          rd-0
-        >
-          {{ t('This configuration applies to this directory scope; different directories can have different configurations, and the configuration of an inner directory can override that of an outer directory.') }}
-        </a-tip>
-        <q-item-label header>
-          {{ t('Directory Configuration') }}
-        </q-item-label>
-        <setting-item
-          :label="t('Chat assistant')"
-          :modified-in="state.chatAssistantId.modifiedIn"
-          @reset="reset('chatAssistantId')"
-        >
-          <q-select
-            :model-value="state.chatAssistantId.value"
-            @update:model-value="update('chatAssistantId', $event)"
-            :options="assistantOptions"
-            map-options
-            emit-value
-            dense
-            filled
+    <div
+      flex-1
+      min-h-0
+      relative
+      @dragenter.prevent="dragging = true"
+      @dragover.prevent="dragging = true"
+      @dragleave="onDragLeave"
+      @drop.prevent="onDrop"
+    >
+      <entity-list
+        v-model="currentId"
+        flex-1
+        min-h-0
+        h-full
+        @entity-click="onFileClick"
+      >
+        <template #empty>
+          <div
+            flex="~ col"
+            items-center
+            justify-center
+            text-on-sur-var
+            h-full
+            px-6
+            py-12
+            text-center
           >
-            <template #option="{ opt: { label, avatar }, itemProps }">
-              <dense-item
-                :label
-                :avatar
-                v-bind="itemProps"
+            <q-icon
+              name="sym_o_folder_open"
+              size="64px"
+              mb-4
+            />
+            <div
+              text-h6
+              text-on-sur
+            >
+              {{ t('Drop files or folders here') }}
+            </div>
+            <div
+              mt-2
+              max-w="420px"
+            >
+              {{ t('Create a folder, then upload documents. Files are parsed automatically and can be asked about.') }}
+            </div>
+            <div
+              flex
+              gap-2
+              mt-6
+            >
+              <q-btn
+                unelevated
+                no-caps
+                icon="sym_o_create_new_folder"
+                :label="t('New folder')"
+                @click="createFolder"
+                bg-pri-c
+                text-on-pri-c
               />
-            </template>
-          </q-select>
-        </setting-item>
-        <setting-item
-          :label="t('Chat model')"
-          :modified-in="state.chatModelId.modifiedIn"
-          @reset="reset('chatModelId')"
-        >
-          <model-select
-            :workspace-id="workspaceStore.id"
-            :model-value="state.chatModelId.value"
-            @update:model-value="update('chatModelId', $event)"
-            dense
-            filled
-          />
-        </setting-item>
-        <setting-item
-          :label="t('Chat title model')"
-          :caption="t('Model used to generate chat title')"
-          :modified-in="state.chatTitleModelId.modifiedIn"
-          @reset="reset('chatTitleModelId')"
-        >
-          <model-select
-            :workspace-id="workspaceStore.id"
-            :model-value="state.chatTitleModelId.value"
-            @update:model-value="update('chatTitleModelId', $event)"
-            dense
-            filled
-          />
-        </setting-item>
-        <setting-item
-          :label="t('Search assistant prompt')"
-          :modified-in="state.searchAssistantPrompt.modifiedIn"
-          @reset="reset('searchAssistantPrompt')"
-        >
-          <a-input
-            :model-value="state.searchAssistantPrompt.value"
-            @change="update('searchAssistantPrompt', $event)"
-            filled
-            autogrow
-            class="w-full"
-          />
-        </setting-item>
-        <setting-item
-          :label="t('Chat title prompt')"
-          :caption="t('The prompt used to summarize chat titles')"
-          :modified-in="state.chatTitlePrompt.modifiedIn"
-          @reset="reset('chatTitlePrompt')"
-        >
-          <a-input
-            :model-value="state.chatTitlePrompt.value"
-            @change="update('chatTitlePrompt', $event)"
-            filled
-            autogrow
-            class="w-full"
-          />
-        </setting-item>
-      </q-list>
+              <q-btn
+                outline
+                no-caps
+                icon="sym_o_upload_file"
+                :label="t('Upload files')"
+                @click="selectFile(files => uploadKnowledge(currentId, files.map(file => ({ file, relativePath: file.name }))), { multiple: true })"
+              />
+            </div>
+          </div>
+        </template>
+      </entity-list>
+      <div
+        v-if="dragging"
+        pointer-events-none
+        abs-full
+        flex
+        items-center
+        justify-center
+        bg="pri/12"
+        border="2 dashed pri"
+      >
+        <div text-h6>
+          {{ t('Drop to upload and parse') }}
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -122,49 +128,65 @@
 <script setup lang="ts">
 import { t } from 'src/utils/i18n'
 import { useThisEntityConf } from 'src/composables/entity-conf'
-import { computed, provide } from 'vue'
-import SettingItem from 'src/components/SettingItem.vue'
-import ModelSelect from 'src/components/ModelSelect.vue'
-import { entityAvatar, entityName } from 'src/utils/defaults'
-import type { SettingsScope } from 'src/utils/types'
+import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { entityName } from 'src/utils/defaults'
 import { useWorkspaceStore } from 'src/stores/workspace'
-import { useQuery } from 'src/composables/zero/query'
-import { queries } from 'app/src-shared/queries'
-import CommonItem from 'src/components/CommonItem.vue'
-import { mutate } from 'src/utils/zero-session'
-import { mutators } from 'app/src-shared/mutators'
-import DenseItem from 'src/components/DenseItem.vue'
-import AInput from 'src/components/AInput'
 import CommonToolbar from 'src/components/CommonToolbar.vue'
-import ATip from 'src/components/ATip.vue'
+import EntityList from 'src/components/EntityList.vue'
+import { createEntity } from 'src/utils/create-entity'
+import { selectFile } from 'src/utils/select-file'
+import { filesFromDrop, selectFolder, uploadKnowledge } from 'src/utils/knowledge-upload'
+import type { FullEntity } from 'app/src-shared/queries'
+import { entityRoute } from 'src/utils/functions'
+import { useAskKnowledge } from 'src/composables/ask-knowledge'
 
 const props = defineProps<{
   id: string
 }>()
 
-const { entity, ancestors, state, update, reset } = useThisEntityConf()
+const router = useRouter()
+const currentId = ref(props.id)
+watch(() => props.id, id => {
+  currentId.value = id
+})
+watch(currentId, id => {
+  if (id && id !== props.id) router.replace(`/folder/${id}`)
+})
 
-provide('scopes', computed<SettingsScope[]>(() => ancestors.value.map(x => ({
-  label: entityName(x),
-  to: { query: { rightEntity: JSON.stringify({ type: 'folder', id: x.id }) } },
-}))))
+const { entity } = useThisEntityConf()
+const dragging = ref(false)
 
 const workspaceStore = useWorkspaceStore()
+watch(() => entity.value?.rootId, rootId => {
+  if (rootId && workspaceStore.id !== rootId) workspaceStore.id = rootId
+})
+const askKnowledge = useAskKnowledge()
+const folderTitle = computed(() => {
+  if (!entity.value) return ''
+  if (entity.value.id === workspaceStore.id || entity.value.name === '/') return t('All files')
+  return entityName(entity.value)
+})
 
-const { data: assistants } = useQuery(() => workspaceStore.id ? queries.assistants({ workspaceId: workspaceStore.id }) : null)
-const assistantOptions = computed(() => assistants.value?.map(a => ({
-  avatar: entityAvatar(a.entity),
-  label: entityName(a.entity),
-  value: a.id,
-})))
+function createFolder() {
+  createEntity(currentId.value, 'folder')
+}
 
-function updateEntity(updates: {
-  sortPriority?: number
-  hidden?: boolean
-}) {
-  mutate(mutators.updateEntity({
-    id: props.id,
-    ...updates,
-  }))
+function onFileClick(entity: FullEntity) {
+  const link = entityRoute(entity.type, entity.id)
+  link && router.push(link)
+}
+
+function onDragLeave(ev: DragEvent) {
+  const related = ev.relatedTarget as Node | null
+  if (related && (ev.currentTarget as HTMLElement).contains(related)) return
+  dragging.value = false
+}
+
+async function onDrop(ev: DragEvent) {
+  dragging.value = false
+  if (!ev.dataTransfer) return
+  const dropped = await filesFromDrop(ev.dataTransfer)
+  await uploadKnowledge(currentId.value, dropped)
 }
 </script>

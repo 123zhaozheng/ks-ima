@@ -37,6 +37,7 @@ export default drizzleZeroConfig(schema, {
     usage: true,
     order: true,
     entityAccess: true,
+    entityPermission: true,
     globalSettings: true,
   },
 })

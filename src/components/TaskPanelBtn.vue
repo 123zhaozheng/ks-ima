@@ -1,16 +1,25 @@
 <template>
-  <q-btn
+  <q-item
+    clickable
     @click="openTaskPanel"
-    icon="sym_o_checklist"
     :title="t('Tasks')"
   >
-    <q-badge
+    <q-item-section avatar>
+      <q-icon name="sym_o_checklist" />
+    </q-item-section>
+    <q-item-section>
+      {{ t('Tasks') }}
+    </q-item-section>
+    <q-item-section
       v-if="runningTaskCount"
-      :label="runningTaskCount"
-      rounded
-      floating
-    />
-  </q-btn>
+      side
+    >
+      <q-badge
+        :label="runningTaskCount"
+        rounded
+      />
+    </q-item-section>
+  </q-item>
 </template>
 <script lang="ts" setup>
 import { t } from 'src/utils/i18n'

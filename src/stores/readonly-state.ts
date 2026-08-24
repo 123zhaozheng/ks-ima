@@ -1,12 +1,10 @@
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { computed } from 'vue'
-import { useEntityStore } from 'src/stores/entity'
 import { useWorkspaceStore } from 'src/stores/workspace'
 import { t } from 'src/utils/i18n'
 import { connectionState } from 'src/utils/zero-session'
 
 export const useReadonlyStateStore = defineStore('readonlyState', () => {
-  const entityStore = useEntityStore()
   const workspaceStore = useWorkspaceStore()
 
   const message = computed(() => {

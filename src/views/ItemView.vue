@@ -4,8 +4,25 @@
     flex="~ col"
   >
     <common-toolbar>
-      <q-toolbar-title text-lg>
-        {{ entityName(entity) }}
+      <q-btn
+        flat
+        dense
+        round
+        icon="sym_o_arrow_back"
+        :title="t('Back')"
+        @click="goBack"
+      />
+      <q-toolbar-title>
+        <div text-lg>
+          {{ entityName(entity) }}
+        </div>
+        <div
+          v-if="parseLabel"
+          text-sm
+          :class="parseClass"
+        >
+          {{ parseLabel }}
+        </div>
       </q-toolbar-title>
       <q-btn
         icon="sym_o_more_vert"
@@ -26,6 +43,11 @@
               :label="t('Download link')"
               icon="sym_o_link"
               @click="copyDownloadLink"
+            />
+            <menu-item
+              :label="t('Reparse')"
+              icon="sym_o_sync"
+              @click="reparse"
             />
           </q-list>
         </q-menu>
@@ -63,10 +85,11 @@
       <div
         v-if="tab === 'preview'"
         p-3
+        h-full
       >
         <img
-          v-if="imageUrl"
-          :src="imageUrl"
+          v-if="previewMode === 'image' && fileUrl"
+          :src="fileUrl"
           max-w-full
           max-h-full
         >
@@ -76,12 +99,33 @@
           max-w-full
           max-h-full
         >
+        <file-preview
+          v-else-if="(previewMode === 'pdf' || previewMode === 'docx' || previewMode === 'xlsx') && item.id"
+          :item-id="item.id"
+          :kind="previewMode"
+        />
+        <video
+          v-else-if="previewMode === 'video' && fileUrl"
+          :src="fileUrl"
+          controls
+          max-w-full
+        />
+        <audio
+          v-else-if="previewMode === 'audio' && fileUrl"
+          :src="fileUrl"
+          controls
+        />
         <md-preview
           v-else-if="previewMode === 'markdown'"
           :model-value="item.text!"
           v-bind="mdPreviewProps"
           bg-sur
         />
+        <pre
+          v-else-if="previewMode === 'text'"
+          whitespace-pre-wrap
+          font-sans
+        >{{ item.text }}</pre>
       </div>
       <div
         v-if="tab === 'text'"
@@ -179,30 +223,56 @@ import { mutate } from 'src/utils/zero-session'
 import { getCached, getDownloadUrl } from 'src/utils/blob-cache'
 import { entityName } from 'src/utils/defaults'
 import { formatBytes, getItemUrl, textBeginning } from 'src/utils/functions'
+import { itemParseStatus } from 'src/utils/knowledge'
 import { t } from 'src/utils/i18n'
 import { computed, ref, toRef } from 'vue'
+import { useRouter } from 'vue-router'
 import CommonToolbar from 'src/components/CommonToolbar.vue'
 import { useMdProps } from 'src/composables/md-props'
 import { useBlobURL } from 'src/composables/blob-url'
 import { MdPreview } from 'md-editor-v3'
 import CodeEditor from 'src/components/CodeEditor.vue'
+import FilePreview from 'src/components/FilePreview.vue'
 import { useEditProxy } from 'src/composables/state-proxy'
+import { useWorkspaceStore } from 'src/stores/workspace'
+import { client } from 'src/utils/hc'
 
 const props = defineProps<{
   item: FullItem
 }>()
 
+const { entity } = useThisEntityConf()
+const parseStatus = computed(() => itemParseStatus(props.item, entity.value?.conf))
+const parseLabel = computed(() => {
+  if (parseStatus.value === 'ready') {
+    return entity.value?.conf?.indexed === true
+      ? t('Parsed · Vector indexed')
+      : t('Parsed · Keyword only')
+  }
+  if (parseStatus.value === 'parsing') return t('Parsing…')
+  if (parseStatus.value === 'unparsed') return t('No text extracted')
+  if (parseStatus.value === 'failed') return t('Parse failed')
+  return ''
+})
+const parseClass = computed(() => {
+  if (parseStatus.value === 'ready') return 'text-pri'
+  if (parseStatus.value === 'unparsed' || parseStatus.value === 'failed') return 'text-warn'
+  return 'text-on-sur-var'
+})
+
 const previewMode = computed(() => {
   const { item } = props
-  if (item.blobId && item.mimeType?.startsWith('image/')) {
-    return 'image'
-  }
-  if (item.text && ['html', 'markdown', 'text'].includes(item.language ?? 'text')) {
-    return 'markdown'
-  }
-  if (item.text && item.language === 'svg') {
-    return 'svg'
-  }
+  const mime = item.mimeType ?? ''
+  const name = entity.value?.name ?? ''
+  if (mime.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(name)) return 'image'
+  if (item.text && item.language === 'svg') return 'svg'
+  if (mime === 'application/pdf' || name.toLowerCase().endsWith('.pdf')) return 'pdf'
+  if (mime.includes('word') || /\.docx$/i.test(name)) return 'docx'
+  if (mime.includes('spreadsheet') || mime.includes('excel') || /\.xlsx?$/i.test(name)) return 'xlsx'
+  if (mime.startsWith('video/')) return 'video'
+  if (mime.startsWith('audio/')) return 'audio'
+  if (item.text && (item.language === 'markdown' || /\.md$/i.test(name))) return 'markdown'
+  if (item.text) return 'text'
   return null
 })
 const tab = ref((() => {
@@ -211,9 +281,16 @@ const tab = ref((() => {
   if (props.item.text != null) return 'text'
   return 'empty'
 })())
-const imageUrl = useBlobURL(computed(() => previewMode.value === 'image' ? props.item.id : null))
+const fileUrl = useBlobURL(computed(() => {
+  if (['image', 'video', 'audio'].includes(previewMode.value ?? '')) return props.item.id
+  return null
+}))
+const router = useRouter()
+const workspaceStore = useWorkspaceStore()
 
-const { entity } = useThisEntityConf()
+function goBack() {
+  router.push(`/folder/${entity.value?.parentId || workspaceStore.id}`)
+}
 
 function updateItem(updates: {
   text?: string
@@ -243,6 +320,32 @@ function copyDownloadLink() {
       console.error(err)
       $q.notify(t('Failed to get download link: {0}', err.message))
     })
+}
+
+async function reparse() {
+  if (!workspaceStore.id) return
+  try {
+    const response = await client.api.kb.reparse.$post({
+      json: { workspaceId: workspaceStore.id, id: props.item.id },
+    })
+    if (!response.ok) {
+      const text = await response.text()
+      let message = text
+      try {
+        const body = JSON.parse(text) as { error?: string }
+        message = body.error || text
+      } catch {
+        // Some infrastructure errors are returned as plain text.
+      }
+      throw new Error(message || `HTTP ${response.status}`)
+    }
+    $q.notify(t('Parsing…'))
+  } catch (err) {
+    $q.notify({
+      message: t('Reparse failed: {0}', err instanceof Error ? err.message : String(err)),
+      color: 'negative',
+    })
+  }
 }
 
 const { mdPreviewProps } = useMdProps()

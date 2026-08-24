@@ -17,6 +17,7 @@ export function entityAvatar(entity: PartialEntity | null | undefined): Avatar {
 
 export function entityName(entity: PartialEntity | null | undefined) {
   if (!entity) return ''
+  if (entity.name === '/') return t('All files')
   if (entity.name === '$chat') return t('Chat')
   if (entity.name === '$search') return t('Search')
   if (entity.name === '$pages') return t('Notes')

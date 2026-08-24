@@ -26,30 +26,24 @@
               dense
             />
           </common-item>
-          <common-item :label="t('Default search chat model')">
+          <common-item
+            :label="t('Embedding model')"
+            :caption="t('Platform default. A workspace can override this under Models.')"
+          >
             <model-select
-              :model-value="value.defaultSearchChatModel"
-              @update:model-value="updates.defaultSearchChatModel = $event"
+              :model-value="value.embeddingModelId"
+              @update:model-value="updates.embeddingModelId = $event"
               dense
             />
           </common-item>
-          <common-item :label="t('Free model requests limit')">
-            <q-input
-              :model-value="value.freeModelReqLimit"
-              @update:model-value="updates.freeModelReqLimit = parseInt($event as string)"
-              type="number"
+          <common-item
+            :label="t('Rerank model')"
+            :caption="t('Platform default. A workspace can override this under Models.')"
+          >
+            <model-select
+              :model-value="value.rerankModelId"
+              @update:model-value="updates.rerankModelId = $event"
               dense
-              class="w-100px"
-            />
-          </common-item>
-          <common-item :label="t('Free model limit window')">
-            <number-unit-input
-              :model-value="value.freeModelLimitWindow"
-              @update:model-value="updates.freeModelLimitWindow = $event"
-              :multiplier="1000"
-              suffix="s"
-              dense
-              class="w-100px"
             />
           </common-item>
           <common-item :label="t('Max workspaces per user')">
@@ -59,34 +53,6 @@
               type="number"
               dense
               class="w-100px"
-            />
-          </common-item>
-          <common-item :label="t('OAuth Providers')">
-            <q-select
-              :model-value="value.oauthProviders"
-              @update:model-value="updates.oauthProviders = $event"
-              :options="['google', 'github']"
-              multiple
-              dense
-              class="min-w-100px"
-            />
-          </common-item>
-          <common-item :label="t('TOS Link')">
-            <q-input
-              :model-value="value.tosLink"
-              @update:model-value="updates.tosLink = $event"
-              dense
-              min-w-150px
-              field-sizing-content
-            />
-          </common-item>
-          <common-item :label="t('Privacy Policy Link')">
-            <q-input
-              :model-value="value.privacyPolicyLink"
-              @update:model-value="updates.privacyPolicyLink = $event"
-              dense
-              min-w-150px
-              field-sizing-content
             />
           </common-item>
         </q-list>
@@ -119,7 +85,6 @@ import { queries } from 'app/src-shared/queries'
 import { useQuery } from 'src/composables/zero/query'
 import ModelSelect from 'src/components/ModelSelect.vue'
 import { client } from 'src/utils/hc'
-import NumberUnitInput from './NumberUnitInput.vue'
 
 defineEmits([
   ...useDialogPluginComponent.emits,

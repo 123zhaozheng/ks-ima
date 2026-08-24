@@ -7,7 +7,7 @@ import { useWorkspaceStore } from 'src/stores/workspace'
 const searchInputSchema = z.object({
   searches: z.array(z.object({
     q: z.string().describe('The search query'),
-    types: z.array(z.enum(['chat', 'page', 'item'])).optional().describe('Types to search: chat, page (notes), item (files).'),
+    types: z.array(z.enum(['item', 'folder'])).optional().describe('Types to search: item (files) and folder.'),
     limit: z.int().min(1).max(100).default(15),
   })),
 })
@@ -17,13 +17,13 @@ export const workspacePlugin: BuiltinPluginManifest = {
   type: 'builtin',
   name: t('Knowledge Search'),
   avatar: { type: 'icon', icon: 'sym_o_manage_search', hue: 135 },
-  description: t('Search notes and files in the current knowledge base. Always cite sources.'),
-  prompt: `You are a knowledge-base librarian. Use the search tool before answering internal facts. If nothing is found, say the knowledge base does not contain it. Cite titles of notes/files you used.`,
+  description: t('Search files in the current knowledge base. Always cite sources.'),
+  prompt: 'You are a knowledge-base librarian. Call search before answering internal facts. Each result has title, path, quote, score. Cite those quotes. If results are empty, say the knowledge base does not contain it. Do not invent clauses.',
   tools: [
     {
       name: 'search',
       inputSchema: z.toJSONSchema(searchInputSchema) as any,
-      description: 'Search notes (page) and files (item) in the current workspace. Default searches notes and files.',
+      description: 'Search files in the current workspace. Default searches uploaded documents.',
       async execute({ searches }: z.infer<typeof searchInputSchema>) {
         const workspaceStore = useWorkspaceStore()
         if (!workspaceStore.id) {
@@ -31,10 +31,9 @@ export const workspacePlugin: BuiltinPluginManifest = {
         }
 
         const res = await Promise.all(searches.map(async args => {
-          const result = await client.api.search.$post({
+          const result = await client.api.kb.search.$post({
             json: {
               workspaceId: workspaceStore.id!,
-              types: args.types ?? ['page', 'item'],
               q: args.q,
               limit: args.limit,
             },

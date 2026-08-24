@@ -11,10 +11,10 @@
         icon="sym_o_menu"
         @click="uiStateStore.toggleMainDrawer"
       />
-      <q-toolbar-title>{{ workspace?.name }}</q-toolbar-title>
+      <q-toolbar-title>{{ workspace?.name || t('Workspace') }}</q-toolbar-title>
     </q-toolbar>
     <q-tabs
-      v-if="workspace?.member?.role === 'owner' || workspace?.member?.role === 'admin'"
+      v-if="workspaceStore.id"
       active-color="primary"
       align="left"
       no-caps
@@ -22,6 +22,10 @@
       <q-route-tab
         :label="t('Overview')"
         to="/workspace"
+      />
+      <q-route-tab
+        :label="t('Models')"
+        to="/workspace/models"
       />
       <q-route-tab
         :label="t('Connectors')"
@@ -33,7 +37,7 @@
       />
     </q-tabs>
   </q-header>
-  <router-view v-if="workspace" />
+  <router-view v-if="workspaceStore.id" />
 </template>
 
 <script setup lang="ts">

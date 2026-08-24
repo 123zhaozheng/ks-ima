@@ -1,5 +1,6 @@
 <template>
   <q-drawer
+    v-if="showDrawer"
     show-if-above
     bg-sur-c-low
     :breakpoint="uiStateStore.rightDrawerBreakpoint"
@@ -31,15 +32,6 @@
         w-full
         py-2
       />
-      <task-panel-btn
-        pos-fixed
-        bottom-2
-        right-2
-        bg-sur-c-low
-        flat
-        round
-        dense
-      />
     </div>
   </q-drawer>
 </template>
@@ -47,16 +39,19 @@
 <script setup lang="ts">
 import { useUiStateStore } from 'src/stores/ui-state'
 import { useRightDirStore } from 'src/stores/right-dir'
-import RightEntityList from 'src/components/RightEntityList.vue'
+import RightEntityList from './RightEntityList.vue'
 import NewEntityBtns from './NewEntityBtns.vue'
 import { useRoute } from 'vue-router'
-import { ref, watchEffect } from 'vue'
-import TaskPanelBtn from './TaskPanelBtn.vue'
+import { computed, ref, watchEffect } from 'vue'
 
 const rightDirStore = useRightDirStore()
 const uiStateStore = useUiStateStore()
 
 const route = useRoute()
+const showDrawer = computed(() => {
+  const type = route.params.type
+  return type === 'assistant' || type === 'provider'
+})
 const viewDirId = ref()
 watchEffect(() => {
   viewDirId.value = route.params.id

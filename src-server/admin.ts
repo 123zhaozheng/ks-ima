@@ -1,11 +1,11 @@
 import { Hono } from 'hono'
 import { auth } from './auth/auth'
 import { db } from './utils/db'
-import { user, plan, model, workspace, planPrice, globalSettings } from './schema'
+import { user, model, workspace, globalSettings } from './schema'
 import { and, eq } from 'drizzle-orm'
 import { zValidator } from '@hono/zod-validator'
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod'
-import { avatarSchema, modelInputTypesSchema, paymentProviderSchema, planIntervalSchema } from 'app/src-shared/utils/validators'
+import { avatarSchema, modelInputTypesSchema } from 'app/src-shared/utils/validators'
 import { z } from 'zod'
 import { genId } from 'app/src-shared/utils/id'
 import { PUBLIC_ROOT_ID } from 'app/src-shared/utils/config'
@@ -31,72 +31,6 @@ const app = new Hono()
     await db.update(user).set({ role: 'admin' }).where(eq(user.id, session.user.id))
     return c.json({ message: 'Admin role acquired' })
   })
-  .post('/addPlan',
-    zValidator('json', createInsertSchema(plan)),
-    async c => {
-      const session = await auth.api.getSession({ headers: c.req.raw.headers })
-      if (session?.user.role !== 'admin') return c.json({ error: 'Unauthorized' }, 401)
-      const data = c.req.valid('json')
-      await db.insert(plan).values(data)
-      return c.json({ message: 'Plan created' })
-    },
-  )
-  .post('/updatePlan',
-    zValidator('json', createUpdateSchema(plan).required({ id: true })),
-    async c => {
-      const session = await auth.api.getSession({ headers: c.req.raw.headers })
-      if (session?.user.role !== 'admin') return c.json({ error: 'Unauthorized' }, 401)
-      const { id, ...updates } = c.req.valid('json')
-      await db.update(plan).set(updates).where(eq(plan.id, id))
-      return c.json({ message: 'Plan updated' })
-    },
-  )
-  .post('/deletePlan',
-    zValidator('json', z.object({ id: z.string() })),
-    async c => {
-      const session = await auth.api.getSession({ headers: c.req.raw.headers })
-      if (session?.user.role !== 'admin') return c.json({ error: 'Unauthorized' }, 401)
-      const { id } = c.req.valid('json')
-      await db.delete(plan).where(eq(plan.id, id))
-      return c.json({ message: 'Plan deleted' })
-    },
-  )
-  .post('/addPlanPrice',
-    zValidator('json', createInsertSchema(planPrice).extend({
-      provider: paymentProviderSchema,
-      interval: planIntervalSchema,
-    })),
-    async c => {
-      const session = await auth.api.getSession({ headers: c.req.raw.headers })
-      if (session?.user.role !== 'admin') return c.json({ error: 'Unauthorized' }, 401)
-      const data = c.req.valid('json')
-      await db.insert(planPrice).values(data)
-      return c.json({ message: 'Plan price created' })
-    },
-  )
-  .post('/updatePlanPrice',
-    zValidator('json', createUpdateSchema(planPrice).extend({
-      provider: paymentProviderSchema.optional(),
-      interval: planIntervalSchema.optional(),
-    }).required({ id: true })),
-    async c => {
-      const session = await auth.api.getSession({ headers: c.req.raw.headers })
-      if (session?.user.role !== 'admin') return c.json({ error: 'Unauthorized' }, 401)
-      const { id, ...updates } = c.req.valid('json')
-      await db.update(planPrice).set(updates).where(eq(planPrice.id, id))
-      return c.json({ message: 'Plan price updated' })
-    },
-  )
-  .post('/deletePlanPrice',
-    zValidator('json', z.object({ id: z.string() })),
-    async c => {
-      const session = await auth.api.getSession({ headers: c.req.raw.headers })
-      if (session?.user.role !== 'admin') return c.json({ error: 'Unauthorized' }, 401)
-      const { id } = c.req.valid('json')
-      await db.delete(planPrice).where(eq(planPrice.id, id))
-      return c.json({ message: 'Plan price deleted' })
-    },
-  )
   .post('/addModel',
     zValidator('json', adminModelSchema),
     async c => {
@@ -143,7 +77,6 @@ const app = new Hono()
       id: z.string(),
       name: z.string().optional(),
       planId: z.string().optional(),
-      remainingMonths: z.int().nullish(),
     })),
     async c => {
       const session = await auth.api.getSession({ headers: c.req.raw.headers })
@@ -164,9 +97,9 @@ const app = new Hono()
     },
   )
   .post('/updateGlobalSettings',
-    zValidator('json', createUpdateSchema(globalSettings).required({ id: true }).extend({
-      oauthProviders: z.array(z.string()).optional(),
-    })),
+    zValidator('json', createUpdateSchema(globalSettings)
+      .omit({ oauthProviders: true, searchEngines: true })
+      .required({ id: true })),
     async c => {
       const session = await auth.api.getSession({ headers: c.req.raw.headers })
       if (session?.user.role !== 'admin') return c.json({ error: 'Unauthorized' }, 401)

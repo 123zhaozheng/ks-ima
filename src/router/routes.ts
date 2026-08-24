@@ -2,7 +2,6 @@ import Front from 'src/AppFront.vue'
 import MainLayout from 'src/layouts/MainLayout.vue'
 import DualViewPage from 'src/pages/DualViewPage.vue'
 import NotFoundPage from 'src/pages/NotFoundPage.vue'
-import SearchIndex from 'src/pages/SearchIndex.vue'
 import type { RouteRecordRaw } from 'vue-router'
 import { authRoute } from './auth'
 import WorkspaceLayout from 'src/layouts/WorkspaceLayout.vue'
@@ -13,14 +12,8 @@ import WorkspaceOverview from 'src/pages/WorkspaceOverview.vue'
 import WorkspaceUsage from 'src/pages/WorkspaceUsage.vue'
 import WorkspaceConnectors from 'src/pages/WorkspaceConnectors.vue'
 import AccountLayout from 'src/layouts/AccountLayout.vue'
-import ChatWelcome from 'src/pages/ChatWelcome.vue'
-import PageWelcome from 'src/pages/PageWelcome.vue'
-import IndexPage from 'src/pages/IndexPage.vue'
-import ProviderWelcome from 'src/pages/ProviderWelcome.vue'
-import IndexWelcome from 'src/pages/IndexWelcome.vue'
-import ItemWelcome from 'src/pages/ItemWelcome.vue'
-import ItemIndex from 'src/pages/ItemIndex.vue'
-import ModelPricing from 'src/pages/ModelPricing.vue'
+import RedirectToFolder from 'src/pages/RedirectToFolder.vue'
+import WorkspaceModels from 'src/pages/WorkspaceModels.vue'
 import { t } from 'src/utils/i18n'
 
 const routes: RouteRecordRaw[] = [
@@ -32,20 +25,17 @@ const routes: RouteRecordRaw[] = [
         path: '/',
         component: MainLayout,
         children: [
-          { path: '/', component: IndexPage },
-          { path: '/welcome', component: IndexWelcome },
+          { path: '/', component: RedirectToFolder },
+          { path: '/welcome', component: RedirectToFolder },
         ],
       },
       {
-        path: '/:type(search|chat|page|item|folder|assistant|provider)',
+        path: '/:type(chat|item|folder|provider)',
         component: MainLayout,
         children: [
-          { path: '/:type(search)', component: SearchIndex },
-          { path: '/:type(item)', component: ItemIndex },
-          { path: '/:type(chat)/welcome', component: ChatWelcome },
-          { path: '/:type(page)/welcome', component: PageWelcome },
-          { path: '/:type(provider)/welcome', component: ProviderWelcome },
-          { path: '/:type(item)/welcome', component: ItemWelcome },
+          { path: '/:type(item)', component: RedirectToFolder },
+          { path: '/:type(chat)/welcome', component: RedirectToFolder },
+          { path: '/:type(item)/welcome', component: RedirectToFolder },
           { path: ':id', component: DualViewPage },
         ],
       },
@@ -74,14 +64,14 @@ const routes: RouteRecordRaw[] = [
               title: t('Connectors'),
             },
           },
+          {
+            path: 'models',
+            component: WorkspaceModels,
+            meta: {
+              title: t('Models'),
+            },
+          },
         ],
-      },
-      {
-        path: '/models',
-        component: ModelPricing,
-        meta: {
-          title: t('Model Pricing'),
-        },
       },
       {
         path: '/trash',
@@ -99,7 +89,7 @@ const routes: RouteRecordRaw[] = [
         path: '/settings',
         component: SettingsLayout,
         meta: {
-          title: t('Settings'),
+          title: t('Personal Settings'),
         },
       },
       {

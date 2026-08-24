@@ -15,7 +15,7 @@
       >
         <entity-list
           v-model="dirId"
-          @entity-click="dirId = $event.id"
+          :list-options-override="{ type: 'folder' }"
           :exclude
         />
       </q-card-section>

@@ -48,42 +48,6 @@
         @click="forgotPassword"
       />
     </div>
-    <q-separator
-      v-if="oauthProviders?.length"
-      spaced
-    />
-    <q-btn
-      v-if="oauthProviders?.includes('google')"
-      @click="signInWith('google')"
-      w-full
-      unelevated
-      bg-pri-c
-      text-on-pri-c
-      no-caps
-      mt-3
-    >
-      <a-avatar
-        :avatar="{ type: 'svg', name: 'google-c'}"
-        size="32px"
-      />
-      <span ml-2>{{ t('Continue with Google') }}</span>
-    </q-btn>
-    <q-btn
-      v-if="oauthProviders?.includes('github')"
-      @click="signInWith('github')"
-      w-full
-      unelevated
-      bg-pri-c
-      text-on-pri-c
-      mt-3
-      no-caps
-    >
-      <a-avatar
-        :avatar="{ type: 'svg', name: 'github'}"
-        size="32px"
-      />
-      <span ml-2>{{ t('Continue with GitHub') }}</span>
-    </q-btn>
   </div>
 </template>
 
@@ -91,23 +55,17 @@
 
 import { useQuasar } from 'quasar'
 import { t } from 'src/utils/i18n'
-import { authClient } from 'src/utils/auth-client'
-import { computed, reactive, ref, watch } from 'vue'
-import AAvatar from 'src/components/AAvatar.vue'
+import { authClient, session } from 'src/utils/auth-client'
+import { reactive, ref, watch } from 'vue'
 import ForgotPasswordDialog from './ForgotPasswordDialog.vue'
 import VerifyEmailDialog from './VerifyEmailDialog.vue'
 import { useRoute, useRouter } from 'vue-router'
-import { user } from 'src/utils/zero-session'
-import { useGlobalSettingsStore } from 'src/stores/global-settings'
 import PolicyLinks from './PolicyLinks.vue'
 
 const input = reactive({
   email: '',
   password: '',
 })
-
-const globalSettingsStore = useGlobalSettingsStore()
-const oauthProviders = computed(() => globalSettingsStore.settings?.oauthProviders)
 
 const loading = ref(false)
 const $q = useQuasar()
@@ -143,20 +101,14 @@ async function signIn() {
   }
 }
 
-function signInWith(provider: string) {
-  authClient.signIn.social({
-    provider,
-    callbackURL: location.origin + getRedirect(),
-  })
-}
-
 function forgotPassword() {
   $q.dialog({
     component: ForgotPasswordDialog,
   })
 }
 
-watch(() => user.id, id => {
-  if (id) router.replace(getRedirect())
+watch(session, s => {
+  if (s.isPending || s.error) return
+  if (s.data?.user.id) router.replace(getRedirect())
 }, { immediate: true })
 </script>

@@ -46,7 +46,7 @@
     <dense-item
       v-for="w in workspaces"
       :key="w.id"
-      :avatar="workspaceAvatar(workspace)"
+      :avatar="workspaceAvatar(w)"
       :label="w.name"
       :active="w.id === workspaceStore.id"
       clickable
@@ -134,8 +134,8 @@ function signOut() {
       color: 'negative',
       flat: true,
     },
-  }).onOk(() => {
-    authClient.signOut()
+  }).onOk(async () => {
+    await authClient.signOut()
     workspaceStore.id = null
     router.push('/auth/sign-in')
   })

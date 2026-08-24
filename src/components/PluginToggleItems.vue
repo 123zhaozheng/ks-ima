@@ -40,7 +40,7 @@
         v-else-if="modelValue.includes(id)"
         caption
       >
-        {{ statusText(status[id]) }}
+        {{ statusText() }}
       </q-item-label>
     </q-item-section>
     <q-item-section side>
@@ -73,9 +73,7 @@ defineEmits<{
 
 const store = usePluginsStore()
 
-function statusText(status: PluginStatus) {
-  if (status === 'starting') return t('Starting...')
-  if (status === 'ready') return t('Started')
-  if (status === 'failed') return t('Failed to start')
+function statusText() {
+  return t('Started')
 }
 </script>

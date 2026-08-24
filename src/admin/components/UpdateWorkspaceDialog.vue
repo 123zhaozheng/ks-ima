@@ -25,15 +25,6 @@
               class="w-120px"
             />
           </common-item>
-          <common-item :label="t('Remaining Months')">
-            <q-input
-              v-model.number="workspace.remainingMonths"
-              type="number"
-              dense
-              clearable
-              class="w-120px"
-            />
-          </common-item>
         </q-list>
       </q-card-section>
       <q-card-actions align="right">

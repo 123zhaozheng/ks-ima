@@ -55,50 +55,77 @@
       </q-item-section>
     </q-item>
     <q-separator spaced />
-    <right-entity-list
-      v-if="dirId"
-      v-model="dirId"
-      mode="left"
-    />
+    <folder-tree v-if="workspaceStore.id" />
     <q-space />
     <q-list
       p-2
       text-on-sur-var
     >
-      <q-item
-        clickable
-        @click="searchInWorkspace"
-        item-rd
-        min-h="40px"
-      >
-        <q-item-section avatar>
-          <q-icon name="sym_o_manage_search" />
-        </q-item-section>
-        <q-item-section>
-          {{ t('Search in Workspace') }}
-        </q-item-section>
-      </q-item>
-      <q-item
-        to="/trash"
-        item-rd
-        min-h="40px"
-      >
-        <q-item-section avatar>
-          <q-icon name="sym_o_delete" />
-        </q-item-section>
-        <q-item-section>
-          {{ t('Trash') }}
-        </q-item-section>
-      </q-item>
-      <q-separator spaced />
+      <template v-if="workspaceStore.id">
+        <q-item
+          clickable
+          @click="askKnowledge"
+          item-rd
+          min-h="40px"
+        >
+          <q-item-section avatar>
+            <q-icon name="sym_o_chat" />
+          </q-item-section>
+          <q-item-section>
+            {{ t('Ask') }}
+          </q-item-section>
+        </q-item>
+        <q-item
+          clickable
+          @click="searchInWorkspace"
+          item-rd
+          min-h="40px"
+        >
+          <q-item-section avatar>
+            <q-icon name="sym_o_manage_search" />
+          </q-item-section>
+          <q-item-section>
+            {{ t('Search in Workspace') }}
+          </q-item-section>
+        </q-item>
+        <task-panel-btn
+          item-rd
+          min-h="40px"
+        />
+        <q-item
+          to="/trash"
+          item-rd
+          min-h="40px"
+        >
+          <q-item-section avatar>
+            <q-icon name="sym_o_delete" />
+          </q-item-section>
+          <q-item-section>
+            {{ t('Trash') }}
+          </q-item-section>
+        </q-item>
+        <q-item
+          to="/workspace"
+          item-rd
+          min-h="40px"
+        >
+          <q-item-section avatar>
+            <q-icon name="sym_o_manage_accounts" />
+          </q-item-section>
+          <q-item-section>
+            {{ t('Workspace Settings') }}
+          </q-item-section>
+        </q-item>
+        <q-separator spaced />
+      </template>
       <div
         flex
         text-on-sur-var
         items-center
       >
         <q-btn
-          icon="sym_o_settings"
-          :label="t('Settings')"
+          icon="sym_o_tune"
+          :label="t('Personal Settings')"
           to="/settings"
           :class="{ 'route-active': $route.path === '/settings'}"
           flat
@@ -106,36 +133,6 @@
         />
         <q-space />
         <dark-switch-btn />
-        <q-btn
-          flat
-          dense
-          round
-          icon="sym_o_more_vert"
-        >
-          <q-menu>
-            <q-list>
-              <dense-item
-                clickable
-                :avatar="{ type: 'svg', name: 'github' }"
-                label="GitHub"
-                href="https://github.com/NitroRCr/nyaai"
-                target="_blank"
-              />
-              <menu-item
-                icon="sym_o_book_2"
-                :label="t('Docs')"
-                href="https://docs.nyaai.cc"
-                target="_blank"
-              />
-              <menu-item
-                icon="sym_o_history"
-                :label="t('Changelog')"
-                href="https://github.com/NitroRCr/nyaai/releases"
-                target="_blank"
-              />
-            </q-list>
-          </q-menu>
-        </q-btn>
       </div>
     </q-list>
   </q-drawer>
@@ -148,21 +145,15 @@ import { useUiStateStore } from 'src/stores/ui-state'
 import AAvatar from './AAvatar.vue'
 import { workspaceAvatar } from 'src/utils/defaults'
 import WorkspaceMenuList from './WorkspaceMenuList.vue'
-import RightEntityList from './RightEntityList.vue'
-import { ref } from 'vue'
-import { until } from '@vueuse/core'
-import MenuItem from './MenuItem.vue'
-import DenseItem from './DenseItem.vue'
+import FolderTree from './FolderTree.vue'
 import DarkSwitchBtn from './DarkSwitchBtn.vue'
 import { user } from 'src/utils/zero-session'
+import { useAskKnowledge } from 'src/composables/ask-knowledge'
+import TaskPanelBtn from './TaskPanelBtn.vue'
 
 const uiStateStore = useUiStateStore()
 const workspaceStore = useWorkspaceStore()
-
-const dirId = ref<string | null>(null)
-until(() => workspaceStore.member).toBeTruthy().then(({ leftDirId }) => {
-  dirId.value = leftDirId
-})
+const askKnowledge = useAskKnowledge()
 
 function searchInWorkspace() {
   uiStateStore.searchDialogOpen = true

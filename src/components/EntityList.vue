@@ -68,7 +68,6 @@
         <entity-item
           v-for="entity of children.filter(x => !props.exclude?.includes(x.id))"
           :key="entity.id"
-          :to="entityRoute(entity.type, entity.id)"
           :active="activeEntitiesStore.activeIds.includes(entity.id)"
           clickable
           @click.prevent="onEntityClick(entity)"
@@ -79,33 +78,94 @@
           v-on="dragHoverListeners"
           :selectable="selected.size > 0"
           :selected="selected.has(entity.id)"
-          @contextmenu="onContextmenu(entity.id)"
+          @contextmenu.prevent="onContextmenu(entity.id)"
         >
           <template #actions>
-            <q-btn
-              v-if="entity.type === 'shortcut'"
-              @click.prevent.stop="editShortcut(entity.id)"
-              icon="sym_o_edit"
-              :title="t('Edit Shortcut')"
-              flat
-              round
-              size="sm"
-              transition="opacity 250"
-              op-0
-              group-hover:op-100
-            />
-            <q-btn
-              v-else-if="entity.type !== 'folder'"
-              @click.prevent.stop="dirId = entity.id"
-              icon="sym_o_login"
-              :title="t('Enter Directory')"
-              flat
-              round
-              size="sm"
-              transition="opacity 250"
-              op-0
-              group-hover:op-100
-            />
+            <div
+              flex
+              items-center
+              gap-1
+              @click.stop
+              @mousedown.stop
+            >
+              <template v-if="entity.type === 'item'">
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="sym_o_visibility"
+                  :title="t('Preview')"
+                  @click="openEntity(entity)"
+                />
+                <q-btn
+                  v-if="entity.item?.blobId"
+                  flat
+                  dense
+                  round
+                  icon="sym_o_download"
+                  :title="t('Download')"
+                  @click="downloadEntity(entity)"
+                />
+                <q-btn
+                  v-if="canReparse(entity)"
+                  flat
+                  dense
+                  no-caps
+                  icon="sym_o_sync"
+                  :label="$q.screen.gt.sm ? t('Reparse') : undefined"
+                  :title="t('Reparse')"
+                  :loading="reparsingIds.has(entity.id)"
+                  text-pri
+                  @click="reparseEntity(entity)"
+                />
+              </template>
+              <q-btn
+                flat
+                dense
+                round
+                icon="sym_o_more_vert"
+                :title="t('More Actions')"
+              >
+                <q-menu>
+                  <q-list min-w="180px">
+                    <menu-item
+                      v-if="entity.type === 'item'"
+                      :label="t('Reparse')"
+                      icon="sym_o_sync"
+                      @click="reparseEntity(entity)"
+                    />
+                    <menu-item
+                      :label="t('Rename')"
+                      icon="sym_o_edit"
+                      @click="renameEntity(entity)"
+                    />
+                    <menu-item
+                      :label="t('Move')"
+                      icon="sym_o_move_item"
+                      @click="moveEntity(entity)"
+                    />
+                    <menu-item
+                      v-if="entity.type === 'folder'"
+                      :label="t('Permissions')"
+                      icon="sym_o_lock"
+                      @click="editAcl(entity)"
+                    />
+                    <menu-item
+                      :label="t('Tags')"
+                      icon="sym_o_label"
+                      @click="editTags(entity)"
+                    />
+                    <q-separator />
+                    <menu-item
+                      :label="t('Move to Trash')"
+                      icon="sym_o_delete"
+                      @click="recycleEntity(entity)"
+                      hover:text-err
+                    />
+                  </q-list>
+                </q-menu>
+              </q-btn>
+            </div>
           </template>
         </entity-item>
         <q-menu context-menu>
@@ -117,12 +177,6 @@
               :label="t('Rename')"
               icon="sym_o_edit"
               @click="renameSelected"
-            />
-            <menu-item
-              v-if="selectedOne?.type === 'chat'"
-              :label="t('Summarize title')"
-              icon="sym_o_auto_fix"
-              @click="summarizeChatTitle(selectedOne.id)"
             />
             <menu-item
               v-if="selectedOne"
@@ -147,12 +201,6 @@
                 icon="sym_o_label"
                 @click="editTags(selectedOne)"
               />
-              <menu-item
-                :label="t('Properties')"
-                icon="sym_o_settings"
-                :active="false"
-                :to="entityRoute('folder', selectedOne.id)"
-              />
             </template>
             <menu-item
               :label="t('Move to Trash')"
@@ -163,18 +211,17 @@
           </q-list>
         </q-menu>
       </q-list>
-      <div grow>
-        <q-menu context-menu>
-          <q-list ref="menuListRef">
-            <menu-item
-              :label="t('Properties')"
-              icon="sym_o_settings"
-              :active="false"
-              :to="entityRoute('folder', dirId)"
-            />
-          </q-list>
-        </q-menu>
+      <div
+        v-if="!children.length"
+        flex-1
+        flex
+        items-center
+        justify-center
+        min-h="240px"
+      >
+        <slot name="empty" />
       </div>
+      <div grow />
     </div>
   </div>
 </template>
@@ -183,13 +230,13 @@
 import type { FullEntity } from 'app/src-shared/queries'
 import { queries } from 'app/src-shared/queries'
 import { useQuery } from 'src/composables/zero/query'
-import { mutate, z } from 'src/utils/zero-session'
+import { mutate } from 'src/utils/zero-session'
 import type { SpliceListOptions } from 'src/utils/functions'
-import { arrayToMap, displayLength, entityRoute, expandAncestors, spliceList } from 'src/utils/functions'
+import { arrayToMap, displayLength, expandAncestors, getItemUrl, spliceList } from 'src/utils/functions'
 import { computed, onUnmounted, reactive, ref, useTemplateRef, watch } from 'vue'
 import EntityItem from './EntityItem.vue'
 import { t } from 'src/utils/i18n'
-import { QList, QMenu, useQuasar } from 'quasar'
+import { exportFile, QList, QMenu, useQuasar } from 'quasar'
 import MenuItem from './MenuItem.vue'
 import { mutators } from 'app/src-shared/mutators'
 import { useWorkspaceStore } from 'src/stores/workspace'
@@ -199,14 +246,12 @@ import type { Avatar, EntityListOptions, EntityStart } from 'app/src-shared/util
 import EntityListOptionsBtn from './EntityListOptionsBtn.vue'
 import SelectDirDialog from './SelectDirDialog.vue'
 import PickAvatarDialog from './PickAvatarDialog.vue'
-import UpdateShortcutDialog from './UpdateShortcutDialog.vue'
-import { parseText } from 'src/utils/file-parse'
-import { genId } from 'app/src-shared/utils/id'
-import { upload } from 'src/utils/blob-cache'
-import { generateChatTitle } from 'src/services/generate-chat-title'
-import { useEntityConf } from 'src/composables/entity-conf'
+import { isKnowledgeEntity, itemParseStatus } from 'src/utils/knowledge'
+import { filesFromDrop, uploadKnowledge } from 'src/utils/knowledge-upload'
 import { useEntityAcl } from 'src/composables/acl'
 import FolderAclDialog from './FolderAclDialog.vue'
+import { client } from 'src/utils/hc'
+import { getCached } from 'src/utils/blob-cache'
 
 const emit = defineEmits<{
   entityClick: [entity: FullEntity]
@@ -248,8 +293,7 @@ watch([dirId, listOptions], () => {
 })
 
 function spliceChildren(val: FullEntity[], options: SpliceListOptions) {
-  const hiddenTypes = new Set(['translation', 'channel', 'mcpPlugin'])
-  const cleaned = filterVisible(val).filter(e => !hiddenTypes.has(e.type) && !['$translations', '$channels', '$mcpPlugins'].includes(e.name ?? ''))
+  const cleaned = filterVisible(val).filter(isKnowledgeEntity)
   spliceList(children, cleaned, [['sortPriority', 'desc'], listOptions.value.orderBy, ['id', 'asc']], options)
 }
 watch(() => dir.value?.children, val => {
@@ -307,38 +351,28 @@ function onDragstart({ dataTransfer }: DragEvent, id: string) {
   dataTransfer.setData('application/x-entity-id', id)
   dataTransfer.effectAllowed = 'move'
 }
-function onDrop({ dataTransfer }: DragEvent, id: string) {
+async function onDrop({ dataTransfer }: DragEvent, id: string) {
   if (!dataTransfer) return
-  handleFiles(Array.from(dataTransfer.files), id)
   const sourceId = dataTransfer.getData('application/x-entity-id')
-  if (!sourceId) return
-  if (!selected.has(sourceId)) {
-    if (sourceId === id) return
-    mutate(mutators.moveEntities({
-      ids: [sourceId],
-      to: id,
-    }))
-  } else {
-    if (selected.has(id)) return
-    mutate(mutators.moveEntities({
-      ids: Array.from(selected),
-      to: id,
-    }))
+  if (sourceId) {
+    if (!selected.has(sourceId)) {
+      if (sourceId === id) return
+      mutate(mutators.moveEntities({
+        ids: [sourceId],
+        to: id,
+      }))
+    } else {
+      if (selected.has(id)) return
+      mutate(mutators.moveEntities({
+        ids: Array.from(selected),
+        to: id,
+      }))
+    }
+    exitSelectMode()
+    return
   }
-  exitSelectMode()
-}
-async function handleFiles(files: File[], parentId: string) {
-  for (const file of files) {
-    const id = genId()
-    const wait = mutate(mutators.createItem({
-      id,
-      parentId,
-      name: file.name,
-      mimeType: file.type,
-      ...await parseText(file),
-    })).server
-    upload(id, file, file.name, wait)
-  }
+  const dropped = await filesFromDrop(dataTransfer)
+  if (dropped.length) await uploadKnowledge(id, dropped)
 }
 
 const activeEntitiesStore = useActiveEntitiesStore()
@@ -351,6 +385,96 @@ function onEntityClick(entity: FullEntity) {
   } else {
     emit('entityClick', entity)
   }
+}
+function openEntity(entity: FullEntity) {
+  emit('entityClick', entity)
+}
+
+function canReparse(entity: FullEntity) {
+  if (entity.type !== 'item') return false
+  const status = itemParseStatus(entity.item, entity.conf)
+  return status === 'failed' || status === 'unparsed'
+}
+
+const reparsingIds = reactive(new Set<string>())
+async function reparseEntity(entity: FullEntity) {
+  if (!workspaceStore.id || entity.type !== 'item' || reparsingIds.has(entity.id)) return
+  reparsingIds.add(entity.id)
+  try {
+    const response = await client.api.kb.reparse.$post({
+      json: { workspaceId: workspaceStore.id, id: entity.id },
+    })
+    if (!response.ok) {
+      const text = await response.text()
+      let message = text
+      try {
+        const body = JSON.parse(text) as { error?: string }
+        message = body.error || text
+      } catch {
+        // Some infrastructure errors are returned as plain text.
+      }
+      throw new Error(message || `HTTP ${response.status}`)
+    }
+    $q.notify(t('Parsing…'))
+  } catch (err) {
+    $q.notify({
+      message: t('Reparse failed: {0}', err instanceof Error ? err.message : String(err)),
+      color: 'negative',
+    })
+  } finally {
+    reparsingIds.delete(entity.id)
+  }
+}
+
+async function downloadEntity(entity: FullEntity) {
+  if (entity.type !== 'item' || !entity.item) return
+  const cached = await getCached(entity.item.id)
+  if (cached) exportFile(entityName(entity), cached)
+  else window.open(getItemUrl(entity.item.id), '_blank')
+}
+
+function renameEntity(entity: FullEntity) {
+  $q.dialog({
+    title: t('Rename'),
+    prompt: {
+      model: entity.name ?? '',
+      label: t('Name'),
+    },
+    cancel: true,
+    ok: t('Rename'),
+  }).onOk(name => {
+    mutate(mutators.updateEntity({ id: entity.id, name }))
+  })
+}
+
+function moveEntity(entity: FullEntity) {
+  $q.dialog({
+    component: SelectDirDialog,
+    componentProps: {
+      title: t('Move to'),
+      exclude: [entity.id],
+    },
+  }).onOk((to: string) => {
+    mutate(mutators.moveEntities({ ids: [entity.id], to }))
+  })
+}
+
+function recycleEntity(entity: FullEntity) {
+  $q.dialog({
+    title: t('Move to Trash'),
+    message: t('Are you sure you want to move "{0}" to trash?', entityName(entity)),
+    cancel: true,
+    ok: {
+      label: t('Move to Trash'),
+      color: 'negative',
+      flat: true,
+    },
+  }).onOk(() => {
+    mutate(mutators.recycleEntities({
+      workspaceId: workspaceStore.id!,
+      ids: [entity.id],
+    }))
+  })
 }
 const listRef = useTemplateRef('listRef')
 const menuListRef = useTemplateRef('menuListRef')
@@ -435,16 +559,6 @@ function editTags(entity: FullEntity) {
     }))
   })
 }
-function editShortcut(id: string) {
-  const shortcut = activeEntitiesStore.shortcuts.find(s => s.id === id)
-  if (!shortcut) return
-  $q.dialog({
-    component: UpdateShortcutDialog,
-    componentProps: {
-      id: shortcut.id,
-    },
-  })
-}
 function changeIcon() {
   const entity = selectedOne.value!
   $q.dialog({
@@ -459,19 +573,6 @@ function changeIcon() {
       id: entity.id,
       avatar,
     }))
-  })
-}
-
-const { conf } = useEntityConf(dir)
-async function summarizeChatTitle(id: string) {
-  exitSelectMode()
-  const chat = await z.run(queries.fullChat(id), { type: 'complete' })
-  chat && await generateChatTitle({ chat, conf: conf.value }).catch(err => {
-    console.error(err)
-    $q.notify({
-      message: t('Failed to generate chat title: {0}', err.message),
-      color: 'negative',
-    })
   })
 }
 </script>

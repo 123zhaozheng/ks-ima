@@ -56,7 +56,6 @@ const columns: QTableColumn[] = [
   { name: 'name', label: t('Name'), field: 'name', align: 'left' },
   { name: 'ownerId', label: t('Owner ID'), field: 'ownerId' },
   { name: 'plan', label: t('Plan'), field: 'plan', format: plan => plan?.name },
-  { name: 'payment', label: t('Payment'), field: 'payment', format: val => val ? JSON.stringify(val) : '' },
   { name: 'quotaUsed', label: t('Quota Used'), field: 'quotaUsed', format: q => `$${q.toFixed(3)}` },
   { name: 'storageUsed', label: t('Storage Used'), field: 'storageUsed', format: formatBytes },
   { name: 'resetAt', label: t('Reset At'), field: 'resetAt', format: resetAt => new Date(resetAt).toLocaleString() },

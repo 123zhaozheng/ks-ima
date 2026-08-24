@@ -4,8 +4,16 @@
     flex="~ col"
   >
     <common-toolbar>
+      <q-btn
+        flat
+        dense
+        round
+        icon="sym_o_arrow_back"
+        :title="t('Models')"
+        to="/workspace/models"
+      />
       <q-toolbar-title>
-        {{ t('Edit Provider') }}
+        {{ t('Intranet gateway') }}
       </q-toolbar-title>
     </common-toolbar>
     <q-list>
@@ -67,7 +75,7 @@ import { mutate } from 'src/utils/zero-session'
 import { genId } from 'app/src-shared/utils/id'
 import { dialogOptions } from 'src/utils/props'
 import type { ProviderTypeKeys } from 'src/utils/values'
-import { providerTypes } from 'src/utils/values'
+import { getProviderType, providerTypes } from 'src/utils/values'
 import { computed } from 'vue'
 import { mutators } from 'app/src-shared/mutators'
 
@@ -75,12 +83,15 @@ const props = defineProps<{
   provider: FullProvider
 }>()
 
-const providerType = computed(() => providerTypes[props.provider.type])
-const providerOptions = Object.entries(providerTypes).map(([k, v]) => ({
-  avatar: v.avatar,
-  label: v.label,
-  value: k,
-}))
+const intranetProviderKeys = new Set(['openaiCompatible', 'ollama'])
+const providerType = computed(() => getProviderType(props.provider.type))
+const providerOptions = Object.entries(providerTypes)
+  .filter(([k]) => intranetProviderKeys.has(k))
+  .map(([k, v]) => ({
+    avatar: v.avatar,
+    label: v.label,
+    value: k,
+  }))
 function updateSettings(settings) {
   mutate(mutators.updateProvider({
     id: props.provider.id,

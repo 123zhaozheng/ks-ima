@@ -32,8 +32,7 @@
           v-model="args.types"
           multiple
           :options="[
-            { label: t('Chat'), value: 'chat' },
-            { label: t('Note'), value: 'page' },
+            { label: t('Folder'), value: 'folder' },
             { label: t('File'), value: 'item' },
           ]"
           map-options
@@ -107,19 +106,17 @@ import { reactive, ref, watch, nextTick, useTemplateRef } from 'vue'
 import AInput from './AInput'
 import AAvatar from './AAvatar.vue'
 import { t } from 'src/utils/i18n'
-import type { EntityType } from 'app/src-shared/utils/validators'
 import { useWorkspaceStore } from 'src/stores/workspace'
 import { cjkReg, textBeginning } from 'src/utils/functions'
 import { entityAvatar, entityName } from 'src/utils/defaults'
 import { useRouter } from 'vue-router'
 import { client } from 'src/utils/hc'
-import { entityTypeSchema } from 'app/src-shared/utils/validators'
 import type { SearchResult } from 'app/src-shared/utils/types'
 import Mark from 'mark.js'
 
 const args = reactive({
   query: '',
-  types: [] as EntityType[],
+  types: [] as Array<'folder' | 'item'>,
 })
 
 const workspaceStore = useWorkspaceStore()
@@ -173,7 +170,7 @@ watch(args, async () => {
 
   loading.value = true
   try {
-    const types = args.types.length ? args.types : entityTypeSchema.options
+    const types = args.types.length ? args.types : (['item', 'folder'] as Array<'item' | 'folder'>)
     const res = await client.api.search.$post({
       json: {
         workspaceId: workspaceStore.id!,

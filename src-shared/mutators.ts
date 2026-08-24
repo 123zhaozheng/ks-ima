@@ -8,7 +8,7 @@ import type { WorkspaceContentTable } from './table-permission'
 import { assertAuthorized, withMember, withRole, withWritable, workspaceContentTables } from './table-permission'
 import { zeroToZod } from './utils/zero-to-zod'
 import { z } from 'zod'
-import { avatarSchema, entityTypeSchema, mcpTransportSchema, memberDataSchema, modelInputTypesSchema, promptRoleSchema, searchResultSchema, shortcutActionSchema, toolCallStatusSchema, workspaceRoleSchema } from './utils/validators'
+import { avatarSchema, entityTypeSchema, memberDataSchema, modelInputTypesSchema, promptRoleSchema, searchResultSchema, shortcutActionSchema, toolCallStatusSchema, workspaceRoleSchema } from './utils/validators'
 import { personalAcl } from './utils/acl'
 import { DEFAULT_PLAN_ID } from './utils/config'
 import { addMonths } from 'date-fns'
@@ -358,33 +358,6 @@ const createAssistant = defineMutator(
     })
   },
 )
-const createMcpPlugin = defineMutator(
-  z.object({
-    ...entityPropsSchema.shape,
-    transport: mcpTransportSchema,
-  }),
-  async ({ tx, ctx, args: { id, parentId, name, avatar, transport } }) => {
-    assertAuthorized(ctx.userId)
-    const { rootId, pubRoot } = await requireWritable.entity(tx, ctx, parentId)
-    await tx.mutate.entity.insert({
-      ...entityDefaultProps,
-      id,
-      pubRoot,
-      parentId,
-      rootId,
-      type: 'mcpPlugin',
-      name,
-      avatar,
-    })
-    await tx.mutate.mcpPlugin.insert({
-      id,
-      rootId,
-      enabled: true,
-      transport,
-    })
-  },
-)
-
 const jsonUpdateSchema = z.object({
   updates: z.record(z.string(), z.any()).optional(),
   deletes: z.array(z.string()).optional(),
@@ -583,69 +556,6 @@ const createPagePatch = defineMutator(
     })
   },
 )
-const createTranslation = defineMutator(
-  z.object({
-    ...entityPropsSchema.shape,
-    input: z.string().optional(),
-  }),
-  async ({ tx, ctx, args: { id, parentId, input, name, avatar } }) => {
-    assertAuthorized(ctx.userId)
-    const { rootId, pubRoot } = await requireWritable.entity(tx, ctx, parentId)
-    await tx.mutate.entity.insert({
-      ...entityDefaultProps,
-      id,
-      rootId,
-      pubRoot,
-      type: 'translation',
-      parentId,
-      name,
-      avatar,
-    })
-    await tx.mutate.translation.insert({
-      id,
-      rootId,
-      currentIndex: 0,
-    })
-    await tx.mutate.translationRecord.insert({
-      id,
-      rootId,
-      entityId: id,
-      input,
-    })
-  },
-)
-const createChannel = defineMutator(
-  z.object({
-    ...entityPropsSchema.shape,
-    draftMessageId: z.string(),
-  }),
-  async ({ tx, ctx, args: { id, parentId, name, avatar, draftMessageId } }) => {
-    assertAuthorized(ctx.userId)
-    const { rootId, pubRoot } = await requireWritable.entity(tx, ctx, parentId)
-    await tx.mutate.entity.insert({
-      ...entityDefaultProps,
-      id,
-      rootId,
-      pubRoot,
-      type: 'channel',
-      parentId,
-      name,
-      avatar,
-    })
-    await tx.mutate.channel.insert({
-      id,
-      rootId,
-    })
-    await createDraftMessage.fn({
-      tx,
-      ctx,
-      args: {
-        id: draftMessageId,
-        channelId: id,
-      },
-    })
-  },
-)
 const createItemArgs = z.object({
   ...entityPropsSchema.shape,
   mimeType: z.string().optional(),
@@ -668,6 +578,7 @@ const createItem = defineMutator(
       type: 'item',
       parentId,
       hidden,
+      conf: { parseStatus: 'queued' },
     })
     await tx.mutate.item.insert({
       id,
@@ -898,9 +809,7 @@ const updateAssistantMessage = defineMutator(
   },
 )
 function allowInputMessage(message: Row['message'], userId: string) {
-  if (message.type === 'chat:user') return true
-  if (message.type === 'channel:draft') return message.userId === userId
-  return false
+  return message.type === 'chat:user' && message.userId === userId
 }
 const updateInputingMessage = defineMutator(
   updateSchema(tables.message).pick({
@@ -927,57 +836,6 @@ const editMessageText = defineMutator(
     const message = await requireWritable.message(tx, ctx, id)
     assert(allowEditMessageText(message, ctx.userId), 'Message not found')
     await tx.mutate.message.update({ id, text, userId: ctx.userId, editedAt: Date.now() })
-  },
-)
-export function allowDeleteMessage(message: Row['message'], userId: string) {
-  return message.type.startsWith('channel:') && message.userId === userId
-}
-const deleteMessage = defineMutator(
-  z.string(),
-  async ({ tx, ctx, args: id }) => {
-    assertAuthorized(ctx.userId)
-    const message = await requireWritable.message(tx, ctx, id)
-    assert(allowDeleteMessage(message, ctx.userId), 'Message not found')
-    await tx.mutate.message.delete({ id })
-  },
-)
-const createDraftMessage = defineMutator(
-  z.object({
-    id: z.string(),
-    channelId: z.string(),
-  }),
-  async ({ tx, ctx, args: { id, channelId } }) => {
-    assertAuthorized(ctx.userId)
-    const { rootId } = await requireWritable.channel(tx, ctx, channelId)
-    await tx.mutate.message.insert({
-      id,
-      rootId,
-      type: 'channel:draft',
-      entityId: channelId,
-      text: '',
-      userId: ctx.userId,
-    })
-  },
-)
-const sendChannelMessage = defineMutator(
-  z.object({
-    id: z.string(),
-    draftMessageId: z.string(),
-    sentAt: z.number(),
-  }),
-  async ({ tx, ctx, args: { id, draftMessageId, sentAt } }) => {
-    assertAuthorized(ctx.userId)
-    const message = await requireWritable.message(tx, ctx, id)
-    assert(message.type === 'channel:draft' && message.userId === ctx.userId, 'Message not found')
-    await tx.mutate.message.update({ id, type: 'channel:user', sentAt: ensureTimeValid(sentAt) })
-    await createDraftMessage.fn({
-      tx,
-      ctx,
-      args: {
-        id: draftMessageId,
-        channelId: message.entityId,
-      },
-    })
   },
 )
 const updateModel = defineMutator(
@@ -1038,36 +896,6 @@ const updatePage = defineMutator(
     await tx.mutate.page.update({ id, text })
   },
 )
-const updateTranslation = defineMutator(
-  updateSchema(tables.translation),
-  async ({ tx, ctx, args: { id, ...updates } }) => {
-    assertAuthorized(ctx.userId)
-    await requireWritable.translation(tx, ctx, id)
-    await tx.mutate.translation.update({ id, ...updates })
-  },
-)
-const updateTranslationRecord = defineMutator(
-  updateSchema(tables.translationRecord).omit({ entityId: true }),
-  async ({ tx, ctx, args: { id, ...updates } }) => {
-    assertAuthorized(ctx.userId)
-    await requireWritable.translationRecord(tx, ctx, id)
-    await tx.mutate.translationRecord.update({ id, ...updates })
-  },
-)
-const spliceTranslationRecord = defineMutator(
-  z.tuple([
-    z.string(),
-    insertSchema(tables.translationRecord),
-  ]),
-  async ({ tx, ctx, args: [start, { entityId, ...props }] }) => {
-    assertAuthorized(ctx.userId)
-    const { rootId, currentIndex } = await requireWritable.translation(tx, ctx, entityId)
-    const records = await tx.run(zql.translationRecord.where('entityId', entityId).where('id', '>', start))
-    await Promise.all(records.map(({ id }) => tx.mutate.translationRecord.delete({ id })))
-    await tx.mutate.translationRecord.insert({ entityId, rootId, ...props })
-    await tx.mutate.translation.update({ id: entityId, currentIndex: currentIndex + 1 })
-  },
-)
 const updateItem = defineMutator(
   z.object({
     id: z.string(),
@@ -1092,15 +920,6 @@ const updateAssistant = defineMutator(
     await tx.mutate.assistant.update({ id, ...updates })
   },
 )
-const updateMcpPlugin = defineMutator(
-  updateSchema(tables.mcpPlugin),
-  async ({ tx, ctx, args: { id, ...updates } }) => {
-    assertAuthorized(ctx.userId)
-    await requireWritable.mcpPlugin(tx, ctx, id)
-    await tx.mutate.mcpPlugin.update({ id, ...updates })
-  },
-)
-
 const deleteModel = defineMutator(
   z.string(),
   async ({ tx, ctx, args: id }) => {
@@ -1146,7 +965,6 @@ const createWorkspace = defineMutator(
         chatAssistantId,
         chatModelId: settings.defaultChatModel,
         chatTitleModelId: settings.defaultChatTitleModel,
-        translationModelId: settings.defaultTranslationModel,
       },
     })
     // create trash root
@@ -1162,12 +980,12 @@ const createWorkspace = defineMutator(
       chatFolderId,
       searchFolderId,
       pagesFolderId,
-      translationsFolderId,
-      channelsFolderId,
+      ,
+      ,
       filesFolderId,
       assistantsFolderId,
       providersFolderId,
-      pluginsFolderId,
+      ,
       shortcutsFolderId,
     ] = ids.slice(3, 13)
     const folderProps = {
@@ -1202,18 +1020,6 @@ const createWorkspace = defineMutator(
     })
     await tx.mutate.entity.insert({
       ...folderProps,
-      id: translationsFolderId,
-      name: '$translations',
-      hidden: true,
-    })
-    await tx.mutate.entity.insert({
-      ...folderProps,
-      id: channelsFolderId,
-      name: '$channels',
-      hidden: true,
-    })
-    await tx.mutate.entity.insert({
-      ...folderProps,
       id: filesFolderId,
       name: '$files',
     })
@@ -1221,12 +1027,6 @@ const createWorkspace = defineMutator(
       ...folderProps,
       id: assistantsFolderId,
       name: '$assistants',
-    })
-    await tx.mutate.entity.insert({
-      ...folderProps,
-      id: pluginsFolderId,
-      name: '$mcpPlugins',
-      hidden: true,
     })
     await tx.mutate.entity.insert({
       ...folderProps,
@@ -1238,11 +1038,11 @@ const createWorkspace = defineMutator(
       chatShortcutId,
       searchShortcutId,
       pageShortcutId,
-      _translationShortcutId,
-      _channelShortcutId,
+      ,
+      ,
       fileShortcutId,
       assistantShortcutId,
-      _pluginShortcutId,
+      ,
       providersShortcutId,
     ] = ids.slice(13, 22)
     await createShortcutBase(tx, id, null, {
@@ -1490,24 +1290,6 @@ async function updatePubRoot(tx: Transaction<Schema>, entityId: string, pubRoot:
     WHERE e.id IN (SELECT id FROM tree);
   `, [entityId, pubRoot])
 }
-const publishEntity = defineMutator(
-  z.string(),
-  async ({ tx, ctx, args: id }) => {
-    assertAuthorized(ctx.userId)
-    const { pubRoot } = await requireWritable.entity(tx, ctx, id)
-    assert(!pubRoot, 'Entity already published')
-    await updatePubRoot(tx, id, id)
-  },
-)
-const unpublishEntity = defineMutator(
-  z.string(),
-  async ({ tx, ctx, args: id }) => {
-    assertAuthorized(ctx.userId)
-    const { pubRoot } = await requireWritable.entity(tx, ctx, id)
-    assert(pubRoot === id, 'This entity is not publication root')
-    await updatePubRoot(tx, id, null)
-  },
-)
 const changeMemberRole = defineMutator(
   z.object({
     id: z.string(),
@@ -1612,11 +1394,8 @@ export const mutators = defineMutators({
   createPage,
   createPagePatch,
   updatePage,
-  createTranslation,
-  createChannel,
   createShortcut,
   createItem,
-  createMcpPlugin,
   createMessageItem,
   createMessageEntities,
   updateLastWorkspaceId,
@@ -1634,19 +1413,12 @@ export const mutators = defineMutators({
   updateAssistantMessage,
   updateInputingMessage,
   editMessageText,
-  deleteMessage,
-  sendChannelMessage,
-  createDraftMessage,
   updateModel,
   updateChat,
   updateSearch,
   updateShortcut,
-  updateTranslation,
-  updateTranslationRecord,
-  spliceTranslationRecord,
   updateItem,
   updateAssistant,
-  updateMcpPlugin,
   deleteModel,
   deleteMessageEntity,
   createWorkspace,
@@ -1657,8 +1429,6 @@ export const mutators = defineMutators({
   restoreEntities,
   deleteEntities,
   directDeleteEntities,
-  publishEntity,
-  unpublishEntity,
   moveEntities,
   changeMemberRole,
   removeMember,

@@ -1,7 +1,7 @@
 <template>
   <q-select
     :model-value="options.find(x => x.value === modelId) ?? modelId"
-    @update:model-value="modelId = $event.value"
+    @update:model-value="modelId = $event?.value ?? $event ?? null"
     :options="filteredOptions"
     @filter="filterFn"
     use-input

@@ -31,7 +31,6 @@ services:
       S3_ENDPOINT: update-this
       S3_REGION: update-this
       S3_BUCKET: update-this
-      SEARXNG_URL: update-this
 
     depends_on:
       db:

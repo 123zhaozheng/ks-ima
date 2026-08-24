@@ -1,13 +1,8 @@
-import type { BetterAuthOptions } from 'better-auth/minimal'
 import { betterAuth } from 'better-auth/minimal'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { admin, twoFactor } from 'better-auth/plugins'
 import { db } from '../utils/db'
 import {
-  GOOGLE_CLIENT_ID,
-  GOOGLE_CLIENT_SECRET,
-  GITHUB_CLIENT_ID,
-  GITHUB_CLIENT_SECRET,
   REQUIRE_EMAIL_VERIFICATION,
   SITE_NAME,
   FRONT_URL,
@@ -17,20 +12,6 @@ import { sendResetPassword, sendVerificationEmail } from './smtp'
 import { genId, genIds } from 'app/src-shared/utils/id'
 import { zdb } from '../zero/db'
 import { mutators } from 'app/src-shared/mutators'
-
-const socialProviders: BetterAuthOptions['socialProviders'] = {}
-if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
-  socialProviders.google = {
-    clientId: GOOGLE_CLIENT_ID,
-    clientSecret: GOOGLE_CLIENT_SECRET,
-  }
-}
-if (GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET) {
-  socialProviders.github = {
-    clientId: GITHUB_CLIENT_ID,
-    clientSecret: GITHUB_CLIENT_SECRET,
-  }
-}
 
 export const auth = betterAuth({
   appName: SITE_NAME,
@@ -91,7 +72,6 @@ export const auth = betterAuth({
       },
     },
   },
-  socialProviders,
   emailVerification: {
     sendVerificationEmail: ({ user, url }) => sendVerificationEmail(user, url),
   },

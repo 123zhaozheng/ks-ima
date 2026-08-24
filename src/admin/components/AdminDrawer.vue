@@ -29,17 +29,6 @@
         </q-item-section>
       </q-item>
       <q-item
-        to="/plans"
-        item-rd
-      >
-        <q-item-section avatar>
-          <q-icon name="sym_o_sell" />
-        </q-item-section>
-        <q-item-section>
-          {{ t('Plans') }}
-        </q-item-section>
-      </q-item>
-      <q-item
         to="/models"
         item-rd
       >

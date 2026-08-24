@@ -14,83 +14,27 @@
         text-on-sur-var
       />
       <q-toolbar-title>
-        {{ t('Settings') }}
+        {{ t('Personal Settings') }}
       </q-toolbar-title>
     </q-toolbar>
-    <q-tabs
-      active-color="primary"
-      align="left"
-      no-caps
-    >
-      <q-route-tab
-        v-for="({ label, to }, index) in allScopes"
-        :key="index"
-        :label
-        :to
-      />
-    </q-tabs>
   </q-header>
   <q-page-container>
-    <q-page>
-      <a-tip
-        tip-key="settings-scopes"
-        long
-        rd-0
-      >
-        {{ t('Settings have three scopes: user, workspace, and local, which allows you to apply different settings for different workspaces and devices.') }}
-      </a-tip>
-      <settings-list
-        :state
-        :scope
-        @update="update"
-        @reset="reset"
-      />
+    <q-page
+      max-w="800px"
+      mx-a
+    >
+      <settings-list />
     </q-page>
   </q-page-container>
 </template>
 
 <script setup lang="ts">
 import SettingsList from 'src/components/SettingsList.vue'
-import { usePerfsState } from 'src/composables/perfs-state'
 import { t } from 'src/utils/i18n'
-import { DefaultPerfs, usePerfsStore } from 'src/stores/perfs'
-import type { Perfs } from 'src/stores/perfs'
-import { computed, provide } from 'vue'
-import { useRoute } from 'vue-router'
-import { z } from 'zod'
 import { useRequireLogin } from 'src/composables/require-login'
 import { useUiStateStore } from 'src/stores/ui-state'
-import ATip from 'src/components/ATip.vue'
 
 useRequireLogin()
-
-const route = useRoute()
-const allScopes = [
-  { name: 'user', label: t('User'), to: { query: {} } },
-  { name: 'workspace', label: t('Workspace'), to: { query: { scope: 'workspace' } } },
-  { name: 'local', label: t('Local'), to: { query: { scope: 'local' } } },
-] as const
-
-const scopeSchema = z.enum(allScopes.map(scope => scope.name)).catch('user')
-const scope = computed(() => scopeSchema.parse(route.query.scope))
-const scopes = computed(() => allScopes.slice(0, allScopes.findIndex(s => s.name === scope.value) + 1))
-provide('scopes', scopes)
-
-const perfsStore = usePerfsStore()
-const { state } = usePerfsState(computed(() => scopes.value.map(s => perfsStore[`${s.name}Perfs`])), DefaultPerfs)
-
-function update<K extends keyof Perfs>(key: K, value: Perfs[K]) {
-  perfsStore.update({
-    updates: { [key]: value },
-    scope: scope.value,
-  })
-}
-function reset(key: keyof Perfs) {
-  perfsStore.update({
-    deletes: [key],
-    scope: scope.value,
-  })
-}
 
 const uiStateStore = useUiStateStore()
 </script>

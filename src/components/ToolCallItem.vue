@@ -1,48 +1,51 @@
 <template>
-  <q-expansion-item
-    bg-sur-c-low
-    of-hidden
-    rd-md
-    v-if="plugin"
-  >
-    <template #header>
-      <q-item-section avatar>
-        <a-avatar :avatar="plugin.avatar" />
-      </q-item-section>
-      <q-item-section>
-        <q-item-label>
-          {{ plugin.name }}<code bg-sur-c-high>{{ toolCall.name }}</code>
-        </q-item-label>
-        <q-item-label caption>
-          {{ t('Tool Call') }}
-        </q-item-label>
-      </q-item-section>
-      <q-item-section side>
-        <q-spinner
-          v-if="toolCall.status === 'calling'"
-          size="sm"
+  <div>
+    <q-expansion-item
+      bg-sur-c-low
+      of-hidden
+      rd-md
+      v-if="plugin"
+    >
+      <template #header>
+        <q-item-section avatar>
+          <a-avatar :avatar="plugin.avatar" />
+        </q-item-section>
+        <q-item-section>
+          <q-item-label>
+            {{ plugin.name }}<code bg-sur-c-high>{{ toolCall.name }}</code>
+          </q-item-label>
+          <q-item-label caption>
+            {{ t('Tool Call') }}
+          </q-item-label>
+        </q-item-section>
+        <q-item-section side>
+          <q-spinner
+            v-if="toolCall.status === 'calling'"
+            size="sm"
+          />
+          <q-icon
+            v-else-if="toolCall.status === 'completed'"
+            name="sym_o_check_circle"
+            text-suc
+          />
+          <q-icon
+            v-else-if="toolCall.status === 'failed'"
+            name="sym_o_error"
+            text-err
+          />
+        </q-item-section>
+      </template>
+      <template #default>
+        <md-preview
+          :model-value="contentMd"
+          v-bind="mdPreviewProps"
+          bg-sur-c-low
+          px-3
         />
-        <q-icon
-          v-else-if="toolCall.status === 'completed'"
-          name="sym_o_check_circle"
-          text-suc
-        />
-        <q-icon
-          v-else-if="toolCall.status === 'failed'"
-          name="sym_o_error"
-          text-err
-        />
-      </q-item-section>
-    </template>
-    <template #default>
-      <md-preview
-        :model-value="contentMd"
-        v-bind="mdPreviewProps"
-        bg-sur-c-low
-        px-3
-      />
-    </template>
-  </q-expansion-item>
+      </template>
+    </q-expansion-item>
+    <kb-citations :tool-call="toolCall" />
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -54,6 +57,7 @@ import { MdPreview } from 'md-editor-v3'
 import type { Row } from '@rocicorp/zero'
 import { t } from 'src/utils/i18n'
 import { useMdProps } from 'src/composables/md-props'
+import KbCitations from './KbCitations.vue'
 
 const props = defineProps<{
   toolCall: Row['toolCall']

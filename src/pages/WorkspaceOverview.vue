@@ -24,54 +24,8 @@
           <a-avatar :avatar="workspaceAvatar(workspace)" />
         </common-item>
         <q-separator spaced />
-        <q-item-label header>
-          {{ t('Subscription') }}
-        </q-item-label>
-        <common-item
-          :label="t('Current Plan')"
-          :to="isOwner ? '/workspace/plans' : undefined"
-        >
-          {{ workspace.plan?.name }}
-        </common-item>
-        <common-item
-          :label="t('Next Billing Time')"
-          v-if="nextBillingTime"
-          :caption="nextBillingTime"
-        >
-          <template v-if="isOwner">
-            <q-btn
-              v-if="workspace.payment?.type === 'stripe'"
-              :label="t('Manage Subscription')"
-              @click="gotoPortal"
-              :loading="creatingPortalSession"
-              no-caps
-              unelevated
-              bg-pri-c
-              text-on-pri-c
-            />
-            <q-btn
-              v-else-if="workspace.payment?.type === 'wxpay'"
-              :label="t('Renew')"
-              to="/workspace/plans"
-              unelevated
-              bg-pri-c
-              text-on-pri-c
-            />
-          </template>
-        </common-item>
         <common-item :label="t('File storage usage')">
-          <span :class="{ 'text-err': workspace.storageUsed >= workspace.plan!.storageLimit }">
-            {{ formatBytes(workspace.storageUsed) }} / {{ formatBytes(workspace.plan!.storageLimit) }}
-          </span>
-        </common-item>
-        <common-item
-          :label="t('AI quota usage')"
-          :caption="t('Next reset time: {0}', new Date(workspace.resetAt).toLocaleString())"
-          to="/workspace/usage"
-        >
-          <span :class="{ 'text-err': workspace.quotaUsed >= workspace.plan!.quotaLimit }">
-            ${{ workspace.quotaUsed.toFixed(4) }} / ${{ workspace.plan!.quotaLimit }}
-          </span>
+          {{ formatBytes(workspace.storageUsed) }}
         </common-item>
         <q-separator spaced />
         <div
@@ -230,7 +184,7 @@ import AAvatar from 'src/components/AAvatar.vue'
 import { mutate } from 'src/utils/zero-session'
 import { useWorkspaceStore } from 'src/stores/workspace'
 import { t } from 'src/utils/i18n'
-import { computed, ref, toRef } from 'vue'
+import { computed, toRef } from 'vue'
 import { userAvatar, workspaceAvatar } from 'src/utils/defaults'
 import MenuItem from 'src/components/MenuItem.vue'
 import { copyToClipboard, useQuasar } from 'quasar'
@@ -240,8 +194,6 @@ import { formatBytes, formatTimeBrief, invitationLink, maskedInvitationLink, rol
 import CopyBtn from 'src/components/CopyBtn.vue'
 import DeleteWorkspaceDialog from 'src/components/DeleteWorkspaceDialog.vue'
 import CommonItem from 'src/components/CommonItem.vue'
-import { addMonths } from 'date-fns'
-import { client } from 'src/utils/hc'
 import PickAvatarDialog from 'src/components/PickAvatarDialog.vue'
 import AInput from 'src/components/AInput'
 
@@ -343,31 +295,6 @@ function deleteWorkspace() {
     componentProps: {
       workspace: workspaceStore.workspace!,
     },
-  })
-}
-
-const nextBillingTime = computed(() => {
-  const { workspace } = workspaceStore
-  if (workspace?.remainingMonths == null) return null
-  return addMonths(new Date(workspace.resetAt), workspace.remainingMonths).toLocaleString()
-})
-
-const creatingPortalSession = ref(false)
-function gotoPortal() {
-  creatingPortalSession.value = true
-  client.api.payment.createPortalSession.$post({
-    json: { workspaceId: workspaceStore.id! },
-  }).then(async res => {
-    const data = await res.json()
-    if ('error' in data) throw new Error(data.error)
-    window.open(data.url, '_blank')
-  }).catch(err => {
-    $q.notify({
-      message: t('Failed to create portal session: {0}', err.message),
-      color: 'negative',
-    })
-  }).finally(() => {
-    creatingPortalSession.value = false
   })
 }
 

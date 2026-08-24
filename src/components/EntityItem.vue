@@ -27,6 +27,14 @@
       >
         {{ entityName(entity) }}
       </q-item-label>
+      <q-item-label
+        v-if="parseLabel"
+        caption
+        :class="parseClass"
+        :title="parseError"
+      >
+        {{ parseLabel }}
+      </q-item-label>
     </q-item-section>
     <q-item-section
       side
@@ -46,13 +54,35 @@
 </template>
 
 <script setup lang="ts">
-import type { Row } from '@rocicorp/zero'
+import type { FullEntity } from 'app/src-shared/queries'
+import { computed } from 'vue'
 import AAvatar from './AAvatar.vue'
 import { entityAvatar, entityName } from 'src/utils/defaults'
+import { itemParseStatus } from 'src/utils/knowledge'
+import { t } from 'src/utils/i18n'
 
-defineProps<{
-  entity: Row['entity']
+const props = defineProps<{
+  entity: FullEntity
   selectable?: boolean
   selected?: boolean
 }>()
+
+const parseStatus = computed(() => props.entity.type === 'item' ? itemParseStatus(props.entity.item, props.entity.conf) : null)
+const parseError = computed(() => typeof props.entity.conf?.parseError === 'string' ? props.entity.conf.parseError : '')
+const parseLabel = computed(() => {
+  if (parseStatus.value === 'ready') {
+    return props.entity.conf?.indexed === true
+      ? t('Parsed · Vector indexed')
+      : t('Parsed · Keyword only')
+  }
+  if (parseStatus.value === 'parsing') return t('Parsing…')
+  if (parseStatus.value === 'unparsed') return t('No text extracted')
+  if (parseStatus.value === 'failed') return t('Parse failed')
+  return ''
+})
+const parseClass = computed(() => {
+  if (parseStatus.value === 'ready') return 'text-pri'
+  if (parseStatus.value === 'unparsed' || parseStatus.value === 'failed') return 'text-warn'
+  return 'text-on-sur-var'
+})
 </script>

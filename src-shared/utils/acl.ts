@@ -24,9 +24,25 @@ export const ROLE_DEFAULT_ACTIONS: Record<WorkspaceRole, AclAction[]> = {
 export function parseFolderAcl(conf: Record<string, any> | null | undefined): FolderAcl | null {
   const acl = conf?.acl
   if (!acl || typeof acl !== 'object') return null
+  const validActions = new Set<AclAction>(ACL_ACTIONS)
   return {
     inherit: acl.inherit !== false,
-    aces: Array.isArray(acl.aces) ? acl.aces : [],
+    aces: Array.isArray(acl.aces)
+      ? acl.aces.flatMap((ace: unknown) => {
+        if (!ace || typeof ace !== 'object') return []
+        const value = ace as Record<string, unknown>
+        if (value.principalType !== 'role' && value.principalType !== 'user') return []
+        if (typeof value.principalId !== 'string' || !value.principalId) return []
+        const actions = Array.isArray(value.actions)
+          ? value.actions.filter((action): action is AclAction => validActions.has(action as AclAction))
+          : []
+        return [{
+          principalType: value.principalType,
+          principalId: value.principalId,
+          actions,
+        }]
+      })
+      : [],
   }
 }
 
@@ -82,5 +98,7 @@ export function canAction(
   action: AclAction,
 ) {
   if (!role || !userId) return false
-  return resolveActions(role, userId, ancestorConfs).has(action)
+  const actions = resolveActions(role, userId, ancestorConfs)
+  // Asking can reveal source text through both the answer and its citations.
+  return actions.has(action) && (action !== 'ask' || actions.has('view'))
 }

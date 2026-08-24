@@ -4,22 +4,43 @@
     view-styles
   >
     <common-toolbar>
-      <assistant-model-select
-        v-if="$route.params.type === 'chat' && workspaceStore.id"
-        :assistant-id="conf.chatAssistantId"
-        :model-id="chat.modelId"
-        :workspace-id="workspaceStore.id"
-        :conf
-        @update:assistant-id="switchAssistant"
-        @update:model-id="switchModel"
+      <q-btn
+        v-if="$route.params.type === 'chat'"
+        flat
+        dense
+        round
+        icon="sym_o_arrow_back"
+        :title="t('All files')"
+        :to="workspaceStore.id ? `/folder/${workspaceStore.id}` : '/'"
       />
-      <q-toolbar-title
-        v-else
-        text-lg
-      >
-        {{ entityName(entity) }}
+      <q-toolbar-title text-lg>
+        {{ $route.params.type === 'chat' ? t('Ask') : entityName(entity) }}
       </q-toolbar-title>
-      <div ml-a />
+      <q-btn
+        v-if="$route.params.type === 'chat' && workspaceStore.id"
+        flat
+        dense
+        round
+        icon="sym_o_tune"
+        :title="t('Model')"
+        ml-a
+      >
+        <q-menu>
+          <div
+            p-2
+            style="min-width: 280px"
+          >
+            <assistant-model-select
+              :assistant-id="conf.chatAssistantId"
+              :model-id="chat.modelId"
+              :workspace-id="workspaceStore.id"
+              :conf
+              @update:assistant-id="switchAssistant"
+              @update:model-id="switchModel"
+            />
+          </div>
+        </q-menu>
+      </q-btn>
     </common-toolbar>
     <div
       grow
@@ -52,6 +73,22 @@
           p-4
         />
       </template>
+      <div
+        v-if="isEmptyAsk"
+        text-on-sur-var
+        text-center
+        py-12
+        px-6
+      >
+        {{ t('Ask about files in this knowledge base.') }}
+        <div
+          v-if="!model"
+          text-warn
+          mt-3
+        >
+          {{ t('Please select a model') }}
+        </div>
+      </div>
     </div>
     <div
       pos-relative
@@ -102,49 +139,10 @@
         :parent-id="chat.id"
         :input-types="modelInputTypes(model).user"
         :plugins
+        :placeholder="t('Ask about your files…')"
         @send="send"
         v-slot="{ empty }"
       >
-        <provider-options-btn
-          v-if="model"
-          :model
-          v-model:options="providerOptions"
-          v-model:tools="providerTools"
-          flat
-          round
-        />
-        <q-btn
-          v-if="$route.params.type === 'chat'"
-          flat
-          :round="!activePluginCount"
-          :class="{ 'px-2': activePluginCount }"
-          min-w="2.7em"
-          min-h="2.7em"
-          icon="sym_o_extension"
-          :title="t('Plugins')"
-        >
-          <code
-            v-if="activePluginCount"
-            bg-sur-c-high
-            px="6px"
-          >{{ activePluginCount }}</code>
-          <q-menu>
-            <q-list>
-              <plugin-toggle-items
-                :model-value="pluginIds"
-                @update:model-value="updatePlugins"
-                :status="Object.fromEntries(Object.entries(plugins).map(([id, { status }]) => [id, status]))"
-              />
-            </q-list>
-          </q-menu>
-        </q-btn>
-        <q-btn
-          icon="sym_o_add"
-          :title="t('Add Item')"
-          flat
-          round
-          @click="selectEntity"
-        />
         <q-space />
         <div
           v-if="usage"
@@ -183,7 +181,7 @@
 import { useUiStateStore } from 'src/stores/ui-state'
 import type { Ref } from 'vue'
 import { computed, inject, nextTick, toRef, useTemplateRef, watch, ref } from 'vue'
-import { mutate, z } from 'src/utils/zero-session'
+import { mutate } from 'src/utils/zero-session'
 import { genId } from 'app/src-shared/utils/id'
 import { getCommonVars, pairs } from 'src/utils/functions'
 import { t } from 'src/utils/i18n'
@@ -205,11 +203,6 @@ import type { LayoutPosition } from 'src/utils/types'
 import { useRoute } from 'vue-router'
 import { entityName, modelInputTypes, modelName } from 'src/utils/defaults'
 import { usePlugins } from 'src/composables/plugins'
-import PluginToggleItems from 'src/components/PluginToggleItems.vue'
-import { editPageSdkTool } from 'src/utils/edit-page'
-import { injectGlobal } from 'src/composables/provide-inject-global'
-import type { Editor } from '@tiptap/vue-3'
-import SelectEntityDialog from 'src/components/SelectEntityDialog.vue'
 import { useWorkspaceStore } from 'src/stores/workspace'
 import CommonToolbar from 'src/components/CommonToolbar.vue'
 import MessageInput from 'src/components/MessageInput.vue'
@@ -217,12 +210,10 @@ import { usePerfsStore } from 'src/stores/perfs'
 import { useChatScroll } from 'src/composables/chat-scroll'
 import MessageItem from 'src/components/MessageItem.vue'
 import { flush } from 'src/composables/state-proxy'
-import ProviderOptionsBtn from 'src/components/ProviderOptionsBtn.vue'
 import { DefaultPromptTemplate } from 'src/utils/templates'
 import { useQuote } from 'src/composables/quote'
 import { useListenKey } from 'src/composables/listen-key'
 import { engine } from 'src/utils/template-engine'
-import { localData } from 'src/utils/local-data'
 
 const props = defineProps<{
   chat: FullChat
@@ -241,14 +232,6 @@ const pluginIds = computed(() => {
   return ['workspace', 'mermaid']
 })
 const { plugins, pluginsPrompt } = usePlugins(pluginIds)
-const activePluginCount = computed(() => Object.values(plugins.value).filter(({ status }) => status === 'ready').length)
-
-function updatePlugins(plugins: string[]) {
-  mutate(mutators.updateChat({
-    id: props.chat.id,
-    plugins,
-  }))
-}
 
 const { getMessageAt, chain, messageMap } = useChatRes(toRef(props, 'chat'))
 
@@ -270,7 +253,7 @@ async function edit(parent: string) {
 
 const $q = useQuasar()
 async function regenerate(parent: string) {
-  const params = await getStreamParams()
+  const params = getStreamParams()
   if (!params) return
   await mutate(mutators.appendMessagePair({
     entityId: props.chat.id,
@@ -302,18 +285,11 @@ watch(() => props.chat.id, id => {
   })
 })
 
-function selectEntity() {
-  $q.dialog({
-    component: SelectEntityDialog,
-  }).onOk(entity => {
-    mutate(mutators.createMessageEntities({
-      messageId: chain.value.at(-1)!,
-      entityIds: [entity.id],
-    }))
-  })
-}
-
 const route = useRoute()
+const isEmptyAsk = computed(() =>
+  route.params.type === 'chat' &&
+  Object.values(messageMap.value).every(m => !m.text?.trim()),
+)
 
 watch(route, async () => {
   const messageId = route.query.messageId
@@ -349,14 +325,14 @@ watch(route, async () => {
   document.querySelector('mark')?.scrollIntoView({ block: 'center' })
 }, { immediate: true })
 
-async function getStreamParams() {
-  const config = await getCompletionConfig()
-  if (!config) {
-    $q.notify({ message: t('Please select an assistant'), color: 'negative' })
-    return null
-  }
+function getStreamParams() {
   if (!model.value) {
     $q.notify({ message: t('Please select a model'), color: 'negative' })
+    return null
+  }
+  const config = getCompletionConfig()
+  if (!config) {
+    $q.notify({ message: t('Please select an assistant'), color: 'negative' })
     return null
   }
   return {
@@ -366,7 +342,7 @@ async function getStreamParams() {
 }
 
 async function send() {
-  const params = await getStreamParams()
+  const params = getStreamParams()
   if (!params) return
   const { id } = props.chat
   const target = chain.value.at(-1)!
@@ -438,68 +414,39 @@ function stream(params: {
   })
   return task
 }
-watch(() => props.chat.id, async () => {
-  if (route.params.type === 'search' && !streamingTask.value && !messageMap.value[chain.value.at(-2)!].text) {
-    const params = await getStreamParams()
-    params && stream(params, true)
+function getCompletionConfig(): CompletionConfig | undefined {
+  const tools = Object.fromEntries(Object.entries(plugins.value).map(([id, { tools }]) => [id, tools]))
+  const pluginVars = {
+    _pluginsPrompt: engine.parseAndRenderSync(pluginsPrompt.value, getCommonVars()),
   }
-}, { immediate: true })
-
-async function getCompletionConfig(): Promise<CompletionConfig | undefined> {
-  if (route.params.type === 'chat') {
-    if (assistant.value) {
-      const { promptTemplate, promptRole, contextNum, streamSettings, prompt } = assistant.value
-      return {
-        promptTemplate: promptTemplate || DefaultPromptTemplate,
-        promptRole,
-        contextNum,
-        streamSettings,
-        vars: {
-          _rolePrompt: prompt,
-          _pluginsPrompt: engine.parseAndRenderSync(pluginsPrompt.value, getCommonVars()),
-        },
-        tools: Object.fromEntries(Object.entries(plugins.value).map(([id, { tools }]) => [id, tools])),
-        sdkTools: providerTools.value,
-        providerOptions: providerOptions.value,
-      }
+  if (assistant.value) {
+    const { promptTemplate, promptRole, contextNum, streamSettings, prompt } = assistant.value
+    return {
+      promptTemplate: promptTemplate || DefaultPromptTemplate,
+      promptRole,
+      contextNum,
+      streamSettings,
+      vars: {
+        _rolePrompt: prompt,
+        ...pluginVars,
+      },
+      tools,
+      sdkTools: providerTools.value,
+      providerOptions: providerOptions.value,
     }
   }
-  const base = {
+  return {
+    promptTemplate: DefaultPromptTemplate,
     promptRole: 'system',
+    contextNum: 10,
     streamSettings: {},
-  } satisfies Partial<CompletionConfig>
-  if (route.params.type === 'search') {
-    const record = await z.run(queries.searchRecord(props.chat.id), { type: 'complete' })
-    if (record) {
-      return {
-        ...base,
-        promptTemplate: conf.value.searchAssistantPrompt,
-        promptRole: 'user',
-        vars: {
-          query: record.q,
-          results: record.results,
-          language: localData.locale ?? navigator.language,
-        },
-        tools: {},
-      }
-    }
-  } else if (route.params.type === 'page') {
-    const entity = await z.run(queries.entity({ id: route.params.id as string }), { type: 'complete' })
-    const editor = injectGlobal<Ref<Editor>>('pageEditor')
-    if (editor?.value) {
-      return {
-        ...base,
-        promptTemplate: conf.value.pageAssistantPrompt,
-        vars: {
-          title: entityName(entity),
-          content: editor.value.getHTML(),
-        },
-        tools: {},
-        sdkTools: {
-          edit_page: editPageSdkTool,
-        },
-      }
-    }
+    vars: {
+      _rolePrompt: t('You are a knowledge-base librarian. Call search before answering internal facts. Cite title and quote. If search is empty, say the knowledge base does not contain it.'),
+      ...pluginVars,
+    },
+    tools,
+    sdkTools: providerTools.value,
+    providerOptions: providerOptions.value,
   }
 }
 

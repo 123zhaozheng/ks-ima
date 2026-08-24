@@ -21,7 +21,7 @@ export function isPDFDocumentProxy(data: unknown): data is PDFDocumentProxy {
   return typeof data === 'object' && data !== null && '_pdfInfo' in data
 }
 
-GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@5.4.624/build/pdf.worker.min.mjs'
+GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
 export function extractText(
   data: DocumentInitParameters['data'] | PDFDocumentProxy,

@@ -212,9 +212,24 @@ export const fileParsers: FileParser[] = [
   },
 ]
 
-export function parseText(file: Blob) {
-  if (file.type === mimeTypes.docx) return parseDocxText(file)
-  if (file.type === mimeTypes.pptx) return parsePptx(file)
-  if (file.type === mimeTypes.xlsx) return parseXlsx(file)
-  if (file.type === mimeTypes.pdf) return extractPdfText(file)
+function mimeFromName(name?: string) {
+  const ext = name?.split('.').pop()?.toLowerCase()
+  if (ext === 'docx') return mimeTypes.docx
+  if (ext === 'pptx') return mimeTypes.pptx
+  if (ext === 'xlsx' || ext === 'xls') return mimeTypes.xlsx
+  if (ext === 'pdf') return mimeTypes.pdf
+  if (ext === 'md' || ext === 'markdown') return 'text/markdown'
+  if (ext === 'txt' || ext === 'csv' || ext === 'json' || ext === 'xml' || ext === 'html') return 'text/plain'
+}
+
+export async function parseText(file: Blob & { name?: string }): Promise<ParseTextResult | undefined> {
+  const type = file.type || mimeFromName(file.name) || ''
+  if (type === mimeTypes.docx) return parseDocxText(file)
+  if (type === mimeTypes.pptx) return parsePptx(file)
+  if (type === mimeTypes.xlsx) return parseXlsx(file)
+  if (type === mimeTypes.pdf) return extractPdfText(file)
+  if (type.startsWith('text/') || type === 'application/json') {
+    const text = await file.text()
+    return { text, language: 'text' as const }
+  }
 }

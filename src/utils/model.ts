@@ -1,7 +1,7 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { PUBLIC_ROOT_ID } from 'app/src-shared/utils/config'
 import { useWorkspaceStore } from 'src/stores/workspace'
-import { providerTypes } from './values'
+import { getProviderType } from './values'
 import type { FullModel } from 'app/src-shared/queries'
 
 export function toSdkModel({ provider, name }: FullModel) {
@@ -18,5 +18,5 @@ export function toSdkModel({ provider, name }: FullModel) {
       baseURL: `${location.origin}/api/v1`,
     }).languageModel(name)
   }
-  return providerTypes[type].model.language(settings, name)
+  return getProviderType(type).model.language(settings, name)
 }

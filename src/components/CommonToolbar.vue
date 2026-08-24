@@ -30,7 +30,7 @@
       />
     </template>
     <q-btn
-      v-else-if="!store.rightDrawerAbove"
+      v-else-if="!store.rightDrawerAbove && showRightDrawerBtn"
       flat
       dense
       round
@@ -43,12 +43,18 @@
 
 <script setup lang="ts">
 import { useUiStateStore } from 'src/stores/ui-state'
-import { inject } from 'vue'
+import { computed, inject } from 'vue'
+import { useRoute } from 'vue-router'
 import type { LayoutPosition } from 'src/utils/types'
 import { useRightEntity } from 'src/composables/right-entity'
 import { entityRoute } from 'src/utils/functions'
 
 const store = useUiStateStore()
+const route = useRoute()
+const showRightDrawerBtn = computed(() => {
+  const type = route.params.type
+  return type === 'assistant' || type === 'provider'
+})
 
 const position = inject<LayoutPosition>('position')!
 const rightEntity = useRightEntity()

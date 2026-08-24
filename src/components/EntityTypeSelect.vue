@@ -15,12 +15,7 @@ const model = defineModel<EntityType | null>()
 
 const options = [
   { label: t('All'), value: null },
-  { label: t('Chat'), value: 'chat' },
-  { label: t('Search'), value: 'search' },
-  { label: t('Note'), value: 'page' },
-  { label: t('File'), value: 'item' },
-  { label: t('Assistant'), value: 'assistant' },
-  { label: t('Provider'), value: 'provider' },
   { label: t('Folder'), value: 'folder' },
+  { label: t('File'), value: 'item' },
 ]
 </script>

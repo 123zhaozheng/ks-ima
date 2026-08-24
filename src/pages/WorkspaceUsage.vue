@@ -27,17 +27,6 @@
           dense
           filled
         />
-        <q-btn
-          :label="t('Model Pricing')"
-          class="pricing-btn"
-          icon="sym_o_sell"
-          no-caps
-          to="/models"
-          bg-pri-c
-          text-on-pri-c
-          unelevated
-          flex-self-stretch
-        />
       </div>
       <q-table
         :rows
@@ -87,11 +76,3 @@ const { data: rows } = useQuery(() => queries.workspaceUsages({
   to: dateStrToHash(range.to),
 }))
 </script>
-<style lang="scss" scoped>
-.pricing-btn {
-  :is(.q-icon) {
-    font-size: 20px;
-    margin-right: 8px;
-  }
-}
-</style>

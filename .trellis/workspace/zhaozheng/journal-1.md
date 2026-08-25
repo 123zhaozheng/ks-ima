@@ -71,3 +71,25 @@ Implemented Python-owned workspaces, memberships, groups, folder hierarchy, norm
 ### Status
 
 [OK] **Completed**
+
+
+## Session 4: Complete central model governance
+
+**Date**: 2026-08-25
+**Task**: Complete central model governance
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Implemented and verified Python-owned model gateways, encrypted credentials, governed models, immutable capability profiles, workspace assignments, guarded inference, Bun target-first compatibility, admin and workspace UI, migration tooling, tests, legacy/commercial cleanup, and executable backend/frontend contracts.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `494de12` | (see git log) |
+| `e68cf53` | (see git log) |
+
+### Status
+
+[OK] **Completed**

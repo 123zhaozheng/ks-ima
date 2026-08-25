@@ -31,6 +31,10 @@
         :label="t('Connectors')"
         to="/workspace/connectors"
       />
+      <q-route-tab
+        :label="t('Tags')"
+        to="/workspace/tags"
+      />
     </q-tabs>
   </q-header>
   <router-view v-if="workspaceStore.id" />

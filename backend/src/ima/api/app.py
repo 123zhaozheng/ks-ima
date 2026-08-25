@@ -24,6 +24,7 @@ from ima.api.middleware import BodyLimitMiddleware, CorrelationMiddleware, Reque
 from ima.api.v1.account import router as account_router
 from ima.api.v1.admin import router as admin_router
 from ima.api.v1.auth import router as auth_router
+from ima.api.v1.knowledge import router as knowledge_router
 from ima.api.v1.model_governance import (
     internal_router as model_governance_bridge_router,
 )
@@ -40,6 +41,7 @@ from ima.api.v1.workspaces import invitation_router
 from ima.api.v1.workspaces import router as workspace_router
 from ima.application.authorization import WorkspaceError, WorkspaceService
 from ima.application.identity import IdentityError, IdentityService
+from ima.application.knowledge import KnowledgeError, KnowledgeService
 from ima.application.model_governance import ModelGovernanceError, ModelGovernanceService
 from ima.config import Settings, get_settings
 from ima.infrastructure.db.engine import create_engine
@@ -61,6 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.identity_service = IdentityService(engine, app_settings)
         app.state.workspace_service = WorkspaceService(engine, app_settings)
         app.state.model_governance_service = ModelGovernanceService(engine, app_settings)
+        app.state.knowledge_service = KnowledgeService(engine, app.state.workspace_service)
         await service.start()
         try:
             yield
@@ -120,6 +123,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.add_exception_handler(ModelGovernanceError, model_governance_exception_handler)  # type: ignore[arg-type]
+
+    async def knowledge_exception_handler(request: Request, exc: KnowledgeError) -> JSONResponse:
+        from ima.api.errors import make_problem
+
+        return make_problem(
+            request,
+            status=exc.status_code,
+            title="Knowledge request failed",
+            detail=exc.detail,
+            code=exc.code,
+        )
+
+    app.add_exception_handler(KnowledgeError, knowledge_exception_handler)  # type: ignore[arg-type]
     app.add_middleware(CorrelationMiddleware)
     app.add_middleware(RequestTimingMiddleware)
     if app_settings.trusted_proxies:
@@ -167,6 +183,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.include_router(model_governance_router)
     api.include_router(model_workspace_router)
     api.include_router(model_governance_bridge_router)
+    api.include_router(knowledge_router)
     app.include_router(api)
     # Route dependencies must use the same immutable settings instance as the
     # application factory, including in contract tests and embedded deployments.

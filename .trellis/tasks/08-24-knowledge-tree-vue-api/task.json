@@ -3,7 +3,7 @@
   "name": "knowledge-tree-vue-api",
   "title": "Knowledge tree and Vue API migration",
   "description": "Implement folders, files, Markdown notes, tags, trash, and migrate the reusable Vue workflow from Zero to versioned APIs.",
-  "status": "planning",
+  "status": "completed",
   "dev_type": null,
   "scope": null,
   "package": null,

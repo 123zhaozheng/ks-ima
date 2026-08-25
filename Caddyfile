@@ -22,7 +22,7 @@
 		reverse_proxy {$PYTHON_API_URL}
 	}
 
-	@ima_workspace path /api/v1/workspaces* /api/v1/workspace-invitations*
+	@ima_workspace path /api/v1/workspaces /api/v1/workspaces/* /api/v1/workspace-invitations /api/v1/workspace-invitations/* /api/v1/folders/* /api/v1/documents/*
 	handle @ima_workspace {
 		reverse_proxy {$PYTHON_API_URL}
 	}
@@ -75,7 +75,7 @@
 		reverse_proxy {$PYTHON_API_URL}
 	}
 
-	@ima_workspace path /api/v1/workspaces* /api/v1/workspace-invitations*
+	@ima_workspace path /api/v1/workspaces /api/v1/workspaces/* /api/v1/workspace-invitations /api/v1/workspace-invitations/* /api/v1/folders/* /api/v1/documents/*
 	handle @ima_workspace {
 		reverse_proxy {$PYTHON_API_URL}
 	}

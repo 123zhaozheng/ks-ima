@@ -9,6 +9,7 @@ import type { MemberData } from 'app/src-shared/utils/validators'
 import { computed, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserDataStore } from './user-data'
+import { queryClient } from 'src/boot/vue-query'
 
 export const useWorkspaceStore = defineStore('workspace', () => {
   const userDataStore = useUserDataStore()
@@ -65,7 +66,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   function switchWorkspace(to: string) {
     if (id.value !== to) {
+      const previous = id.value
       id.value = to
+      if (previous) {
+        queryClient.cancelQueries({ queryKey: ['knowledge', 'workspace', previous] })
+        queryClient.removeQueries({ queryKey: ['knowledge', 'workspace', previous] })
+      }
       mutate(mutators.updateLastWorkspaceId(to))
     }
     if (router.currentRoute.value.path !== `/folder/${to}`) router.push(`/folder/${to}`)

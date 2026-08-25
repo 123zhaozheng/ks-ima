@@ -42,7 +42,7 @@ def test_model_governance_migration_is_fresh_and_repeatable() -> None:
     with psycopg.connect(SYNC_URL) as connection:
         assert (
             connection.execute("SELECT version_num FROM ima.alembic_version").fetchone()[0]
-            == "20260825_0004"
+            == "20260825_0005"
         )
         for table in (
             "model_gateway_secrets",

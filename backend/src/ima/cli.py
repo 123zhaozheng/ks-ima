@@ -15,12 +15,19 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import psycopg
 
 from ima.application.identity import new_legacy_id
 from ima.application.legacy_identity import compatible_argon2id_phc, compatible_totp_secret
+from ima.application.legacy_knowledge import (
+    LegacyKnowledgeIssue,
+    classify_page_patches,
+    hierarchy_issues,
+    normalize_legacy_tags,
+    source_fingerprint,
+)
 from ima.config import get_settings
 from ima.domain.authorization import DEFAULT_ROLE_GRANTS, legacy_role
 from ima.infrastructure.auth.security import encrypt_secret
@@ -41,6 +48,7 @@ def main() -> None:
             "migrate-legacy-authorization",
             "rotate-model-secrets",
             "migrate-legacy-model-governance",
+            "migrate-legacy-knowledge",
         ),
     )
     parser.add_argument(
@@ -77,6 +85,9 @@ def main() -> None:
         return
     if args.command == "migrate-legacy-model-governance":
         _legacy_model_governance_report(args.action, args.mapping_file)
+        return
+    if args.command == "migrate-legacy-knowledge":
+        _legacy_knowledge_report(args.action)
         return
     asyncio.run(_run_worker())
 
@@ -304,6 +315,7 @@ def _legacy_model_governance_report(action: str, mapping_file: Path | None = Non
         if action == "plan":
             print(summary)
             return
+
         key_ring = __import__(
             "ima.infrastructure.model_gateway.secrets", fromlist=["SecretKeyRing"]
         ).SecretKeyRing(
@@ -475,6 +487,521 @@ def _legacy_model_governance_report(action: str, mapping_file: Path | None = Non
                 "SELECT status,count(*) FROM ima.legacy_model_governance_migration GROUP BY status ORDER BY status"
             ).fetchall()
             summary["statuses"] = {str(status): int(count) for status, count in statuses}
+        print(summary)
+
+
+def _legacy_knowledge_report(action: str = "report") -> None:
+    """Inventory/import legacy metadata without selecting blob bytes.
+
+    The command is intentionally conservative: a source row is either mapped
+    with a verifiable parent/fingerprint or retained as a review checkpoint.
+    """
+    settings = get_settings()
+    conninfo = (
+        settings.database_url.get_secret_value()
+        .replace("postgresql+asyncpg://", "postgresql://")
+        .replace("postgresql+psycopg://", "postgresql://")
+    )
+    with psycopg.connect(conninfo) as connection:
+        tables = connection.execute(
+            "SELECT to_regclass('public.\"entity\"'),to_regclass('public.\"item\"'),"
+            "to_regclass('public.\"page\"'),to_regclass('public.\"pagePatch\"'),"
+            "to_regclass('public.\"blob\"'),to_regclass('public.\"workspace\"')"
+        ).fetchone()
+        flags = tuple(tables) if tables else ()
+        source_available = bool(flags and flags[0])
+        entity_rows = (
+            connection.execute(
+                'SELECT id,"rootId","parentId",type,name,conf,"sortPriority",hidden '
+                "FROM public.\"entity\" WHERE type IN ('folder','item') ORDER BY id"
+            ).fetchall()
+            if source_available
+            else []
+        )
+        entities = [
+            {
+                "id": str(row[0]),
+                "root_id": str(row[1]),
+                "parent_id": str(row[2]) if row[2] else None,
+                "type": str(row[3]),
+                "name": row[4],
+                "conf": row[5],
+                "order_key": row[6],
+                "hidden": row[7],
+            }
+            for row in entity_rows
+        ]
+        by_id = {row["id"]: row for row in entities}
+        hierarchy = hierarchy_issues(entities)
+        page_rows: dict[str, str | None] = {}
+        if flags and flags[2]:
+            page_rows = {
+                str(row[0]): row[1]
+                for row in connection.execute('SELECT id,text FROM public."page"').fetchall()
+            }
+        patch_rows: dict[str, list[dict[str, Any]]] = {}
+        if flags and flags[3]:
+            for patch_id, entity_id, patch in connection.execute(
+                'SELECT id,"entityId",patch FROM public."pagePatch" ORDER BY id'
+            ).fetchall():
+                patch_rows.setdefault(str(entity_id), []).append(
+                    {"id": str(patch_id), "patch": patch}
+                )
+        trash_roots: dict[str, str] = {}
+        has_trash_column = bool(
+            flags
+            and flags[5]
+            and connection.execute(
+                """SELECT 1 FROM information_schema.columns
+                WHERE table_schema='public' AND table_name='workspace' AND column_name='trashId'"""
+            ).fetchone()
+        )
+        if has_trash_column:
+            trash_roots = {
+                str(root): str(trash)
+                for root, trash in connection.execute(
+                    'SELECT id,"trashId" FROM public."workspace"'
+                ).fetchall()
+            }
+        page_count = (
+            connection.execute('SELECT count(*) FROM public."page"').fetchone()
+            if flags and flags[2]
+            else None
+        )
+        blob_count = (
+            connection.execute('SELECT count(*) FROM public."blob"').fetchone()
+            if flags and flags[4]
+            else None
+        )
+        summary: dict[str, Any] = {
+            "action": action,
+            "sourceAvailable": source_available,
+            "folders": sum(row["type"] == "folder" for row in entities),
+            "items": sum(row["type"] == "item" for row in entities),
+            "pages": int(page_count[0]) if page_count else 0,
+            "blobMetadata": int(blob_count[0]) if blob_count else 0,
+            "bytesRead": False,
+            "review": 0,
+            "warnings": {},
+        }
+
+        def warning(reason: str) -> None:
+            summary["warnings"][reason] = summary["warnings"].get(reason, 0) + 1
+
+        source_info: dict[str, dict[str, Any]] = {}
+        source_title_keys: set[tuple[str, str, str, str]] = set()
+        for row in entities:
+            source_id, root_id = row["id"], row["root_id"]
+            patches = patch_rows.get(source_id, [])
+            patch_import = classify_page_patches(patches)
+            page_text = page_rows.get(source_id)
+            try:
+                conf = (
+                    row["conf"]
+                    if isinstance(row["conf"], dict)
+                    else json.loads(row["conf"] or "{}")
+                )
+                if not isinstance(conf, dict):
+                    raise LegacyKnowledgeIssue("malformed_conf")
+                tags = normalize_legacy_tags(conf.get("tags"))
+            except (TypeError, json.JSONDecodeError, LegacyKnowledgeIssue, AttributeError) as exc:
+                tags = ()
+                conf = {}
+                warning(getattr(exc, "reason", "malformed_conf"))
+                tag_reason = getattr(exc, "reason", "malformed_conf")
+            else:
+                tag_reason = None
+            target_kind = (
+                "folder" if row["type"] == "folder" else "note" if page_text is not None else "file"
+            )
+            title = str(row["name"] or source_id).strip()[:200] or source_id
+            key = (root_id, str(row["parent_id"] or root_id), target_kind, title.casefold())
+            reasons: list[str] = []
+            if source_id in hierarchy:
+                reasons.append(hierarchy[source_id])
+            if tag_reason:
+                reasons.append(tag_reason)
+            if patch_import.reason:
+                reasons.append(patch_import.reason)
+            if key in source_title_keys:
+                reasons.append("source_title_collision")
+            source_title_keys.add(key)
+            trash_id = trash_roots.get(root_id)
+            current = source_id
+            in_trash = False
+            while current in by_id:
+                parent = by_id[current].get("parent_id") or root_id
+                if trash_id and parent == trash_id:
+                    in_trash = True
+                    break
+                if parent == current:
+                    break
+                current = str(parent)
+            original_parent = None
+            if in_trash:
+                try:
+                    original_parent = (
+                        str(conf.get("originalParentId")) if conf.get("originalParentId") else None
+                    )
+                except AttributeError:
+                    original_parent = None
+                if not original_parent:
+                    reasons.append("trash_original_parent_unprovable")
+            fingerprint = source_fingerprint(
+                {
+                    "root": root_id,
+                    "parent": row["parent_id"],
+                    "type": row["type"],
+                    "name": row["name"],
+                    "conf": row["conf"],
+                    "order": row["order_key"],
+                    "hidden": row["hidden"],
+                    "pageDigest": hashlib.sha256(str(page_text).encode()).hexdigest()
+                    if page_text is not None
+                    else None,
+                    "patches": [
+                        hashlib.sha256(str(item["patch"]).encode()).hexdigest() for item in patches
+                    ],
+                }
+            )
+            source_info[source_id] = {
+                "row": row,
+                "title": title,
+                "kind": target_kind,
+                "tags": tags,
+                "patches": patch_import,
+                "page_text": page_text,
+                "fingerprint": fingerprint,
+                "reasons": reasons,
+                "in_trash": in_trash,
+                "original_parent": original_parent,
+            }
+        summary["review"] = sum(bool(info["reasons"]) for info in source_info.values())
+        if action in {"plan", "report"}:
+            if action == "report":
+                summary["statuses"] = {
+                    str(status): int(count)
+                    for status, count in connection.execute(
+                        "SELECT status,count(*) FROM ima.legacy_knowledge_migration GROUP BY status"
+                    ).fetchall()
+                }
+            print(summary)
+            return
+        if action == "apply":
+            for source_id, info in source_info.items():
+                fingerprint = info["fingerprint"]
+                checkpoint = connection.execute(
+                    "SELECT status,source_fingerprint FROM ima.legacy_knowledge_migration WHERE source_kind='entity' AND source_id=%s",
+                    (source_id,),
+                ).fetchone()
+                if checkpoint and checkpoint[0] == "complete" and checkpoint[1] == fingerprint:
+                    continue
+                if checkpoint and checkpoint[1] != fingerprint:
+                    connection.execute(
+                        "UPDATE ima.legacy_knowledge_migration SET status='review',last_error='source_changed',updated_at=now() WHERE source_kind='entity' AND source_id=%s",
+                        (source_id,),
+                    )
+                    warning("source_changed")
+                    continue
+                row = info["row"]
+                root_id = row["root_id"]
+                parent = str(info["original_parent"] or row["parent_id"] or root_id)
+                if info["in_trash"] and info["original_parent"]:
+                    info["reasons"] = [
+                        reason
+                        for reason in info["reasons"]
+                        if reason != "trash_original_parent_unprovable"
+                    ]
+                try:
+                    with connection.transaction():
+                        connection.execute(
+                            """INSERT INTO ima.legacy_knowledge_migration
+                            (source_kind,source_id,source_fingerprint,status,attempts,updated_at)
+                            VALUES ('entity',%s,%s,'running',1,now())
+                            ON CONFLICT(source_kind,source_id) DO UPDATE SET status='running',
+                            attempts=ima.legacy_knowledge_migration.attempts+1,updated_at=now()""",
+                            (source_id, fingerprint),
+                        )
+                        parent_exists = connection.execute(
+                            "SELECT 1 FROM ima.folders WHERE id=%s AND workspace_id=%s AND lifecycle='active'",
+                            (parent, root_id),
+                        ).fetchone()
+                        target_kind, target_id = "folder", None
+                        if row["type"] == "folder":
+                            valid = bool(
+                                connection.execute(
+                                    "SELECT 1 FROM ima.folders WHERE id=%s AND workspace_id=%s",
+                                    (source_id, root_id),
+                                ).fetchone()
+                            )
+                            if not valid:
+                                info["reasons"].append("missing_target_folder")
+                        else:
+                            valid = bool(parent_exists)
+                            target_id = uuid5(
+                                NAMESPACE_URL, f"legacy-knowledge:{root_id}:{source_id}"
+                            )
+                            if not valid:
+                                info["reasons"].append("missing_target_parent")
+                            existing = connection.execute(
+                                "SELECT workspace_id,title,kind FROM ima.documents WHERE id=%s",
+                                (target_id,),
+                            ).fetchone()
+                            if existing and (
+                                str(existing[0]) != root_id
+                                or existing[1] != info["title"]
+                                or existing[2] != info["kind"]
+                            ):
+                                info["reasons"].append("target_id_collision")
+                            sibling = connection.execute(
+                                "SELECT 1 FROM ima.documents WHERE workspace_id=%s AND folder_id=%s AND kind=%s AND normalized_title=%s AND id<>%s",
+                                (
+                                    root_id,
+                                    parent,
+                                    info["kind"],
+                                    info["title"].casefold(),
+                                    target_id,
+                                ),
+                            ).fetchone()
+                            if sibling:
+                                info["reasons"].append("target_title_collision")
+                            if valid and not any(
+                                reason.endswith("collision") for reason in info["reasons"]
+                            ):
+                                item_row = (
+                                    connection.execute(
+                                        'SELECT "mimeType" FROM public."item" WHERE id=%s',
+                                        (source_id,),
+                                    ).fetchone()
+                                    if flags and flags[1]
+                                    else None
+                                )
+                                mime_type = str(item_row[0]) if item_row and item_row[0] else None
+                                lifecycle = (
+                                    "trashed"
+                                    if info["in_trash"] and info["original_parent"]
+                                    else "active"
+                                )
+                                bodies = list(info["patches"].snapshots)
+                                if info["page_text"] is not None and (
+                                    not bodies or bodies[-1] != info["page_text"]
+                                ):
+                                    bodies.append(str(info["page_text"]))
+                                if info["page_text"] is not None and not bodies:
+                                    bodies = [str(info["page_text"])]
+                                # Every migrated document needs an immutable
+                                # metadata version.  Files have no Markdown
+                                # body, but a version-1 metadata snapshot keeps
+                                # their stable identity/history contract intact
+                                # without reading object bytes.
+                                file_metadata = {
+                                    "mimeType": mime_type,
+                                    "source": "legacy",
+                                }
+                                current_version = len(bodies) or (1 if info["kind"] == "file" else None)
+                                connection.execute(
+                                    """INSERT INTO ima.documents
+                                    (id,workspace_id,folder_id,kind,title,normalized_title,order_key,lifecycle,
+                                     original_folder_id,current_version,file_state,mime_type,created_at,updated_at)
+                                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending',%s,now(),now())
+                                    ON CONFLICT(id) DO NOTHING""",
+                                    (
+                                        target_id,
+                                        root_id,
+                                        parent,
+                                        info["kind"],
+                                        info["title"],
+                                        info["title"].casefold(),
+                                        int(row["order_key"] or 0),
+                                        lifecycle,
+                                        parent if lifecycle == "trashed" else None,
+                                        current_version,
+                                        mime_type,
+                                    ),
+                                )
+                                if info["kind"] == "file":
+                                    metadata_json = json.dumps(
+                                        file_metadata, sort_keys=True, separators=(",", ":")
+                                    )
+                                    connection.execute(
+                                        """INSERT INTO ima.document_versions(document_id,version,kind,markdown,metadata,digest,created_at)
+                                        VALUES (%s,1,'file',NULL,%s::jsonb,%s,now()) ON CONFLICT(document_id,version) DO NOTHING""",
+                                        (
+                                            target_id,
+                                            metadata_json,
+                                            hashlib.sha256(metadata_json.encode()).hexdigest(),
+                                        ),
+                                    )
+                                else:
+                                    for version, body in enumerate(bodies, 1):
+                                        connection.execute(
+                                            """INSERT INTO ima.document_versions(document_id,version,kind,markdown,digest,created_at)
+                                            VALUES (%s,%s,'note',%s,%s,now()) ON CONFLICT(document_id,version) DO NOTHING""",
+                                            (
+                                                target_id,
+                                                version,
+                                                body,
+                                                hashlib.sha256(body.encode()).hexdigest(),
+                                            ),
+                                        )
+                                for normalized, display in info["tags"]:
+                                    tag_id = uuid5(
+                                        NAMESPACE_URL, f"legacy-tag:{root_id}:{normalized}"
+                                    )
+                                    connection.execute(
+                                        """INSERT INTO ima.tags(id,workspace_id,name,normalized_name,created_at,updated_at)
+                                        VALUES (%s,%s,%s,%s,now(),now()) ON CONFLICT(id) DO NOTHING""",
+                                        (tag_id, root_id, display, normalized),
+                                    )
+                                    connection.execute(
+                                        """INSERT INTO ima.document_tags(document_id,tag_id,assigned_at)
+                                        VALUES (%s,%s,now()) ON CONFLICT DO NOTHING""",
+                                        (target_id, tag_id),
+                                    )
+                                target_kind = info["kind"]
+                        status = "review" if info["reasons"] else "complete"
+                        connection.execute(
+                            """UPDATE ima.legacy_knowledge_migration SET status=%s,target_kind=%s,target_id=%s,
+                            last_error=%s,mapping=%s,processed_at=CASE WHEN %s='complete' THEN now() ELSE NULL END,updated_at=now()
+                            WHERE source_kind='entity' AND source_id=%s""",
+                            (
+                                status,
+                                target_kind,
+                                target_id,
+                                ";".join(sorted(set(info["reasons"]))) or None,
+                                json.dumps(
+                                    {
+                                        "legacyId": source_id,
+                                        "patchCount": len(info["patches"].snapshots),
+                                        "tagCount": len(info["tags"]),
+                                        "lifecycle": "trashed" if info["in_trash"] else "active",
+                                    }
+                                ),
+                                status,
+                                source_id,
+                            ),
+                        )
+                except Exception as exc:
+                    connection.rollback()
+                    connection.execute(
+                        """INSERT INTO ima.legacy_knowledge_migration(source_kind,source_id,source_fingerprint,status,attempts,last_error,updated_at)
+                        VALUES ('entity',%s,%s,'failed',1,%s,now()) ON CONFLICT(source_kind,source_id) DO UPDATE SET status='failed',attempts=ima.legacy_knowledge_migration.attempts+1,last_error=%s,updated_at=now()""",
+                        (source_id, fingerprint, type(exc).__name__, type(exc).__name__),
+                    )
+                    warning("migration_failed")
+            summary["statuses"] = {
+                str(status): int(count)
+                for status, count in connection.execute(
+                    "SELECT status,count(*) FROM ima.legacy_knowledge_migration GROUP BY status"
+                ).fetchall()
+            }
+            print(summary)
+            return
+        statuses = {
+            str(status): int(count)
+            for status, count in connection.execute(
+                "SELECT status,count(*) FROM ima.legacy_knowledge_migration GROUP BY status"
+            ).fetchall()
+        }
+        summary["statuses"] = statuses
+        mismatches = 0
+        target_mismatches = 0
+        for source_id, info in source_info.items():
+            checkpoint = connection.execute(
+                "SELECT status,source_fingerprint,target_id FROM ima.legacy_knowledge_migration WHERE source_kind='entity' AND source_id=%s",
+                (source_id,),
+            ).fetchone()
+            if not checkpoint or checkpoint[1] != info["fingerprint"]:
+                mismatches += 1
+                continue
+            if checkpoint[0] != "complete":
+                continue
+
+            row = info["row"]
+            root_id = str(row["root_id"])
+            expected_parent = (
+                None
+                if row["id"] == root_id
+                else str(info["original_parent"] or row["parent_id"] or root_id)
+            )
+            if info["kind"] == "folder":
+                target = connection.execute(
+                    "SELECT workspace_id,parent_id,name,lifecycle,original_parent_id "
+                    "FROM ima.folders WHERE id=%s",
+                    (source_id,),
+                ).fetchone()
+                expected_lifecycle = "trashed" if info["in_trash"] else "active"
+                if (
+                    not target
+                    or str(target[0]) != root_id
+                    or (str(target[1]) if target[1] else None) != expected_parent
+                    or target[2] != info["title"]
+                    or target[3] != expected_lifecycle
+                    or (str(target[4]) if target[4] else None)
+                    != (expected_parent if info["in_trash"] else None)
+                ):
+                    target_mismatches += 1
+                continue
+
+            target_id = checkpoint[2]
+            target = connection.execute(
+                "SELECT workspace_id,folder_id,kind,title,lifecycle,current_version "
+                "FROM ima.documents WHERE id=%s",
+                (target_id,),
+            ).fetchone()
+            bodies = list(info["patches"].snapshots)
+            if info["page_text"] is not None and (not bodies or bodies[-1] != info["page_text"]):
+                bodies.append(str(info["page_text"]))
+            expected_version = len(bodies) or None
+            expected_lifecycle = "trashed" if info["in_trash"] else "active"
+            if (
+                not target
+                or str(target[0]) != root_id
+                or str(target[1]) != expected_parent
+                or target[2] != info["kind"]
+                or target[3] != info["title"]
+                or target[4] != expected_lifecycle
+                or target[5] != expected_version
+            ):
+                target_mismatches += 1
+                continue
+
+            expected_digests = [hashlib.sha256(body.encode()).hexdigest() for body in bodies]
+            actual_digests = [
+                str(version[0])
+                for version in connection.execute(
+                    "SELECT digest FROM ima.document_versions "
+                    "WHERE document_id=%s ORDER BY version",
+                    (target_id,),
+                ).fetchall()
+            ]
+            if actual_digests != expected_digests:
+                target_mismatches += 1
+                continue
+
+            expected_tags = {normalized for normalized, _display in info["tags"]}
+            actual_tags = {
+                str(tag[0])
+                for tag in connection.execute(
+                    "SELECT t.normalized_name FROM ima.tags t "
+                    "JOIN ima.document_tags dt ON dt.tag_id=t.id "
+                    "WHERE dt.document_id=%s AND t.lifecycle='active'",
+                    (target_id,),
+                ).fetchall()
+            }
+            if actual_tags != expected_tags:
+                target_mismatches += 1
+        summary["verifyMismatches"] = mismatches
+        summary["targetMismatches"] = target_mismatches
+        if action == "verify" and (
+            statuses.get("review", 0)
+            or statuses.get("failed", 0)
+            or mismatches
+            or target_mismatches
+        ):
+            raise SystemExit(
+                "legacy knowledge verification failed: review, failed, source, or target mismatch"
+            )
         print(summary)
 
 

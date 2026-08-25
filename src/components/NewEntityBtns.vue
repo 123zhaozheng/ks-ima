@@ -28,12 +28,12 @@
           <menu-item
             :label="t('Upload files')"
             icon="sym_o_upload_file"
-            @click="selectFile(files => rightDirStore.dirId && uploadKnowledge(rightDirStore.dirId, files.map(file => ({ file, relativePath: file.name }))), { multiple: true })"
+            disable
           />
           <menu-item
             :label="t('Upload folder')"
             icon="sym_o_drive_folder_upload"
-            @click="rightDirStore.dirId && selectFolder(files => uploadKnowledge(rightDirStore.dirId!, files))"
+            disable
           />
           <q-separator />
           <menu-item
@@ -52,8 +52,6 @@ import { t } from 'src/utils/i18n'
 import { useRightDirStore } from 'src/stores/right-dir'
 import MenuItem from './MenuItem.vue'
 import { createEntity } from 'src/utils/create-entity'
-import { selectFile } from 'src/utils/select-file'
-import { selectFolder, uploadKnowledge } from 'src/utils/knowledge-upload'
 import { useAskKnowledge } from 'src/composables/ask-knowledge'
 
 const rightDirStore = useRightDirStore()

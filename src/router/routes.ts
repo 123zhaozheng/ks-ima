@@ -14,6 +14,8 @@ import AccountLayout from 'src/layouts/AccountLayout.vue'
 import RedirectToFolder from 'src/pages/RedirectToFolder.vue'
 import AccountSecurity from 'src/pages/AccountSecurity.vue'
 import WorkspaceModels from 'src/pages/WorkspaceModels.vue'
+import WorkspaceTags from 'src/pages/WorkspaceTags.vue'
+import KnowledgeDocumentPage from 'src/pages/KnowledgeDocumentPage.vue'
 import { t } from 'src/utils/i18n'
 
 const routes: RouteRecordRaw[] = [
@@ -27,6 +29,7 @@ const routes: RouteRecordRaw[] = [
         children: [
           { path: '/', component: RedirectToFolder },
           { path: '/welcome', component: RedirectToFolder },
+          { path: '/knowledge/:documentId', component: KnowledgeDocumentPage },
         ],
       },
       {
@@ -63,6 +66,11 @@ const routes: RouteRecordRaw[] = [
             meta: {
               title: t('Models'),
             },
+          },
+          {
+            path: 'tags',
+            component: WorkspaceTags,
+            meta: { title: t('Tags') },
           },
         ],
       },

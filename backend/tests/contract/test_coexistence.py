@@ -8,5 +8,9 @@ def test_caddy_python_match_is_exact_and_legacy_chat_is_not_captured() -> None:
     assert "/api/v1/chat/completions" not in caddy.split("@ima_system", 1)[0]
     assert "@api path /api/*" in caddy
     assert "reverse_proxy {$PYTHON_API_URL}" in caddy
-    assert "@ima_workspace path /api/v1/workspaces* /api/v1/workspace-invitations*" in caddy
+    assert caddy.count(
+        "@ima_workspace path /api/v1/workspaces /api/v1/workspaces/* "
+        "/api/v1/workspace-invitations /api/v1/workspace-invitations/* "
+        "/api/v1/folders/* /api/v1/documents/*"
+    ) == 2
     assert "@ima_internal_forbidden path /api/v1/internal/*" in caddy

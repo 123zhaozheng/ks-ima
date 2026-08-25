@@ -1,1 +1,13 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify restrictive schema, immutable versions, listing revisions, migrations, transactions, checkpoints, and downgrade safety."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify safe typed Problems for hidden resources, stale lists/versions, conflicts, dependencies, and storage pending state."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify Markdown, filenames, tags, legacy patches, cursors, and restricted relationships never leak into logs/audit."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify strict Python quality, import safety, no placeholders, no detached work, and full required tests."}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "Verify OpenAPI/Caddy, isolated forced PostgreSQL, clean resources, and explicit migrations."}
+{"file": ".trellis/spec/backend/workspace-authorization-contracts.md", "reason": "Verify policy SQL reuse, ACL inheritance, platform/content separation, immediate revocation, and 404 non-disclosure."}
+{"file": ".trellis/spec/frontend/openapi-client-contracts.md", "reason": "Verify generated DTO/client drift, shared transport, query cancellation, conflicts, and cross-layer route ownership."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify frontend lint/build quality, complete states, and removal of duplicate Zero product state."}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Verify generated DTO authority and absence of raw entity/config casts or duplicate response parsing."}
+{"file": ".trellis/spec/frontend/workspace-authorization-contracts.md", "reason": "Verify rendered folder/content actions reflect server policy without claiming frontend authorization."}
+{"file": ".trellis/tasks/08-24-knowledge-tree-vue-api/research/backend-codegraph-evidence.md", "reason": "Check every identified browser/Bun/MCP/storage/search caller and evidence-driven deletion blocker."}
+{"file": ".trellis/tasks/08-24-knowledge-tree-vue-api/research/frontend-validation-evidence.md", "reason": "Check all 24 validation/migration rows, desktop/mobile behavior, OpenAPI drift, rollback, and cleanup."}
+{"file": ".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md", "reason": "Check complete knowledge migration coverage and later-child compatibility ownership."}

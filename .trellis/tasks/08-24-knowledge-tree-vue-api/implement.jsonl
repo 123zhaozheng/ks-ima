@@ -1,1 +1,9 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/index.md", "reason": "Discover active database, error, logging, quality, foundation, identity, authorization, and model contracts."}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "Preserve import-safe FastAPI, explicit Alembic, PostgreSQL isolation, OpenAPI, deployment, and test conventions."}
+{"file": ".trellis/spec/backend/workspace-authorization-contracts.md", "reason": "Reuse canonical folder closure, ACL anchors, action dependencies, conflict, audit, and non-disclosure behavior."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Discover active generated-client, authorization, type-safety, and quality conventions."}
+{"file": ".trellis/spec/frontend/openapi-client-contracts.md", "reason": "Extend the single generated transport and Vue Query boundary without duplicate DTOs or clients."}
+{"file": ".trellis/spec/frontend/workspace-authorization-contracts.md", "reason": "Preserve role-aware folder UX, server authority, conflict handling, and no local ACL filtering."}
+{"file": ".trellis/tasks/08-24-knowledge-tree-vue-api/research/backend-codegraph-evidence.md", "reason": "Use the CodeGraph-backed legacy schema, Python reuse, compatibility, consumer, and deletion inventory."}
+{"file": ".trellis/tasks/08-24-knowledge-tree-vue-api/research/frontend-validation-evidence.md", "reason": "Use the Vue/Zero workflow inventory, acceptance gaps, and executable migration/test matrix."}
+{"file": ".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md", "reason": "Preserve repository-wide knowledge, storage, search, MCP, and Zero coexistence ownership boundaries."}

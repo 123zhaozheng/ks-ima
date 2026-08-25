@@ -19,40 +19,39 @@
       <q-btn
         flat
         no-caps
+        icon="sym_o_note_add"
+        :label="t('New note')"
+        @click="createNote"
+      />
+      <q-btn
+        flat
+        no-caps
         icon="sym_o_upload_file"
         :label="t('Upload files')"
-        @click="selectFile(files => uploadKnowledge(currentId, files.map(file => ({ file, relativePath: file.name }))), { multiple: true })"
+        disable
+        :title="t('File storage migration is pending')"
       />
       <q-btn
         flat
         no-caps
         icon="sym_o_drive_folder_upload"
         :label="t('Upload folder')"
-        @click="selectFolder(files => uploadKnowledge(currentId, files))"
-      />
-      <q-btn
-        flat
-        no-caps
-        icon="sym_o_chat"
-        :label="t('Ask')"
-        @click="askKnowledge"
+        disable
+        :title="t('File storage migration is pending')"
       />
     </common-toolbar>
     <div
       flex-1
       min-h-0
       relative
-      @dragenter.prevent="dragging = true"
-      @dragover.prevent="dragging = true"
-      @dragleave="onDragLeave"
-      @drop.prevent="onDrop"
+      @dragenter.prevent
+      @dragover.prevent
     >
-      <entity-list
-        v-model="currentId"
+      <knowledge-list
+        :folder-id="currentId"
         flex-1
         min-h-0
         h-full
-        @entity-click="onFileClick"
       >
         <template #empty>
           <div
@@ -74,13 +73,13 @@
               text-h6
               text-on-sur
             >
-              {{ t('Drop files or folders here') }}
+              {{ t('No items in this folder') }}
             </div>
             <div
               mt-2
               max-w="420px"
             >
-              {{ t('Create a folder, then upload documents. Files are parsed automatically and can be asked about.') }}
+              {{ t('Create a folder or note. File storage will become available after migration.') }}
             </div>
             <div
               flex
@@ -99,47 +98,28 @@
               <q-btn
                 outline
                 no-caps
-                icon="sym_o_upload_file"
-                :label="t('Upload files')"
-                @click="selectFile(files => uploadKnowledge(currentId, files.map(file => ({ file, relativePath: file.name }))), { multiple: true })"
+                icon="sym_o_note_add"
+                :label="t('New note')"
+                @click="createNote"
               />
             </div>
           </div>
         </template>
-      </entity-list>
-      <div
-        v-if="dragging"
-        pointer-events-none
-        abs-full
-        flex
-        items-center
-        justify-center
-        bg="pri/12"
-        border="2 dashed pri"
-      >
-        <div text-h6>
-          {{ t('Drop to upload and parse') }}
-        </div>
-      </div>
+      </knowledge-list>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { t } from 'src/utils/i18n'
-import { useThisEntityConf } from 'src/composables/entity-conf'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { entityName } from 'src/utils/defaults'
 import { useWorkspaceStore } from 'src/stores/workspace'
 import CommonToolbar from 'src/components/CommonToolbar.vue'
-import EntityList from 'src/components/EntityList.vue'
-import { createEntity } from 'src/utils/create-entity'
-import { selectFile } from 'src/utils/select-file'
-import { filesFromDrop, selectFolder, uploadKnowledge } from 'src/utils/knowledge-upload'
-import type { FullEntity } from 'app/src-shared/queries'
-import { entityRoute } from 'src/utils/functions'
-import { useAskKnowledge } from 'src/composables/ask-knowledge'
+import KnowledgeList from 'src/components/KnowledgeList.vue'
+import { identityClient } from 'src/utils/identity-client'
+import { knowledgeClient } from 'src/api/knowledge-client'
+import { Notify, useQuasar } from 'quasar'
 
 const props = defineProps<{
   id: string
@@ -154,39 +134,22 @@ watch(currentId, id => {
   if (id && id !== props.id) router.replace(`/folder/${id}`)
 })
 
-const { entity } = useThisEntityConf()
-const dragging = ref(false)
-
 const workspaceStore = useWorkspaceStore()
-watch(() => entity.value?.rootId, rootId => {
-  if (rootId && workspaceStore.id !== rootId) workspaceStore.id = rootId
-})
-const askKnowledge = useAskKnowledge()
-const folderTitle = computed(() => {
-  if (!entity.value) return ''
-  if (entity.value.id === workspaceStore.id || entity.value.name === '/') return t('All files')
-  return entityName(entity.value)
-})
+const folderTitle = computed(() => currentId.value === workspaceStore.id ? t('All files') : t('Knowledge'))
+const $q = useQuasar()
 
 function createFolder() {
-  createEntity(currentId.value, 'folder')
+  if (!workspaceStore.id) return
+  $q.dialog({ title: t('New folder'), prompt: { model: '', type: 'text' }, cancel: true }).onOk(async (name: string) => {
+    const result = await identityClient.createWorkspaceFolder(workspaceStore.id!, { parentId: currentId.value, name })
+    if (result.error) Notify.create({ type: 'negative', message: result.error.message })
+  })
 }
 
-function onFileClick(entity: FullEntity) {
-  const link = entityRoute(entity.type, entity.id)
-  link && router.push(link)
-}
-
-function onDragLeave(ev: DragEvent) {
-  const related = ev.relatedTarget as Node | null
-  if (related && (ev.currentTarget as HTMLElement).contains(related)) return
-  dragging.value = false
-}
-
-async function onDrop(ev: DragEvent) {
-  dragging.value = false
-  if (!ev.dataTransfer) return
-  const dropped = await filesFromDrop(ev.dataTransfer)
-  await uploadKnowledge(currentId.value, dropped)
+function createNote() {
+  $q.dialog({ title: t('New note'), prompt: { model: '', type: 'text', label: t('Title') }, cancel: true }).onOk(async (title: string) => {
+    const result = await knowledgeClient.createNote(currentId.value, { title, markdown: '' })
+    router.push(`/knowledge/${result.id}`)
+  }).onCancel(() => undefined)
 }
 </script>

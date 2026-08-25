@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
+- **Total Sessions**: 5
 - **Last Active**: 2026-08-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~95 | Active |
+| `journal-1.md` | ~116 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-08-25 | Knowledge tree and Vue API migration | `f603b38` | `feat/intranet-ima` |
 | 4 | 2026-08-25 | Complete central model governance | `494de12`, `e68cf53` | `feat/intranet-ima` |
 | 3 | 2026-08-25 | Workspace authorization core | `6b76756`, `29ee52d` | `feat/intranet-ima` |
 | 2 | 2026-08-25 | Complete local identity and platform administration | `6d420bf`, `dde57b9` | `feat/intranet-ima` |

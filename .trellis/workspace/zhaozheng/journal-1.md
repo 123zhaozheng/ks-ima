@@ -93,3 +93,24 @@ Implemented and verified Python-owned model gateways, encrypted credentials, gov
 ### Status
 
 [OK] **Completed**
+
+
+## Session 5: Knowledge tree and Vue API migration
+
+**Date**: 2026-08-25
+**Task**: Knowledge tree and Vue API migration
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Implemented Python-owned knowledge documents, Markdown versions, tags, unified trash, legacy migration commands, generated Vue API clients, Caddy cutover routes, and desktop/mobile validation. Backend and frontend gates passed; forced PostgreSQL remained blocked by missing local vector extension.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f603b38` | (see git log) |
+
+### Status
+
+[OK] **Completed**

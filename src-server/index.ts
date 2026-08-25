@@ -4,7 +4,6 @@ import zero from './zero/routes'
 import s3 from './s3'
 import ai from './ai'
 import { seed } from './utils/seed'
-import admin from './admin'
 import search from './search'
 import kb from './kb'
 import mcp from './mcp'
@@ -21,7 +20,6 @@ export const app = new Hono().basePath('/api')
   .route('/zero', zero)
   .route('/s3', s3)
   .route('/v1', ai)
-  .route('/admin', admin)
   .route('/search', search)
   .route('/kb', kb)
   .route('/mcp', mcp)

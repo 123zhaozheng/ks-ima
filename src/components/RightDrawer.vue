@@ -50,7 +50,7 @@ const uiStateStore = useUiStateStore()
 const route = useRoute()
 const showDrawer = computed(() => {
   const type = route.params.type
-  return type === 'assistant' || type === 'provider'
+  return type === 'assistant'
 })
 const viewDirId = ref()
 watchEffect(() => {

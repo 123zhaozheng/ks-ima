@@ -16,31 +16,7 @@
       <q-toolbar-title text-lg>
         {{ $route.params.type === 'chat' ? t('Ask') : entityName(entity) }}
       </q-toolbar-title>
-      <q-btn
-        v-if="$route.params.type === 'chat' && workspaceStore.id"
-        flat
-        dense
-        round
-        icon="sym_o_tune"
-        :title="t('Model')"
-        ml-a
-      >
-        <q-menu>
-          <div
-            p-2
-            style="min-width: 280px"
-          >
-            <assistant-model-select
-              :assistant-id="conf.chatAssistantId"
-              :model-id="chat.modelId"
-              :workspace-id="workspaceStore.id"
-              :conf
-              @update:assistant-id="switchAssistant"
-              @update:model-id="switchModel"
-            />
-          </div>
-        </q-menu>
-      </q-btn>
+      <q-badge v-if="$route.params.type === 'chat'" class="q-ml-auto" color="primary">{{ t('Platform-managed capability') }}</q-badge>
     </common-toolbar>
     <div
       grow
@@ -81,13 +57,6 @@
         px-6
       >
         {{ t('Ask about files in this knowledge base.') }}
-        <div
-          v-if="!model"
-          text-warn
-          mt-3
-        >
-          {{ t('Please select a model') }}
-        </div>
       </div>
     </div>
     <div
@@ -137,7 +106,7 @@
       <message-input
         :message="getMessageAt(-1)!"
         :parent-id="chat.id"
-        :input-types="modelInputTypes(model).user"
+        :input-types="['image/*']"
         :plugins
         :placeholder="t('Ask about your files…')"
         @send="send"
@@ -183,25 +152,22 @@ import type { Ref } from 'vue'
 import { computed, inject, nextTick, toRef, useTemplateRef, watch, ref } from 'vue'
 import { mutate } from 'src/utils/zero-session'
 import { genId } from 'app/src-shared/utils/id'
-import { getCommonVars, pairs } from 'src/utils/functions'
+import { pairs } from 'src/utils/functions'
 import { t } from 'src/utils/i18n'
 import { useChatRes } from 'src/composables/chat-res'
 import { useQuasar } from 'quasar'
-import type { FullChat, FullModel } from 'app/src-shared/queries'
+import type { FullChat } from 'app/src-shared/queries'
 import { tasks } from 'src/utils/tasks'
 import AbortableBtn from 'src/components/AbortableBtn.vue'
 import { mutators } from 'app/src-shared/mutators'
-import AssistantModelSelect from 'src/components/AssistantModelSelect.vue'
-import { queries } from 'app/src-shared/queries'
 import { useThisEntityConf } from 'src/composables/entity-conf'
-import { useQuery } from 'src/composables/zero/query'
 import type { CompletionConfig } from 'src/services/stream-message'
 import { streamChat } from 'src/services/stream-message'
 import { generateChatTitle } from 'src/services/generate-chat-title'
 import Mark from 'mark.js'
 import type { LayoutPosition } from 'src/utils/types'
 import { useRoute } from 'vue-router'
-import { entityName, modelInputTypes, modelName } from 'src/utils/defaults'
+import { entityName } from 'src/utils/defaults'
 import { usePlugins } from 'src/composables/plugins'
 import { useWorkspaceStore } from 'src/stores/workspace'
 import CommonToolbar from 'src/components/CommonToolbar.vue'
@@ -210,10 +176,8 @@ import { usePerfsStore } from 'src/stores/perfs'
 import { useChatScroll } from 'src/composables/chat-scroll'
 import MessageItem from 'src/components/MessageItem.vue'
 import { flush } from 'src/composables/state-proxy'
-import { DefaultPromptTemplate } from 'src/utils/templates'
 import { useQuote } from 'src/composables/quote'
 import { useListenKey } from 'src/composables/listen-key'
-import { engine } from 'src/utils/template-engine'
 
 const props = defineProps<{
   chat: FullChat
@@ -221,17 +185,14 @@ const props = defineProps<{
 
 const position = inject<Ref<LayoutPosition>>('position')!
 
-const { entity, conf } = useThisEntityConf()
-const { data: assistant } = useQuery(() => conf.value.chatAssistantId ? queries.fullAssistant(conf.value.chatAssistantId) : null)
-const modelId = computed(() => props.chat.modelId ?? assistant.value?.modelId ?? conf.value.chatModelId)
-const { data: model } = useQuery(() => modelId.value ? queries.fullModel(modelId.value) : null)
+const { entity } = useThisEntityConf()
 
 const pluginIds = computed(() => {
-  const ids = props.chat.plugins ?? assistant.value?.plugins
+  const ids = props.chat.plugins
   if (ids && ids.length) return ids
   return ['workspace', 'mermaid']
 })
-const { plugins, pluginsPrompt } = usePlugins(pluginIds)
+const { plugins } = usePlugins(pluginIds)
 
 const { getMessageAt, chain, messageMap } = useChatRes(toRef(props, 'chat'))
 
@@ -258,7 +219,7 @@ async function regenerate(parent: string) {
   await mutate(mutators.appendMessagePair({
     entityId: props.chat.id,
     target: parent,
-    aProps: { id: genId(), assistantId: assistant.value!.id, modelName: modelName(model.value), sentAt: Date.now() },
+    aProps: { id: genId(), assistantId: undefined, modelName: 'platform-managed', sentAt: Date.now() },
     uProps: { id: genId() },
   })).client
   stream(params)
@@ -326,19 +287,8 @@ watch(route, async () => {
 }, { immediate: true })
 
 function getStreamParams() {
-  if (!model.value) {
-    $q.notify({ message: t('Please select a model'), color: 'negative' })
-    return null
-  }
   const config = getCompletionConfig()
-  if (!config) {
-    $q.notify({ message: t('Please select an assistant'), color: 'negative' })
-    return null
-  }
-  return {
-    model: model.value,
-    config,
-  }
+  return { config }
 }
 
 async function send() {
@@ -350,7 +300,7 @@ async function send() {
   await mutate(mutators.appendMessagePair({
     entityId: id,
     target,
-    aProps: { id: genId(), assistantId: assistant.value?.id, modelName: modelName(model.value), sentAt: Date.now() },
+    aProps: { id: genId(), assistantId: undefined, modelName: 'platform-managed', sentAt: Date.now() },
     uProps: { id: genId() },
   })).client
   nextTick(() => {
@@ -362,7 +312,7 @@ async function send() {
   }
 }
 async function generateTitle() {
-  await generateChatTitle({ chat: props.chat, conf: conf.value }).catch(err => {
+  await generateChatTitle({ chat: props.chat, conf: {} }).catch(err => {
     console.error(err)
     $q.notify({
       message: t('Failed to generate chat title: {0}', err.message),
@@ -397,7 +347,6 @@ watch(lockingBottom, val => {
   }
 })
 function stream(params: {
-  model: FullModel
   config: CompletionConfig
 }, preventLockBottom = false) {
   lockingBottom.value = perfsStore.perfs.streamingLockBottom && !preventLockBottom
@@ -414,57 +363,16 @@ function stream(params: {
   })
   return task
 }
-function getCompletionConfig(): CompletionConfig | undefined {
+function getCompletionConfig(): CompletionConfig {
   const tools = Object.fromEntries(Object.entries(plugins.value).map(([id, { tools }]) => [id, tools]))
-  const pluginVars = {
-    _pluginsPrompt: engine.parseAndRenderSync(pluginsPrompt.value, getCommonVars()),
-  }
-  if (assistant.value) {
-    const { promptTemplate, promptRole, contextNum, streamSettings, prompt } = assistant.value
-    return {
-      promptTemplate: promptTemplate || DefaultPromptTemplate,
-      promptRole,
-      contextNum,
-      streamSettings,
-      vars: {
-        _rolePrompt: prompt,
-        ...pluginVars,
-      },
-      tools,
-      sdkTools: providerTools.value,
-      providerOptions: providerOptions.value,
-    }
-  }
   return {
-    promptTemplate: DefaultPromptTemplate,
-    promptRole: 'system',
     contextNum: 10,
-    streamSettings: {},
-    vars: {
-      _rolePrompt: t('You are a knowledge-base librarian. Call search before answering internal facts. Cite title and quote. If search is empty, say the knowledge base does not contain it.'),
-      ...pluginVars,
-    },
     tools,
-    sdkTools: providerTools.value,
-    providerOptions: providerOptions.value,
   }
 }
 
 function abort() {
   streamingTask.value?.abort()
-}
-
-function switchAssistant(id: string | null) {
-  mutate(mutators.updateEntityConf({
-    id: props.chat.id,
-    updates: { chatAssistantId: id },
-  }))
-}
-function switchModel(id: string | null) {
-  mutate(mutators.updateChat({
-    id: props.chat.id,
-    modelId: id,
-  }))
 }
 
 const workspaceStore = useWorkspaceStore()
@@ -489,9 +397,6 @@ function editCurr() {
   if (index === -1) return
   edit(chain.value[index])
 }
-
-const providerOptions = ref({})
-const providerTools = ref({})
 
 const quote = useQuote(computed(() => getMessageAt(-1)!))
 

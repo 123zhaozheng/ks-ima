@@ -46,16 +46,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     id.value ? queries.fullWorkspace(id.value) : null,
   )
 
-  z.preload(queries.globalSettings())
-  z.preload(queries.publicModels())
   watchEffect(() => {
     if (!id.value) return
-    z.preload(queries.models(id.value))
     z.preload(queries.entity({ id: id.value, children: { depth: 3 } }))
     z.preload(queries.entityAccesses(id.value))
     z.preload(queries.recentChats(id.value))
     z.preload(queries.recentItems(id.value))
-    z.preload(queries.recentProviders(id.value))
     z.preload(queries.assistants({
       workspaceId: id.value,
       limit: 10,

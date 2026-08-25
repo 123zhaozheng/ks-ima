@@ -9,7 +9,6 @@ import InvitationLayout from 'src/layouts/InvitationLayout.vue'
 import TrashLayout from 'src/layouts/TrashLayout.vue'
 import SettingsLayout from 'src/layouts/SettingsLayout.vue'
 import WorkspaceOverview from 'src/pages/WorkspaceOverview.vue'
-import WorkspaceUsage from 'src/pages/WorkspaceUsage.vue'
 import WorkspaceConnectors from 'src/pages/WorkspaceConnectors.vue'
 import AccountLayout from 'src/layouts/AccountLayout.vue'
 import RedirectToFolder from 'src/pages/RedirectToFolder.vue'
@@ -31,7 +30,7 @@ const routes: RouteRecordRaw[] = [
         ],
       },
       {
-        path: '/:type(chat|item|folder|provider)',
+        path: '/:type(chat|item|folder)',
         component: MainLayout,
         children: [
           { path: '/:type(item)', component: RedirectToFolder },
@@ -49,13 +48,6 @@ const routes: RouteRecordRaw[] = [
             component: WorkspaceOverview,
             meta: {
               title: t('Workspace Overview'),
-            },
-          },
-          {
-            path: 'usage',
-            component: WorkspaceUsage,
-            meta: {
-              title: t('Usage Logs'),
             },
           },
           {

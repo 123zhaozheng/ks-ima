@@ -5,7 +5,7 @@ import type { AclAction } from 'app/src-shared/utils/acl'
 import { canAction } from 'app/src-shared/utils/acl'
 import type { WorkspaceRole } from 'app/src-shared/utils/validators'
 import { createHash, randomBytes } from 'node:crypto'
-import { IMA_BRIDGE_TIMEOUT_MS, IMA_BRIDGE_TOKEN, PYTHON_API_INTERNAL_URL } from './config'
+import { IMA_BRIDGE_TIMEOUT_MS, IMA_BRIDGE_TOKEN, privatePythonOrigin } from './config'
 
 export type Actor = {
   userId: string
@@ -166,7 +166,7 @@ type BridgeAction = 'view_metadata' | 'view_content' | 'download' | 'ask' | 'cre
 type BridgeDecision = { allowed: boolean, source: 'target' | 'legacy' | 'denied', reason: string, folderId?: string }
 
 function bridgeConfigured() {
-  return Boolean(PYTHON_API_INTERNAL_URL && IMA_BRIDGE_TOKEN)
+  return Boolean(privatePythonOrigin() && IMA_BRIDGE_TOKEN)
 }
 
 function bridgeAction(action: AclAction): BridgeAction {
@@ -176,7 +176,9 @@ function bridgeAction(action: AclAction): BridgeAction {
 async function bridgeRequest(path: string, body: unknown): Promise<Response | null> {
   if (!bridgeConfigured()) return null
   try {
-    return await fetch(`${PYTHON_API_INTERNAL_URL!.replace(/\/$/, '')}/internal/authorization/${path}`, {
+    const origin = privatePythonOrigin()
+    if (!origin) return null
+    return await fetch(`${origin}/api/v1/internal/authorization/${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-ima-bridge-token': IMA_BRIDGE_TOKEN! },
       body: JSON.stringify(body),

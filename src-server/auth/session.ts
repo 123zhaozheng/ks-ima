@@ -1,4 +1,4 @@
-import { IMA_BRIDGE_TIMEOUT_MS, PYTHON_API_INTERNAL_URL, IMA_BRIDGE_TOKEN } from '../utils/config'
+import { IMA_BRIDGE_TIMEOUT_MS, IMA_BRIDGE_TOKEN, privatePythonOrigin } from '../utils/config'
 
 export type PythonSession = {
   user: {
@@ -12,19 +12,8 @@ export type PythonSession = {
   }
 }
 
-const bridgeUrl = (() => {
-  const value = PYTHON_API_INTERNAL_URL
-  if (!value) return null
-  try {
-    const url = new URL(value)
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) return null
-    const privateHost = url.hostname === 'localhost' || url.hostname === 'api' || url.hostname === 'python' || url.hostname.endsWith('.local') || /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(url.hostname)
-    if (!privateHost) return null
-    return `${url.origin}/api/v1/internal/session/introspect`
-  } catch {
-    return null
-  }
-})()
+const bridgeOrigin = privatePythonOrigin()
+const bridgeUrl = bridgeOrigin ? `${bridgeOrigin}/api/v1/internal/session/introspect` : null
 
 /** The one browser-session adapter used by every legacy Bun route. */
 export async function getSession(headers: Headers): Promise<PythonSession | null> {

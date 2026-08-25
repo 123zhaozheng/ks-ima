@@ -30,7 +30,7 @@
         </q-item-section>
       </q-item>
       <q-item
-        v-if="canManageUsers"
+        v-if="canReadModelGovernance"
         to="/models"
         item-rd
       >
@@ -91,6 +91,7 @@ import { computed } from 'vue'
 
 const canManageUsers = computed(() => session.value.data?.user.platformRoles.includes('super_admin') || session.value.data?.user.platformRoles.includes('platform_admin'))
 const canManageSettings = canManageUsers
+const canReadModelGovernance = computed(() => canManageUsers.value || session.value.data?.user.platformRoles.includes('security_auditor'))
 
 const router = useRouter()
 function signOut() {

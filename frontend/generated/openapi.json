@@ -294,6 +294,137 @@
         "title": "AdminUserList",
         "type": "object"
       },
+      "Assignment": {
+        "additionalProperties": false,
+        "properties": {
+          "assignedAt": {
+            "format": "date-time",
+            "title": "Assignedat",
+            "type": "string"
+          },
+          "availability": {
+            "enum": [
+              "available",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "Availability",
+            "type": "string"
+          },
+          "availabilityReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Availabilityreason"
+          },
+          "profileId": {
+            "format": "uuid",
+            "title": "Profileid",
+            "type": "string"
+          },
+          "profileVersion": {
+            "title": "Profileversion",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "workflow": {
+            "enum": [
+              "grounded_ask",
+              "title_generation",
+              "summarization",
+              "embedding",
+              "reranking"
+            ],
+            "title": "Workflow",
+            "type": "string"
+          },
+          "workspaceId": {
+            "title": "Workspaceid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "workflow",
+          "profileId",
+          "profileVersion",
+          "version",
+          "availability",
+          "assignedAt"
+        ],
+        "title": "Assignment",
+        "type": "object"
+      },
+      "AssignmentList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Assignment"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "AssignmentList",
+        "type": "object"
+      },
+      "AssignmentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectedversion"
+          },
+          "profileId": {
+            "format": "uuid",
+            "title": "Profileid",
+            "type": "string"
+          },
+          "profileVersion": {
+            "minimum": 1.0,
+            "title": "Profileversion",
+            "type": "integer"
+          },
+          "workflow": {
+            "enum": [
+              "grounded_ask",
+              "title_generation",
+              "summarization",
+              "embedding",
+              "reranking"
+            ],
+            "title": "Workflow",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow",
+          "profileId",
+          "profileVersion"
+        ],
+        "title": "AssignmentRequest",
+        "type": "object"
+      },
       "AuditEvent": {
         "additionalProperties": false,
         "properties": {
@@ -428,6 +559,158 @@
           "capabilities"
         ],
         "title": "BuildInfo",
+        "type": "object"
+      },
+      "CapabilityProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "businessAlias": {
+            "title": "Businessalias",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "currentVersion": {
+            "title": "Currentversion",
+            "type": "integer"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lifecycle": {
+            "enum": [
+              "active",
+              "disabled",
+              "archived"
+            ],
+            "title": "Lifecycle",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "workflow": {
+            "enum": [
+              "grounded_ask",
+              "title_generation",
+              "summarization",
+              "embedding",
+              "reranking"
+            ],
+            "title": "Workflow",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workflow",
+          "businessAlias",
+          "description",
+          "lifecycle",
+          "currentVersion",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "CapabilityProfile",
+        "type": "object"
+      },
+      "CapabilityProfileVersion": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config"
+          },
+          "configDigest": {
+            "title": "Configdigest",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "disabledAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabledat"
+          },
+          "draftVersion": {
+            "title": "Draftversion",
+            "type": "integer"
+          },
+          "profileId": {
+            "format": "uuid",
+            "title": "Profileid",
+            "type": "string"
+          },
+          "publishedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publishedat"
+          },
+          "state": {
+            "enum": [
+              "draft",
+              "published",
+              "disabled"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "profileId",
+          "version",
+          "state",
+          "configDigest",
+          "draftVersion",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "CapabilityProfileVersion",
         "type": "object"
       },
       "CreateUserRequest": {
@@ -750,6 +1033,705 @@
         "title": "FolderReorderRequest",
         "type": "object"
       },
+      "GatewayCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "allowedCapabilities": {
+            "items": {
+              "enum": [
+                "chat",
+                "embedding",
+                "rerank"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Allowedcapabilities",
+            "type": "array"
+          },
+          "allowedCidrs": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Allowedcidrs",
+            "type": "array"
+          },
+          "allowedHosts": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Allowedhosts",
+            "type": "array"
+          },
+          "baseUrl": {
+            "maxLength": 2048,
+            "minLength": 8,
+            "title": "Baseurl",
+            "type": "string"
+          },
+          "connectTimeoutMs": {
+            "default": 5000,
+            "maximum": 300000.0,
+            "minimum": 100.0,
+            "title": "Connecttimeoutms",
+            "type": "integer"
+          },
+          "customCaRef": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customcaref"
+          },
+          "insecurePrivate": {
+            "default": false,
+            "title": "Insecureprivate",
+            "type": "boolean"
+          },
+          "maxResponseBytes": {
+            "default": 8388608,
+            "maximum": 134217728.0,
+            "minimum": 1024.0,
+            "title": "Maxresponsebytes",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "poolTimeoutMs": {
+            "default": 5000,
+            "maximum": 300000.0,
+            "minimum": 100.0,
+            "title": "Pooltimeoutms",
+            "type": "integer"
+          },
+          "readTimeoutMs": {
+            "default": 30000,
+            "maximum": 300000.0,
+            "minimum": 100.0,
+            "title": "Readtimeoutms",
+            "type": "integer"
+          },
+          "secret": {
+            "anyOf": [
+              {
+                "maxLength": 8192,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret",
+            "writeOnly": true
+          },
+          "writeTimeoutMs": {
+            "default": 30000,
+            "maximum": 300000.0,
+            "minimum": 100.0,
+            "title": "Writetimeoutms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "baseUrl",
+          "allowedCapabilities"
+        ],
+        "title": "GatewayCreateRequest",
+        "type": "object"
+      },
+      "GatewayHealthDto": {
+        "additionalProperties": false,
+        "properties": {
+          "capability": {
+            "enum": [
+              "chat",
+              "embedding",
+              "rerank"
+            ],
+            "title": "Capability",
+            "type": "string"
+          },
+          "checkedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkedat"
+          },
+          "latencyMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latencyms"
+          },
+          "reasonCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoncode"
+          },
+          "state": {
+            "enum": [
+              "unknown",
+              "healthy",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability",
+          "state"
+        ],
+        "title": "GatewayHealthDto",
+        "type": "object"
+      },
+      "GatewayPatchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "allowedCapabilities": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "chat",
+                    "embedding",
+                    "rerank"
+                  ],
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowedcapabilities"
+          },
+          "allowedCidrs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 64,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowedcidrs"
+          },
+          "allowedHosts": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 64,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowedhosts"
+          },
+          "baseUrl": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurl"
+          },
+          "connectTimeoutMs": {
+            "anyOf": [
+              {
+                "maximum": 300000.0,
+                "minimum": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connecttimeoutms"
+          },
+          "customCaRef": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customcaref"
+          },
+          "expectedVersion": {
+            "minimum": 1.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "insecurePrivate": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insecureprivate"
+          },
+          "maxResponseBytes": {
+            "anyOf": [
+              {
+                "maximum": 134217728.0,
+                "minimum": 1024.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxresponsebytes"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "poolTimeoutMs": {
+            "anyOf": [
+              {
+                "maximum": 300000.0,
+                "minimum": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pooltimeoutms"
+          },
+          "readTimeoutMs": {
+            "anyOf": [
+              {
+                "maximum": 300000.0,
+                "minimum": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readtimeoutms"
+          },
+          "writeTimeoutMs": {
+            "anyOf": [
+              {
+                "maximum": 300000.0,
+                "minimum": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Writetimeoutms"
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ],
+        "title": "GatewayPatchRequest",
+        "type": "object"
+      },
+      "GovernedModel": {
+        "additionalProperties": false,
+        "properties": {
+          "businessLabel": {
+            "title": "Businesslabel",
+            "type": "string"
+          },
+          "capability": {
+            "enum": [
+              "chat",
+              "embedding",
+              "rerank"
+            ],
+            "title": "Capability",
+            "type": "string"
+          },
+          "contextLimit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contextlimit"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "embeddingDimension": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embeddingdimension"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "gatewayId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gatewayid"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "maxDocuments": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxdocuments"
+          },
+          "outputLimit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outputlimit"
+          },
+          "remoteName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remotename"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "validated": {
+            "title": "Validated",
+            "type": "boolean"
+          },
+          "validatedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validatedat"
+          },
+          "validationDigest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validationdigest"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "capability",
+          "businessLabel",
+          "enabled",
+          "validated",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "GovernedModel",
+        "type": "object"
+      },
+      "GovernedModelCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "businessLabel": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Businesslabel",
+            "type": "string"
+          },
+          "capability": {
+            "enum": [
+              "chat",
+              "embedding",
+              "rerank"
+            ],
+            "title": "Capability",
+            "type": "string"
+          },
+          "contextLimit": {
+            "anyOf": [
+              {
+                "maximum": 2097152.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contextlimit"
+          },
+          "embeddingDimension": {
+            "anyOf": [
+              {
+                "maximum": 65536.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embeddingdimension"
+          },
+          "gatewayId": {
+            "format": "uuid",
+            "title": "Gatewayid",
+            "type": "string"
+          },
+          "maxDocuments": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxdocuments"
+          },
+          "outputLimit": {
+            "anyOf": [
+              {
+                "maximum": 524288.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outputlimit"
+          },
+          "remoteName": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Remotename",
+            "type": "string"
+          }
+        },
+        "required": [
+          "gatewayId",
+          "remoteName",
+          "capability",
+          "businessLabel"
+        ],
+        "title": "GovernedModelCreateRequest",
+        "type": "object"
+      },
+      "GovernedModelList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GovernedModel"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "GovernedModelList",
+        "type": "object"
+      },
+      "GovernedModelPatchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "businessLabel": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Businesslabel"
+          },
+          "contextLimit": {
+            "anyOf": [
+              {
+                "maximum": 2097152.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contextlimit"
+          },
+          "embeddingDimension": {
+            "anyOf": [
+              {
+                "maximum": 65536.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embeddingdimension"
+          },
+          "expectedVersion": {
+            "minimum": 1.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "maxDocuments": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxdocuments"
+          },
+          "outputLimit": {
+            "anyOf": [
+              {
+                "maximum": 524288.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outputlimit"
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ],
+        "title": "GovernedModelPatchRequest",
+        "type": "object"
+      },
       "GroupCreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -796,6 +1778,29 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "capability": {
+            "anyOf": [
+              {
+                "enum": [
+                  "chat",
+                  "embedding",
+                  "rerank"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capability"
+          }
+        },
+        "title": "HealthRequest",
         "type": "object"
       },
       "IdentityUser": {
@@ -845,6 +1850,108 @@
           "isActive"
         ],
         "title": "IdentityUser",
+        "type": "object"
+      },
+      "ImpactItem": {
+        "additionalProperties": false,
+        "properties": {
+          "affectedIndexes": {
+            "title": "Affectedindexes",
+            "type": "integer"
+          },
+          "affectedSourceIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Affectedsourceids",
+            "type": "array"
+          },
+          "currentDimension": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currentdimension"
+          },
+          "currentModelId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currentmodelid"
+          },
+          "workflow": {
+            "enum": [
+              "grounded_ask",
+              "title_generation",
+              "summarization",
+              "embedding",
+              "reranking"
+            ],
+            "title": "Workflow",
+            "type": "string"
+          },
+          "workspaceId": {
+            "title": "Workspaceid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "workflow",
+          "affectedIndexes",
+          "affectedSourceIds"
+        ],
+        "title": "ImpactItem",
+        "type": "object"
+      },
+      "ImpactResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "affected": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactItem"
+            },
+            "title": "Affected",
+            "type": "array"
+          },
+          "dimension": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dimension"
+          },
+          "modelId": {
+            "format": "uuid",
+            "title": "Modelid",
+            "type": "string"
+          },
+          "requiresReindex": {
+            "title": "Requiresreindex",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "modelId",
+          "dimension",
+          "affected",
+          "requiresReindex"
+        ],
+        "title": "ImpactResponse",
         "type": "object"
       },
       "Invitation": {
@@ -1103,6 +2210,155 @@
         "title": "MemberWorkspace",
         "type": "object"
       },
+      "ModelDiscoveryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "names"
+        ],
+        "title": "ModelDiscoveryResponse",
+        "type": "object"
+      },
+      "ModelGateway": {
+        "additionalProperties": false,
+        "properties": {
+          "allowedCapabilities": {
+            "items": {
+              "enum": [
+                "chat",
+                "embedding",
+                "rerank"
+              ],
+              "type": "string"
+            },
+            "title": "Allowedcapabilities",
+            "type": "array"
+          },
+          "baseUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurl"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "customCaRef": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customcaref"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fingerprint"
+          },
+          "health": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GatewayHealthDto"
+            },
+            "title": "Health",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "insecurePrivate": {
+            "title": "Insecureprivate",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "secretPresent": {
+            "title": "Secretpresent",
+            "type": "boolean"
+          },
+          "tlsMode": {
+            "enum": [
+              "required",
+              "private_http"
+            ],
+            "title": "Tlsmode",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "enabled",
+          "allowedCapabilities",
+          "tlsMode",
+          "insecurePrivate",
+          "version",
+          "secretPresent",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "ModelGateway",
+        "type": "object"
+      },
+      "ModelGatewayList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ModelGateway"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ModelGatewayList",
+        "type": "object"
+      },
       "PasswordChangeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1287,6 +2543,149 @@
         "title": "ProblemDetails",
         "type": "object"
       },
+      "ProfileCloneRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "businessAlias": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Businessalias"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "title": "ProfileCloneRequest",
+        "type": "object"
+      },
+      "ProfileCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "businessAlias": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Businessalias",
+            "type": "string"
+          },
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          },
+          "description": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "workflow": {
+            "enum": [
+              "grounded_ask",
+              "title_generation",
+              "summarization",
+              "embedding",
+              "reranking"
+            ],
+            "title": "Workflow",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow",
+          "businessAlias",
+          "description",
+          "config"
+        ],
+        "title": "ProfileCreateRequest",
+        "type": "object"
+      },
+      "ProfileDiff": {
+        "additionalProperties": false,
+        "properties": {
+          "changedFields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changedfields",
+            "type": "array"
+          },
+          "fromVersion": {
+            "title": "Fromversion",
+            "type": "integer"
+          },
+          "profileId": {
+            "format": "uuid",
+            "title": "Profileid",
+            "type": "string"
+          },
+          "toVersion": {
+            "title": "Toversion",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "profileId",
+          "fromVersion",
+          "toVersion",
+          "changedFields"
+        ],
+        "title": "ProfileDiff",
+        "type": "object"
+      },
+      "ProfileLifecycleRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectedversion"
+          }
+        },
+        "title": "ProfileLifecycleRequest",
+        "type": "object"
+      },
+      "ProfileList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityProfile"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ProfileList",
+        "type": "object"
+      },
       "ProfilePatch": {
         "additionalProperties": false,
         "properties": {
@@ -1316,6 +2715,44 @@
           }
         },
         "title": "ProfilePatch",
+        "type": "object"
+      },
+      "ProfilePatchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          },
+          "expectedDraftVersion": {
+            "minimum": 1.0,
+            "title": "Expecteddraftversion",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "config",
+          "expectedDraftVersion"
+        ],
+        "title": "ProfilePatchRequest",
+        "type": "object"
+      },
+      "ProfileVersionList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityProfileVersion"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ProfileVersionList",
         "type": "object"
       },
       "RecoveryVerifyRequest": {
@@ -1366,6 +2803,35 @@
           "displayName"
         ],
         "title": "RegisterRequest",
+        "type": "object"
+      },
+      "SecretRotateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectedversion"
+          },
+          "secret": {
+            "maxLength": 8192,
+            "minLength": 1,
+            "title": "Secret",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "secret"
+        ],
+        "title": "SecretRotateRequest",
         "type": "object"
       },
       "SessionInfo": {
@@ -1657,6 +3123,25 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "VersionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectedversion"
+          }
+        },
+        "title": "VersionRequest",
+        "type": "object"
+      },
       "WorkspaceAdminRepairRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1671,6 +3156,70 @@
           "userId"
         ],
         "title": "WorkspaceAdminRepairRequest",
+        "type": "object"
+      },
+      "WorkspaceCapability": {
+        "additionalProperties": false,
+        "properties": {
+          "alias": {
+            "title": "Alias",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "enum": [
+              "available",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "workflow": {
+            "enum": [
+              "grounded_ask",
+              "title_generation",
+              "summarization",
+              "embedding",
+              "reranking"
+            ],
+            "title": "Workflow",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow",
+          "alias",
+          "description",
+          "version",
+          "status"
+        ],
+        "title": "WorkspaceCapability",
         "type": "object"
       },
       "WorkspaceCreateResponse": {
@@ -2278,6 +3827,1368 @@
         "summary": "Audit Events",
         "tags": [
           "platform-admin"
+        ]
+      }
+    },
+    "/api/v1/admin/capability-profiles": {
+      "get": {
+        "operationId": "listCapabilityProfiles",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Profiles",
+        "tags": [
+          "model-governance"
+        ]
+      },
+      "post": {
+        "operationId": "createCapabilityProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Profile",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/capability-profiles/{profile_id}": {
+      "delete": {
+        "operationId": "deleteCapabilityProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Profile",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/capability-profiles/{profile_id}/clone": {
+      "post": {
+        "operationId": "cloneCapabilityProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileCloneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clone Profile",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/capability-profiles/{profile_id}/diff": {
+      "get": {
+        "operationId": "diffCapabilityProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Profile Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_version",
+            "required": true,
+            "schema": {
+              "title": "From Version",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_version",
+            "required": true,
+            "schema": {
+              "title": "To Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileDiff"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Profile Diff",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/capability-profiles/{profile_id}/disable": {
+      "post": {
+        "operationId": "disableCapabilityProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ProfileLifecycleRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Disable Profile",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/capability-profiles/{profile_id}/draft": {
+      "patch": {
+        "operationId": "patchCapabilityProfileDraft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfilePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patchcapabilityprofiledraft",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Profile",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/capability-profiles/{profile_id}/publish": {
+      "post": {
+        "operationId": "publishCapabilityProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfilePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Publishcapabilityprofile",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Publish Profile",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/capability-profiles/{profile_id}/restore": {
+      "post": {
+        "operationId": "restoreCapabilityProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ProfileLifecycleRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore Profile",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/capability-profiles/{profile_id}/validate": {
+      "post": {
+        "operationId": "validateCapabilityProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Validatecapabilityprofile",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Profile",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/capability-profiles/{profile_id}/versions": {
+      "get": {
+        "operationId": "listCapabilityProfileVersions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileVersionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Profile Versions",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/governed-models": {
+      "get": {
+        "operationId": "listGovernedModels",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedModelList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Models",
+        "tags": [
+          "model-governance"
+        ]
+      },
+      "post": {
+        "operationId": "createGovernedModel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GovernedModelCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Model",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/governed-models/{model_id}": {
+      "delete": {
+        "operationId": "deleteGovernedModel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Model",
+        "tags": [
+          "model-governance"
+        ]
+      },
+      "patch": {
+        "operationId": "updateGovernedModel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GovernedModelPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Model",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/governed-models/{model_id}/disable": {
+      "post": {
+        "operationId": "disableGovernedModel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/VersionRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Disable Model",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/governed-models/{model_id}/enable": {
+      "post": {
+        "operationId": "enableGovernedModel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/VersionRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enable Model",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/governed-models/{model_id}/validate": {
+      "post": {
+        "operationId": "validateGovernedModel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/VersionRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Model",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/model-gateways": {
+      "get": {
+        "operationId": "listModelGateways",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelGatewayList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Gateways",
+        "tags": [
+          "model-governance"
+        ]
+      },
+      "post": {
+        "operationId": "createModelGateway",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GatewayCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelGateway"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Gateway",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/model-gateways/{gateway_id}": {
+      "delete": {
+        "operationId": "deleteModelGateway",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Gateway",
+        "tags": [
+          "model-governance"
+        ]
+      },
+      "patch": {
+        "operationId": "updateModelGateway",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GatewayPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelGateway"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Gateway",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/model-gateways/{gateway_id}/disable": {
+      "post": {
+        "operationId": "disableModelGateway",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/VersionRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelGateway"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Disable Gateway",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/model-gateways/{gateway_id}/discover": {
+      "post": {
+        "operationId": "discoverModelGateway",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelDiscoveryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discover Gateway",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/model-gateways/{gateway_id}/enable": {
+      "post": {
+        "operationId": "enableModelGateway",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/VersionRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelGateway"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enable Gateway",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/model-gateways/{gateway_id}/health": {
+      "post": {
+        "operationId": "checkModelGatewayHealth",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HealthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Checkmodelgatewayhealth",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Gateway Health",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/model-gateways/{gateway_id}/health/queue": {
+      "post": {
+        "operationId": "queueModelGatewayHealth",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HealthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Queuemodelgatewayhealth",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Queue Gateway Health",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/model-gateways/{gateway_id}/rotate-secret": {
+      "post": {
+        "operationId": "rotateModelGatewaySecret",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretRotateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelGateway"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rotate Gateway Secret",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/model-governance/impact": {
+      "get": {
+        "operationId": "getModelGovernanceImpact",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Impact",
+        "tags": [
+          "model-governance"
         ]
       }
     },
@@ -3133,6 +6044,167 @@
         ]
       }
     },
+    "/api/v1/admin/workspaces/{workspace_id}/profile-assignments": {
+      "get": {
+        "operationId": "listWorkspaceCapabilityAssignments",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assignments",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/workspaces/{workspace_id}/profile-assignments/{workflow}": {
+      "delete": {
+        "operationId": "removeWorkspaceCapabilityProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workflow",
+            "required": true,
+            "schema": {
+              "title": "Workflow",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Version"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Assignment",
+        "tags": [
+          "model-governance"
+        ]
+      },
+      "put": {
+        "operationId": "assignWorkspaceCapabilityProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workflow",
+            "required": true,
+            "schema": {
+              "title": "Workflow",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Assignment"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assign Profile",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
     "/api/v1/admin/workspaces/{workspace_id}/restore": {
       "post": {
         "operationId": "adminRestoreWorkspace",
@@ -3922,6 +6994,52 @@
         "summary": "Acl Subjects",
         "tags": [
           "workspaces"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/capabilities": {
+      "get": {
+        "operationId": "listWorkspaceModelCapabilities",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkspaceCapability"
+                  },
+                  "title": "Response Listworkspacemodelcapabilities",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Workspace Capabilities",
+        "tags": [
+          "model-governance"
         ]
       }
     },

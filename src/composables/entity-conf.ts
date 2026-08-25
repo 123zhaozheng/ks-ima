@@ -4,7 +4,6 @@ import { mutate } from 'src/utils/zero-session'
 import { expandAncestors } from 'src/utils/functions'
 import { usePerfsState } from './perfs-state'
 import { mutators } from 'app/src-shared/mutators'
-import { ChatTitlePrompt } from 'src/utils/templates'
 import type { LayoutPosition } from 'src/utils/types'
 import { useEntityStore } from 'src/stores/entity'
 import type { FullEntity } from 'app/src-shared/queries'
@@ -14,9 +13,6 @@ import { useQuery } from './zero/query'
 
 const DefaultConf = {
   chatAssistantId: null as string | null,
-  chatModelId: null as string | null,
-  chatTitlePrompt: ChatTitlePrompt,
-  chatTitleModelId: null as string | null,
 }
 
 export type EntityConf = typeof DefaultConf

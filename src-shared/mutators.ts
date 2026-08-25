@@ -1,17 +1,15 @@
 import type { JSONObject, TableSchema, Transaction, Row, ServerTransaction } from '@rocicorp/zero'
 import { defineMutators, defineMutator } from '@rocicorp/zero'
 import { type Schema, schema, zql } from './schema.gen'
-import { assert, expandMessageTree, timeMs, typeAvatar } from './utils/functions'
+import { assert, expandMessageTree, timeMs } from './utils/functions'
 import type { Context } from './utils/types'
 import type { WorkspaceRole } from './utils/validators'
 import type { WorkspaceContentTable } from './table-permission'
 import { assertAuthorized, withMember, withRole, withWritable, workspaceContentTables } from './table-permission'
 import { zeroToZod } from './utils/zero-to-zod'
 import { z } from 'zod'
-import { avatarSchema, entityTypeSchema, memberDataSchema, modelInputTypesSchema, promptRoleSchema, searchResultSchema, shortcutActionSchema, toolCallStatusSchema, workspaceRoleSchema } from './utils/validators'
+import { avatarSchema, entityTypeSchema, memberDataSchema, promptRoleSchema, searchResultSchema, shortcutActionSchema, toolCallStatusSchema, workspaceRoleSchema } from './utils/validators'
 import { personalAcl } from './utils/acl'
-import { DEFAULT_PLAN_ID } from './utils/config'
-import { addMonths } from 'date-fns'
 
 const { tables } = schema
 type Tables = typeof tables
@@ -477,50 +475,6 @@ const updateWorkspace = defineMutator(
   },
 )
 
-const createProvider = defineMutator(
-  z.object({
-    ...entityPropsSchema.shape,
-    avatar: avatarSchema.optional(),
-    type: z.string(),
-    settings: z.record(z.string(), z.any()),
-  }),
-  async ({ tx, ctx, args: { id, parentId, name, type, settings, avatar } }) => {
-    assertAuthorized(ctx.userId)
-    const { rootId, pubRoot } = await requireWritable.entity(tx, ctx, parentId)
-    await tx.mutate.entity.insert({
-      ...entityDefaultProps,
-      id,
-      rootId,
-      pubRoot,
-      type: 'provider',
-      name,
-      parentId,
-      avatar,
-    })
-    await tx.mutate.provider.insert({
-      id,
-      rootId,
-      type,
-      settings,
-    })
-  },
-)
-const createModels = defineMutator(
-  z.object({
-    entityId: z.string(),
-    models: z.array(
-      insertSchema(tables.model).omit({ entityId: true }).extend({
-        avatar: avatarSchema.nullish(),
-        inputTypes: modelInputTypesSchema.nullish(),
-      }),
-    ).optional(),
-  }),
-  async ({ tx, ctx, args: { entityId, models = [] } }) => {
-    assertAuthorized(ctx.userId)
-    const { rootId } = await requireWritable.provider(tx, ctx, entityId)
-    await Promise.all(models.map(m => tx.mutate.model.insert({ ...m, rootId, entityId })))
-  },
-)
 const createPage = defineMutator(
   entityPropsSchema,
   async ({ tx, ctx, args: { id, parentId, name, avatar } }) => {
@@ -781,14 +735,6 @@ async function fullPath(tx: ServerTransaction, entityId: string) {
   `, [entityId])
   return Array.from(res).map(({ id }) => id as string)
 }
-const updateProvider = defineMutator(
-  updateSchema(tables.provider),
-  async ({ tx, ctx, args: { id, ...updates } }) => {
-    assertAuthorized(ctx.userId)
-    await requireWritable.provider(tx, ctx, id)
-    await tx.mutate.provider.update({ id, ...updates })
-  },
-)
 function allowUpdateAssistantMessage(message: Row['message'], userId: string) {
   return message.type.endsWith(':assistant') && message.userId === userId
 }
@@ -836,19 +782,6 @@ const editMessageText = defineMutator(
     const message = await requireWritable.message(tx, ctx, id)
     assert(allowEditMessageText(message, ctx.userId), 'Message not found')
     await tx.mutate.message.update({ id, text, userId: ctx.userId, editedAt: Date.now() })
-  },
-)
-const updateModel = defineMutator(
-  updateSchema(tables.model).pick({ id: true, name: true, label: true, caption: true, sortPriority: true }).extend({
-    avatar: avatarSchema.nullish(),
-    inputTypes: modelInputTypesSchema.nullish(),
-    settings: z.record(z.string(), z.any()).optional(),
-    providerOptions: z.record(z.string(), z.any()).nullish(),
-  }),
-  async ({ tx, ctx, args: { id, ...updates } }) => {
-    assertAuthorized(ctx.userId)
-    await requireWritable.model(tx, ctx, id)
-    await tx.mutate.model.update({ id, ...updates })
   },
 )
 const updateChat = defineMutator(
@@ -920,14 +853,6 @@ const updateAssistant = defineMutator(
     await tx.mutate.assistant.update({ id, ...updates })
   },
 )
-const deleteModel = defineMutator(
-  z.string(),
-  async ({ tx, ctx, args: id }) => {
-    assertAuthorized(ctx.userId)
-    await requireWritable.model(tx, ctx, id)
-    await tx.mutate.model.delete({ id })
-  },
-)
 const deleteMessageEntity = defineMutator(
   z.object({
     messageId: z.string(),
@@ -941,202 +866,6 @@ const deleteMessageEntity = defineMutator(
   },
 )
 
-const createWorkspace = defineMutator(
-  z.object({
-    ids: z.array(z.string()).length(23),
-    name: z.string(),
-  }),
-  async ({ tx, ctx, args: { ids, name } }) => {
-    assertAuthorized(ctx.userId)
-    const settings = await tx.run(zql.globalSettings.one())
-    assert(settings, 'Global settings not found')
-    const workspaces = await tx.run(zql.workspace.where('ownerId', ctx.userId))
-    assert(workspaces.length < settings.maxWorkspacesPerUser, 'Workspace number limit exceeded')
-    const [id, trashId, chatAssistantId] = ids.slice(0, 3)
-
-    // create main root
-    await tx.mutate.entity.insert({
-      ...entityDefaultProps,
-      id,
-      rootId: id,
-      type: 'folder',
-      name: '/',
-      conf: {
-        chatAssistantId,
-        chatModelId: settings.defaultChatModel,
-        chatTitleModelId: settings.defaultChatTitleModel,
-      },
-    })
-    // create trash root
-    await tx.mutate.entity.insert({
-      ...entityDefaultProps,
-      id: trashId,
-      rootId: trashId,
-      type: 'folder',
-      name: '$trash',
-    })
-
-    const [
-      chatFolderId,
-      searchFolderId,
-      pagesFolderId,
-      ,
-      ,
-      filesFolderId,
-      assistantsFolderId,
-      providersFolderId,
-      ,
-      shortcutsFolderId,
-    ] = ids.slice(3, 13)
-    const folderProps = {
-      ...entityDefaultProps,
-      parentId: id,
-      rootId: id,
-      type: 'folder' as const,
-      sortPriority: 10,
-    }
-    await tx.mutate.entity.insert({
-      ...folderProps,
-      id: searchFolderId,
-      name: '$search',
-      conf: {
-        chatModelId: settings.defaultSearchChatModel,
-      },
-    })
-    await tx.mutate.entity.insert({
-      ...folderProps,
-      id: chatFolderId,
-      name: '$chat',
-    })
-    await tx.mutate.entity.insert({
-      ...folderProps,
-      id: providersFolderId,
-      name: '$providers',
-    })
-    await tx.mutate.entity.insert({
-      ...folderProps,
-      id: pagesFolderId,
-      name: '$pages',
-    })
-    await tx.mutate.entity.insert({
-      ...folderProps,
-      id: filesFolderId,
-      name: '$files',
-    })
-    await tx.mutate.entity.insert({
-      ...folderProps,
-      id: assistantsFolderId,
-      name: '$assistants',
-    })
-    await tx.mutate.entity.insert({
-      ...folderProps,
-      id: shortcutsFolderId,
-      name: '$shortcuts',
-    })
-
-    const [
-      chatShortcutId,
-      searchShortcutId,
-      pageShortcutId,
-      ,
-      ,
-      fileShortcutId,
-      assistantShortcutId,
-      ,
-      providersShortcutId,
-    ] = ids.slice(13, 22)
-    await createShortcutBase(tx, id, null, {
-      id: chatShortcutId,
-      parentId: shortcutsFolderId,
-      name: '$chat',
-      dirId: chatFolderId,
-      avatar: typeAvatar('chat'),
-      type: 'chat',
-      action: 'openLast',
-    })
-    await createShortcutBase(tx, id, null, {
-      id: searchShortcutId,
-      parentId: shortcutsFolderId,
-      name: '$search',
-      dirId: searchFolderId,
-      avatar: typeAvatar('search'),
-      type: 'search',
-      action: 'createNew',
-    })
-    await createShortcutBase(tx, id, null, {
-      id: pageShortcutId,
-      parentId: shortcutsFolderId,
-      name: '$pages',
-      dirId: pagesFolderId,
-      avatar: typeAvatar('page'),
-      type: 'page',
-      action: 'openLast',
-    })
-    await createShortcutBase(tx, id, null, {
-      id: fileShortcutId,
-      parentId: shortcutsFolderId,
-      name: '$files',
-      dirId: filesFolderId,
-      avatar: { type: 'icon', icon: 'sym_o_files' },
-      type: 'item',
-      action: 'createNew',
-    })
-    await createShortcutBase(tx, id, null, {
-      id: assistantShortcutId,
-      parentId: shortcutsFolderId,
-      name: '$assistants',
-      dirId: assistantsFolderId,
-      avatar: typeAvatar('assistant'),
-      type: 'assistant',
-      action: 'openLast',
-    })
-    await createShortcutBase(tx, id, null, {
-      id: providersShortcutId,
-      parentId: shortcutsFolderId,
-      name: '$providers',
-      dirId: providersFolderId,
-      avatar: typeAvatar('provider'),
-      type: 'provider',
-      action: 'openLast',
-    })
-    await tx.mutate.workspace.insert({
-      id,
-      name,
-      ownerId: ctx.userId,
-      planId: DEFAULT_PLAN_ID,
-      storageUsed: 0,
-      quotaUsed: 0,
-      resetAt: addMonths(new Date(), 1).getTime(),
-      trashId,
-      perfs: {},
-      defaultLeftDirId: shortcutsFolderId,
-    })
-    const [memberId] = ids.slice(22, 23)
-    await tx.mutate.member.insert({
-      id: memberId,
-      workspaceId: id,
-      userId: ctx.userId,
-      role: 'owner',
-      leftDirId: shortcutsFolderId,
-    })
-
-    await createAssistant.fn({
-      tx,
-      ctx,
-      args: {
-        id: chatAssistantId,
-        parentId: assistantsFolderId,
-        name: '$defaultAssistant',
-      },
-    })
-    tx.mutate.entityAccess.insert({
-      entityId: chatAssistantId,
-      userId: ctx.userId,
-      rootId: id,
-      time: Date.now(),
-    })
-  },
-)
 const joinWorkspace = defineMutator(
   z.object({
     memberId: z.string(),
@@ -1148,7 +877,7 @@ const joinWorkspace = defineMutator(
     const invitation = await tx.run(
       zql.workspaceInvitation
         .where('token', invitationToken)
-        .related('workspace', q => q.related('members').related('plan'))
+        .related('workspace', q => q.related('members'))
         .one(),
     )
     assert(invitation?.workspace, 'Invitation or workspace not found')
@@ -1157,7 +886,6 @@ const joinWorkspace = defineMutator(
     assert(!existingMember, 'Already a workspace member')
     assert(Date.now() < expiresAt, 'Invitation expired')
     assert(remainingSeats > 0, 'No remaining seats')
-    assert(workspace.members.length < workspace.plan!.maxMembers, 'Workspace max members exceeded')
     await tx.mutate.workspaceInvitation.update({
       token: invitation.token,
       remainingSeats: remainingSeats - 1,
@@ -1389,8 +1117,6 @@ export const mutators = defineMutators({
   createSearch,
   createChat,
   createAssistant,
-  createProvider,
-  createModels,
   createPage,
   createPagePatch,
   updatePage,
@@ -1409,19 +1135,15 @@ export const mutators = defineMutators({
   updateEntity,
   createToolCall,
   updateToolCall,
-  updateProvider,
   updateAssistantMessage,
   updateInputingMessage,
   editMessageText,
-  updateModel,
   updateChat,
   updateSearch,
   updateShortcut,
   updateItem,
   updateAssistant,
-  deleteModel,
   deleteMessageEntity,
-  createWorkspace,
   joinWorkspace,
   createInvitation,
   deleteInvitation,

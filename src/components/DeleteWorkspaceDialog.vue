@@ -19,7 +19,6 @@
       <q-card-section pb-2>
         <workspace-item
           :workspace
-          :plan="workspace.plan"
           :members="workspace.members"
         />
       </q-card-section>

@@ -142,6 +142,419 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/capability-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Profiles */
+        get: operations["listCapabilityProfiles"];
+        put?: never;
+        /** Create Profile */
+        post: operations["createCapabilityProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/capability-profiles/{profile_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Profile */
+        delete: operations["deleteCapabilityProfile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/capability-profiles/{profile_id}/clone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clone Profile */
+        post: operations["cloneCapabilityProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/capability-profiles/{profile_id}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Profile Diff */
+        get: operations["diffCapabilityProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/capability-profiles/{profile_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable Profile */
+        post: operations["disableCapabilityProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/capability-profiles/{profile_id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Profile */
+        patch: operations["patchCapabilityProfileDraft"];
+        trace?: never;
+    };
+    "/api/v1/admin/capability-profiles/{profile_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish Profile */
+        post: operations["publishCapabilityProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/capability-profiles/{profile_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Profile */
+        post: operations["restoreCapabilityProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/capability-profiles/{profile_id}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate Profile */
+        post: operations["validateCapabilityProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/capability-profiles/{profile_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Profile Versions */
+        get: operations["listCapabilityProfileVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/governed-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Models */
+        get: operations["listGovernedModels"];
+        put?: never;
+        /** Create Model */
+        post: operations["createGovernedModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/governed-models/{model_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Model */
+        delete: operations["deleteGovernedModel"];
+        options?: never;
+        head?: never;
+        /** Update Model */
+        patch: operations["updateGovernedModel"];
+        trace?: never;
+    };
+    "/api/v1/admin/governed-models/{model_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable Model */
+        post: operations["disableGovernedModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/governed-models/{model_id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable Model */
+        post: operations["enableGovernedModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/governed-models/{model_id}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate Model */
+        post: operations["validateGovernedModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/model-gateways": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Gateways */
+        get: operations["listModelGateways"];
+        put?: never;
+        /** Create Gateway */
+        post: operations["createModelGateway"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/model-gateways/{gateway_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Gateway */
+        delete: operations["deleteModelGateway"];
+        options?: never;
+        head?: never;
+        /** Update Gateway */
+        patch: operations["updateModelGateway"];
+        trace?: never;
+    };
+    "/api/v1/admin/model-gateways/{gateway_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable Gateway */
+        post: operations["disableModelGateway"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/model-gateways/{gateway_id}/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discover Gateway */
+        post: operations["discoverModelGateway"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/model-gateways/{gateway_id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable Gateway */
+        post: operations["enableModelGateway"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/model-gateways/{gateway_id}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check Gateway Health */
+        post: operations["checkModelGatewayHealth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/model-gateways/{gateway_id}/health/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue Gateway Health */
+        post: operations["queueModelGatewayHealth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/model-gateways/{gateway_id}/rotate-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate Gateway Secret */
+        post: operations["rotateModelGatewaySecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/model-governance/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Impact */
+        get: operations["getModelGovernanceImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings": {
         parameters: {
             query?: never;
@@ -347,6 +760,41 @@ export interface paths {
         /** Archive Workspace */
         post: operations["adminArchiveWorkspace"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/workspaces/{workspace_id}/profile-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assignments */
+        get: operations["listWorkspaceCapabilityAssignments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/workspaces/{workspace_id}/profile-assignments/{workflow}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Assign Profile */
+        put: operations["assignWorkspaceCapabilityProfile"];
+        post?: never;
+        /** Remove Assignment */
+        delete: operations["removeWorkspaceCapabilityProfile"];
         options?: never;
         head?: never;
         patch?: never;
@@ -667,6 +1115,23 @@ export interface paths {
         };
         /** Acl Subjects */
         get: operations["searchWorkspaceAclSubjects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workspace Capabilities */
+        get: operations["listWorkspaceModelCapabilities"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1117,6 +1582,59 @@ export interface components {
             /** Nextcursor */
             nextCursor?: string | null;
         };
+        /** Assignment */
+        Assignment: {
+            /**
+             * Assignedat
+             * Format: date-time
+             */
+            assignedAt: string;
+            /**
+             * Availability
+             * @enum {string}
+             */
+            availability: "available" | "degraded" | "unavailable";
+            /** Availabilityreason */
+            availabilityReason?: string | null;
+            /**
+             * Profileid
+             * Format: uuid
+             */
+            profileId: string;
+            /** Profileversion */
+            profileVersion: number;
+            /** Version */
+            version: number;
+            /**
+             * Workflow
+             * @enum {string}
+             */
+            workflow: "grounded_ask" | "title_generation" | "summarization" | "embedding" | "reranking";
+            /** Workspaceid */
+            workspaceId: string;
+        };
+        /** AssignmentList */
+        AssignmentList: {
+            /** Items */
+            items: components["schemas"]["Assignment"][];
+        };
+        /** AssignmentRequest */
+        AssignmentRequest: {
+            /** Expectedversion */
+            expectedVersion?: number | null;
+            /**
+             * Profileid
+             * Format: uuid
+             */
+            profileId: string;
+            /** Profileversion */
+            profileVersion: number;
+            /**
+             * Workflow
+             * @enum {string}
+             */
+            workflow: "grounded_ask" | "title_generation" | "summarization" | "embedding" | "reranking";
+        };
         /** AuditEvent */
         AuditEvent: {
             /** Action */
@@ -1161,6 +1679,77 @@ export interface components {
             capabilities: string[];
             /** Version */
             version: string;
+        };
+        /** CapabilityProfile */
+        CapabilityProfile: {
+            /** Businessalias */
+            businessAlias: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Currentversion */
+            currentVersion: number;
+            /** Description */
+            description: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Lifecycle
+             * @enum {string}
+             */
+            lifecycle: "active" | "disabled" | "archived";
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /**
+             * Workflow
+             * @enum {string}
+             */
+            workflow: "grounded_ask" | "title_generation" | "summarization" | "embedding" | "reranking";
+        };
+        /** CapabilityProfileVersion */
+        CapabilityProfileVersion: {
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Configdigest */
+            configDigest: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Disabledat */
+            disabledAt?: string | null;
+            /** Draftversion */
+            draftVersion: number;
+            /**
+             * Profileid
+             * Format: uuid
+             */
+            profileId: string;
+            /** Publishedat */
+            publishedAt?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "draft" | "published" | "disabled";
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Version */
+            version: number;
         };
         /** CreateUserRequest */
         CreateUserRequest: {
@@ -1286,6 +1875,199 @@ export interface components {
             /** Orderkey */
             orderKey: number;
         };
+        /** GatewayCreateRequest */
+        GatewayCreateRequest: {
+            /** Allowedcapabilities */
+            allowedCapabilities: ("chat" | "embedding" | "rerank")[];
+            /**
+             * Allowedcidrs
+             * @default []
+             */
+            allowedCidrs: string[];
+            /**
+             * Allowedhosts
+             * @default []
+             */
+            allowedHosts: string[];
+            /** Baseurl */
+            baseUrl: string;
+            /**
+             * Connecttimeoutms
+             * @default 5000
+             */
+            connectTimeoutMs: number;
+            /** Customcaref */
+            customCaRef?: string | null;
+            /**
+             * Insecureprivate
+             * @default false
+             */
+            insecurePrivate: boolean;
+            /**
+             * Maxresponsebytes
+             * @default 8388608
+             */
+            maxResponseBytes: number;
+            /** Name */
+            name: string;
+            /**
+             * Pooltimeoutms
+             * @default 5000
+             */
+            poolTimeoutMs: number;
+            /**
+             * Readtimeoutms
+             * @default 30000
+             */
+            readTimeoutMs: number;
+            /** Secret */
+            secret?: string | null;
+            /**
+             * Writetimeoutms
+             * @default 30000
+             */
+            writeTimeoutMs: number;
+        };
+        /** GatewayHealthDto */
+        GatewayHealthDto: {
+            /**
+             * Capability
+             * @enum {string}
+             */
+            capability: "chat" | "embedding" | "rerank";
+            /** Checkedat */
+            checkedAt?: string | null;
+            /** Latencyms */
+            latencyMs?: number | null;
+            /** Reasoncode */
+            reasonCode?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "unknown" | "healthy" | "degraded" | "unavailable";
+        };
+        /** GatewayPatchRequest */
+        GatewayPatchRequest: {
+            /** Allowedcapabilities */
+            allowedCapabilities?: ("chat" | "embedding" | "rerank")[] | null;
+            /** Allowedcidrs */
+            allowedCidrs?: string[] | null;
+            /** Allowedhosts */
+            allowedHosts?: string[] | null;
+            /** Baseurl */
+            baseUrl?: string | null;
+            /** Connecttimeoutms */
+            connectTimeoutMs?: number | null;
+            /** Customcaref */
+            customCaRef?: string | null;
+            /** Expectedversion */
+            expectedVersion: number;
+            /** Insecureprivate */
+            insecurePrivate?: boolean | null;
+            /** Maxresponsebytes */
+            maxResponseBytes?: number | null;
+            /** Name */
+            name?: string | null;
+            /** Pooltimeoutms */
+            poolTimeoutMs?: number | null;
+            /** Readtimeoutms */
+            readTimeoutMs?: number | null;
+            /** Writetimeoutms */
+            writeTimeoutMs?: number | null;
+        };
+        /** GovernedModel */
+        GovernedModel: {
+            /** Businesslabel */
+            businessLabel: string;
+            /**
+             * Capability
+             * @enum {string}
+             */
+            capability: "chat" | "embedding" | "rerank";
+            /** Contextlimit */
+            contextLimit?: number | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Embeddingdimension */
+            embeddingDimension?: number | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Gatewayid */
+            gatewayId?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Maxdocuments */
+            maxDocuments?: number | null;
+            /** Outputlimit */
+            outputLimit?: number | null;
+            /** Remotename */
+            remoteName?: string | null;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Validated */
+            validated: boolean;
+            /** Validatedat */
+            validatedAt?: string | null;
+            /** Validationdigest */
+            validationDigest?: string | null;
+            /** Version */
+            version: number;
+        };
+        /** GovernedModelCreateRequest */
+        GovernedModelCreateRequest: {
+            /** Businesslabel */
+            businessLabel: string;
+            /**
+             * Capability
+             * @enum {string}
+             */
+            capability: "chat" | "embedding" | "rerank";
+            /** Contextlimit */
+            contextLimit?: number | null;
+            /** Embeddingdimension */
+            embeddingDimension?: number | null;
+            /**
+             * Gatewayid
+             * Format: uuid
+             */
+            gatewayId: string;
+            /** Maxdocuments */
+            maxDocuments?: number | null;
+            /** Outputlimit */
+            outputLimit?: number | null;
+            /** Remotename */
+            remoteName: string;
+        };
+        /** GovernedModelList */
+        GovernedModelList: {
+            /** Items */
+            items: components["schemas"]["GovernedModel"][];
+        };
+        /** GovernedModelPatchRequest */
+        GovernedModelPatchRequest: {
+            /** Businesslabel */
+            businessLabel?: string | null;
+            /** Contextlimit */
+            contextLimit?: number | null;
+            /** Embeddingdimension */
+            embeddingDimension?: number | null;
+            /** Expectedversion */
+            expectedVersion: number;
+            /** Maxdocuments */
+            maxDocuments?: number | null;
+            /** Outputlimit */
+            outputLimit?: number | null;
+        };
         /** GroupCreateRequest */
         GroupCreateRequest: {
             /** Name */
@@ -1300,6 +2082,11 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HealthRequest */
+        HealthRequest: {
+            /** Capability */
+            capability?: ("chat" | "embedding" | "rerank") | null;
         };
         /**
          * IdentityUser
@@ -1321,6 +2108,38 @@ export interface components {
              * @default []
              */
             platformRoles: string[];
+        };
+        /** ImpactItem */
+        ImpactItem: {
+            /** Affectedindexes */
+            affectedIndexes: number;
+            /** Affectedsourceids */
+            affectedSourceIds: string[];
+            /** Currentdimension */
+            currentDimension?: number | null;
+            /** Currentmodelid */
+            currentModelId?: string | null;
+            /**
+             * Workflow
+             * @enum {string}
+             */
+            workflow: "grounded_ask" | "title_generation" | "summarization" | "embedding" | "reranking";
+            /** Workspaceid */
+            workspaceId: string;
+        };
+        /** ImpactResponse */
+        ImpactResponse: {
+            /** Affected */
+            affected: components["schemas"]["ImpactItem"][];
+            /** Dimension */
+            dimension: number | null;
+            /**
+             * Modelid
+             * Format: uuid
+             */
+            modelId: string;
+            /** Requiresreindex */
+            requiresReindex: boolean;
         };
         /** Invitation */
         Invitation: {
@@ -1406,6 +2225,62 @@ export interface components {
              */
             updatedAt: string;
         };
+        /** ModelDiscoveryResponse */
+        ModelDiscoveryResponse: {
+            /** Names */
+            names: string[];
+        };
+        /** ModelGateway */
+        ModelGateway: {
+            /** Allowedcapabilities */
+            allowedCapabilities: ("chat" | "embedding" | "rerank")[];
+            /** Baseurl */
+            baseUrl?: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Customcaref */
+            customCaRef?: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Fingerprint */
+            fingerprint?: string | null;
+            /**
+             * Health
+             * @default []
+             */
+            health: components["schemas"]["GatewayHealthDto"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Insecureprivate */
+            insecurePrivate: boolean;
+            /** Name */
+            name: string;
+            /** Secretpresent */
+            secretPresent: boolean;
+            /**
+             * Tlsmode
+             * @enum {string}
+             */
+            tlsMode: "required" | "private_http";
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Version */
+            version: number;
+        };
+        /** ModelGatewayList */
+        ModelGatewayList: {
+            /** Items */
+            items: components["schemas"]["ModelGateway"][];
+        };
         /** PasswordChangeRequest */
         PasswordChangeRequest: {
             /** Currentpassword */
@@ -1475,12 +2350,73 @@ export interface components {
              */
             type: string;
         };
+        /** ProfileCloneRequest */
+        ProfileCloneRequest: {
+            /** Businessalias */
+            businessAlias?: string | null;
+            /** Description */
+            description?: string | null;
+        };
+        /** ProfileCreateRequest */
+        ProfileCreateRequest: {
+            /** Businessalias */
+            businessAlias: string;
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Description */
+            description: string;
+            /**
+             * Workflow
+             * @enum {string}
+             */
+            workflow: "grounded_ask" | "title_generation" | "summarization" | "embedding" | "reranking";
+        };
+        /** ProfileDiff */
+        ProfileDiff: {
+            /** Changedfields */
+            changedFields: string[];
+            /** Fromversion */
+            fromVersion: number;
+            /**
+             * Profileid
+             * Format: uuid
+             */
+            profileId: string;
+            /** Toversion */
+            toVersion: number;
+        };
+        /** ProfileLifecycleRequest */
+        ProfileLifecycleRequest: {
+            /** Expectedversion */
+            expectedVersion?: number | null;
+        };
+        /** ProfileList */
+        ProfileList: {
+            /** Items */
+            items: components["schemas"]["CapabilityProfile"][];
+        };
         /** ProfilePatch */
         ProfilePatch: {
             /** Displayname */
             displayName?: string | null;
             /** Imageurl */
             imageUrl?: string | null;
+        };
+        /** ProfilePatchRequest */
+        ProfilePatchRequest: {
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Expecteddraftversion */
+            expectedDraftVersion: number;
+        };
+        /** ProfileVersionList */
+        ProfileVersionList: {
+            /** Items */
+            items: components["schemas"]["CapabilityProfileVersion"][];
         };
         /** RecoveryVerifyRequest */
         RecoveryVerifyRequest: {
@@ -1500,6 +2436,13 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** SecretRotateRequest */
+        SecretRotateRequest: {
+            /** Expectedversion */
+            expectedVersion?: number | null;
+            /** Secret */
+            secret: string;
         };
         /** SessionInfo */
         SessionInfo: {
@@ -1596,10 +2539,36 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** VersionRequest */
+        VersionRequest: {
+            /** Expectedversion */
+            expectedVersion?: number | null;
+        };
         /** WorkspaceAdminRepairRequest */
         WorkspaceAdminRepairRequest: {
             /** Userid */
             userId: string;
+        };
+        /** WorkspaceCapability */
+        WorkspaceCapability: {
+            /** Alias */
+            alias: string;
+            /** Description */
+            description: string;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "available" | "degraded" | "unavailable";
+            /** Version */
+            version: number | null;
+            /**
+             * Workflow
+             * @enum {string}
+             */
+            workflow: "grounded_ask" | "title_generation" | "summarization" | "embedding" | "reranking";
         };
         /** WorkspaceCreateResponse */
         WorkspaceCreateResponse: {
@@ -1956,6 +2925,941 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditEventList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listCapabilityProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileList"];
+                };
+            };
+        };
+    };
+    createCapabilityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityProfile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteCapabilityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cloneCapabilityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileCloneRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityProfile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diffCapabilityProfile: {
+        parameters: {
+            query: {
+                from_version: number;
+                to_version: number;
+            };
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileDiff"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disableCapabilityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProfileLifecycleRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patchCapabilityProfileDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfilePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publishCapabilityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfilePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restoreCapabilityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProfileLifecycleRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validateCapabilityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listCapabilityProfileVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileVersionList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listGovernedModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GovernedModelList"];
+                };
+            };
+        };
+    };
+    createGovernedModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GovernedModelCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GovernedModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteGovernedModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateGovernedModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GovernedModelPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GovernedModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disableGovernedModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GovernedModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enableGovernedModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GovernedModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validateGovernedModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GovernedModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listModelGateways: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelGatewayList"];
+                };
+            };
+        };
+    };
+    createModelGateway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GatewayCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelGateway"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteModelGateway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gateway_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateModelGateway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gateway_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GatewayPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelGateway"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disableModelGateway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gateway_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelGateway"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discoverModelGateway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gateway_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelDiscoveryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enableModelGateway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gateway_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelGateway"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    checkModelGatewayHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gateway_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HealthRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queueModelGatewayHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gateway_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HealthRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotateModelGatewaySecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gateway_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretRotateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelGateway"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getModelGovernanceImpact: {
+        parameters: {
+            query: {
+                model_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2544,6 +4448,105 @@ export interface operations {
                         [key: string]: boolean;
                     };
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listWorkspaceCapabilityAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assignWorkspaceCapabilityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                workflow: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignment"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    removeWorkspaceCapabilityProfile: {
+        parameters: {
+            query?: {
+                expected_version?: number | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+                workflow: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3149,6 +5152,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AclSubject"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listWorkspaceModelCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceCapability"][];
                 };
             };
             /** @description Validation Error */

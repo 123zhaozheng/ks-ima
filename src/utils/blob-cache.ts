@@ -1,5 +1,5 @@
 import ky from 'ky'
-import { debounce, Notify } from 'quasar'
+import { debounce } from 'quasar'
 import { MAX_SINGLE_CACHE_SIZE, MAX_TOTAL_CACHE_SIZE } from './config'
 import { uploadBlob } from 'src/services/upload'
 import { t } from 'src/utils/i18n'
@@ -7,8 +7,6 @@ import { client } from './hc'
 import type { DBSchema } from 'idb'
 import { openDB } from 'idb'
 import { hashBlob } from './hash'
-import { useWorkspaceStore } from 'src/stores/workspace'
-import { formatBytes } from './functions'
 
 interface BlobMeta {
   hash: string
@@ -123,14 +121,6 @@ async function trimCache() {
 }
 
 export async function upload(id: string, blob: Blob, name: string, wait?: Promise<any>) {
-  const workspaceStore = useWorkspaceStore()
-  const limit = workspaceStore.workspace?.plan?.fileSizeLimit
-  if (limit && blob.size > limit) {
-    Notify.create({
-      message: t('Max file size for your current plan is {0}.', formatBytes(limit)),
-    })
-    throw new Error('File size exceeds limit')
-  }
   sessionBlobs.set(id, blob)
   const sha256 = await uploadBlob({
     id,

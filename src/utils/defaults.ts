@@ -1,4 +1,4 @@
-import type { Avatar, ModelInputTypes } from 'app/src-shared/utils/validators'
+import type { Avatar } from 'app/src-shared/utils/validators'
 import type { Row } from '@rocicorp/zero'
 import { t } from './i18n'
 import { typeAvatar } from 'app/src-shared/utils/functions'
@@ -38,11 +38,6 @@ export function entityName(entity: PartialEntity | null | undefined) {
   return ''
 }
 
-export function modelName(model: Row['model'] | null | undefined) {
-  if (!model) return ''
-  return model.label || model.name
-}
-
 export function userAvatar(user: Row['user'] | null | undefined): Avatar {
   if (!user) return unknownAvatar
   if (user.image) return { type: 'url', url: user.image, hue: stringHue(user.id) }
@@ -53,37 +48,4 @@ export function workspaceAvatar(workspace: Row['workspace'] | null | undefined):
   if (!workspace) return unknownAvatar
   if (workspace.avatar) return workspace.avatar
   return { type: 'icon', icon: 'sym_o_deployed_code' }
-}
-
-const prefixMap = {
-  openai: ['gpt', 'chatgpt', 'openai', 'o1', 'o3', 'o4'],
-  'claude-c': ['claude', 'c-', 'anthropic'],
-  'gemini-c': ['gemini', 'google'],
-  'gemma-c': ['gemma'],
-  'meta-c': ['llama', 'meta'],
-  'mistral-c': ['mistral'],
-  'qwen-c': ['qwen', 'qwq'],
-  'deepseek-c': ['deepseek'],
-  grok: ['grok', 'xai'],
-  'kimi-c': ['kimi', 'moonshot'],
-  'doubao-c': ['doubao', 'bytedance'],
-  zai: ['glm'],
-}
-
-export function modelAvatar(model: Row['model'] | null | undefined): Avatar {
-  if (!model) return unknownAvatar
-  if (model.avatar) return model.avatar
-  for (const [name, prefixes] of Object.entries(prefixMap)) {
-    if (prefixes.some(prefix => model.name.toLocaleLowerCase().startsWith(prefix))) return { type: 'svg', name }
-  }
-  return { type: 'icon', icon: 'sym_o_neurology' }
-}
-
-const defaultModelInputTypes: ModelInputTypes = {
-  user: ['image/*'],
-  assistant: [],
-  tool: [],
-}
-export function modelInputTypes(model: Row['model'] | null | undefined) {
-  return model?.inputTypes ?? defaultModelInputTypes
 }

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import secrets
@@ -38,10 +39,18 @@ def main() -> None:
             "bootstrap-admin",
             "migrate-legacy-identity",
             "migrate-legacy-authorization",
+            "rotate-model-secrets",
+            "migrate-legacy-model-governance",
         ),
     )
     parser.add_argument(
         "action", nargs="?", choices=("plan", "apply", "verify", "report"), default="report"
+    )
+    parser.add_argument(
+        "--mapping-file",
+        dest="mapping_file",
+        type=Path,
+        help="Explicit JSON source-to-target capability mapping for legacy model governance",
     )
     args = parser.parse_args()
     if args.command == "check-config":
@@ -62,6 +71,12 @@ def main() -> None:
         return
     if args.command == "migrate-legacy-authorization":
         _legacy_authorization_report(args.action)
+        return
+    if args.command == "rotate-model-secrets":
+        _rotate_model_secrets(args.action)
+        return
+    if args.command == "migrate-legacy-model-governance":
+        _legacy_model_governance_report(args.action, args.mapping_file)
         return
     asyncio.run(_run_worker())
 
@@ -115,6 +130,352 @@ def _check_worker() -> None:
         raise SystemExit("worker heartbeat is unavailable")
     if (datetime.now(UTC) - heartbeat).total_seconds() > settings.worker_lag_warning_seconds:
         raise SystemExit("worker heartbeat is stale")
+
+
+def _rotate_model_secrets(action: str) -> None:
+    """Plan/apply/verify key-ring rotation without printing credentials."""
+
+    settings = get_settings()
+    ring = __import__(
+        "ima.infrastructure.model_gateway.secrets", fromlist=["SecretKeyRing"]
+    ).SecretKeyRing(
+        settings.model_key_ring.get_secret_value(),
+        settings.model_current_key_version,
+        settings.model_fingerprint_key.get_secret_value(),
+    )
+    conninfo = (
+        settings.database_url.get_secret_value()
+        .replace("postgresql+asyncpg://", "postgresql://")
+        .replace("postgresql+psycopg://", "postgresql://")
+    )
+    with psycopg.connect(conninfo) as connection:
+        rows = connection.execute(
+            "SELECT id,key_version FROM ima.model_gateway_secrets ORDER BY id"
+        ).fetchall()
+        summary = {
+            "action": action,
+            "records": len(rows),
+            "currentVersion": settings.model_current_key_version,
+            "secretValues": False,
+        }
+        if action == "plan":
+            print(summary)
+            return
+        failures: list[dict[str, str]] = []
+        if action == "apply":
+            for secret_id, _key_version in rows:
+                try:
+                    with connection.transaction():
+                        row = connection.execute(
+                            "SELECT s.*,g.id gateway_id FROM ima.model_gateway_secrets s JOIN ima.model_gateways g ON g.secret_id=s.id WHERE s.id=%s FOR UPDATE",
+                            (secret_id,),
+                        ).fetchone()
+                        if not row:
+                            continue
+                        envelope = __import__(
+                            "ima.infrastructure.model_gateway.secrets", fromlist=["SecretEnvelope"]
+                        ).SecretEnvelope(
+                            key_version=row[1], nonce=row[2], ciphertext=row[3], fingerprint=row[4]
+                        )
+                        secret = ring.decrypt(
+                            envelope, gateway_id=str(row[8]), secret_id=str(row[0])
+                        )
+                        rotated = ring.encrypt(
+                            secret, gateway_id=str(row[8]), secret_id=str(row[0])
+                        )
+                        connection.execute(
+                            "UPDATE ima.model_gateway_secrets SET key_version=%s,nonce=%s,ciphertext=%s,fingerprint=%s,rotated_at=now() WHERE id=%s",
+                            (
+                                rotated.key_version,
+                                rotated.nonce,
+                                rotated.ciphertext,
+                                rotated.fingerprint,
+                                secret_id,
+                            ),
+                        )
+                except Exception as exc:
+                    failures.append({"id": str(secret_id), "reason": type(exc).__name__})
+        elif action == "verify":
+            for secret_id, _version in rows:
+                row = connection.execute(
+                    "SELECT s.*,g.id gateway_id FROM ima.model_gateway_secrets s JOIN ima.model_gateways g ON g.secret_id=s.id WHERE s.id=%s",
+                    (secret_id,),
+                ).fetchone()
+                if not row:
+                    failures.append({"id": str(secret_id), "reason": "missing_gateway"})
+                    continue
+                try:
+                    envelope = __import__(
+                        "ima.infrastructure.model_gateway.secrets", fromlist=["SecretEnvelope"]
+                    ).SecretEnvelope(
+                        key_version=row[1], nonce=row[2], ciphertext=row[3], fingerprint=row[4]
+                    )
+                    ring.decrypt(envelope, gateway_id=str(row[8]), secret_id=str(row[0]))
+                except Exception as exc:
+                    failures.append({"id": str(secret_id), "reason": type(exc).__name__})
+        summary["failures"] = failures
+        summary["verified"] = not failures
+        print(summary)
+        if failures and action == "verify":
+            raise SystemExit(1)
+
+
+def _legacy_model_governance_report(action: str, mapping_file: Path | None = None) -> None:
+    """Inventory and conservatively import legacy providers/models.
+
+    Legacy settings are treated as migration input only.  Ambiguous providers,
+    malformed URLs, and all profile/RAG translations remain review checkpoints;
+    no plaintext value is included in reports or audit metadata.
+    """
+
+    settings = get_settings()
+    conninfo = (
+        settings.database_url.get_secret_value()
+        .replace("postgresql+asyncpg://", "postgresql://")
+        .replace("postgresql+psycopg://", "postgresql://")
+    )
+    with psycopg.connect(conninfo) as connection:
+        tables = connection.execute(
+            "SELECT to_regclass('public.provider'),to_regclass('public.model'),to_regclass('public.globalSettings'),to_regclass('public.entity'),to_regclass('public.chunk')"
+        ).fetchone()
+        table_flags: tuple[Any, ...] = tuple(tables) if tables else ()
+        source_available = bool(table_flags and table_flags[0] and table_flags[1])
+        providers = (
+            connection.execute(
+                'SELECT id,"rootId",type,settings FROM "provider" ORDER BY id'
+            ).fetchall()
+            if source_available
+            else []
+        )
+        models = (
+            connection.execute(
+                'SELECT id,"rootId","entityId",name,label,settings FROM "model" ORDER BY id'
+            ).fetchall()
+            if source_available
+            else []
+        )
+        global_row = (
+            connection.execute('SELECT count(*) FROM "globalSettings"').fetchone()
+            if table_flags and table_flags[2]
+            else None
+        )
+        tuning_row = (
+            connection.execute(
+                "SELECT count(*) FROM \"entity\" WHERE \"conf\" ?| ARRAY['chatModelId','embeddingModelId','rerankModelId','chunkSize','topK']"
+            ).fetchone()
+            if table_flags and table_flags[3]
+            else None
+        )
+        chunk_row = (
+            connection.execute(
+                'SELECT count(*) FROM "chunk" WHERE embedding IS NOT NULL'
+            ).fetchone()
+            if table_flags and table_flags[4]
+            else None
+        )
+        global_settings_count = int(global_row[0]) if global_row else 0
+        workspace_tuning_count = int(tuning_row[0]) if tuning_row else 0
+        indexed_chunk_count = int(chunk_row[0]) if chunk_row else 0
+        mapping: dict[str, Any] = {}
+        mapping_file = mapping_file or (
+            Path(os.environ["IMA_MODEL_GOVERNANCE_MAPPING"])
+            if os.environ.get("IMA_MODEL_GOVERNANCE_MAPPING")
+            else None
+        )
+        if mapping_file:
+            try:
+                loaded = json.loads(Path(mapping_file).read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    mapping = loaded
+            except (OSError, json.JSONDecodeError):
+                mapping = {}
+        summary: dict[str, Any] = {
+            "action": action,
+            "sourceAvailable": source_available,
+            "providers": len(providers),
+            "models": len(models),
+            "globalSettings": global_settings_count,
+            "workspaceTuningRows": workspace_tuning_count,
+            "indexedChunks": indexed_chunk_count,
+            "mappingFile": bool(mapping_file),
+            "secretValues": False,
+            "review": 0,
+        }
+        if action == "plan":
+            print(summary)
+            return
+        key_ring = __import__(
+            "ima.infrastructure.model_gateway.secrets", fromlist=["SecretKeyRing"]
+        ).SecretKeyRing(
+            settings.model_key_ring.get_secret_value(),
+            settings.model_current_key_version,
+            settings.model_fingerprint_key.get_secret_value(),
+        )
+        if action == "apply" and source_available:
+            for provider_id, _root_id, _provider_type, raw_settings in providers:
+                source_id = str(provider_id)
+                fingerprint = hashlib.sha256(
+                    json.dumps(raw_settings or {}, sort_keys=True, default=str).encode()
+                ).hexdigest()
+                checkpoint = connection.execute(
+                    "SELECT status,source_fingerprint FROM ima.legacy_model_governance_migration WHERE source_kind='provider' AND source_id=%s",
+                    (source_id,),
+                ).fetchone()
+                if checkpoint and checkpoint[0] == "complete" and checkpoint[1] == fingerprint:
+                    continue
+                with connection.transaction():
+                    connection.execute(
+                        "INSERT INTO ima.legacy_model_governance_migration(source_kind,source_id,source_fingerprint,status,attempts,updated_at) VALUES ('provider',%s,%s,'running',1,now()) ON CONFLICT(source_kind,source_id) DO UPDATE SET attempts=ima.legacy_model_governance_migration.attempts+1,updated_at=now()",
+                        (source_id, fingerprint),
+                    )
+                    settings_json = raw_settings if isinstance(raw_settings, dict) else {}
+                    base_url = (
+                        settings_json.get("baseURL")
+                        or settings_json.get("baseUrl")
+                        or settings_json.get("url")
+                    )
+                    secret = settings_json.get("apiKey")
+                    # A target gateway can only be imported when the source is
+                    # structurally explicit; it always remains disabled.
+                    if (
+                        not isinstance(base_url, str)
+                        or not base_url
+                        or not isinstance(secret, str)
+                        or not secret
+                    ):
+                        connection.execute(
+                            "UPDATE ima.legacy_model_governance_migration SET status='review',last_error='ambiguous_provider',updated_at=now() WHERE source_kind='provider' AND source_id=%s",
+                            (source_id,),
+                        )
+                        summary["review"] += 1
+                        continue
+                    try:
+                        from ima.domain.model_governance import ModelCapability, ModelGatewayInput
+
+                        checked = ModelGatewayInput(
+                            name=f"legacy-{source_id[:80]}",
+                            baseUrl=base_url,
+                            allowedCapabilities=frozenset(ModelCapability),
+                            insecurePrivate=base_url.startswith("http://"),
+                            allowedHosts=(),
+                        )
+                        gateway_id = uuid4()
+                        secret_id = uuid4()
+                        envelope = key_ring.encrypt(
+                            secret, gateway_id=str(gateway_id), secret_id=str(secret_id)
+                        )
+                        connection.execute(
+                            "INSERT INTO ima.model_gateway_secrets(id,key_version,nonce,ciphertext,fingerprint,created_at) VALUES (%s,%s,%s,%s,%s,now())",
+                            (
+                                secret_id,
+                                envelope.key_version,
+                                envelope.nonce,
+                                envelope.ciphertext,
+                                envelope.fingerprint,
+                            ),
+                        )
+                        scheme = (
+                            "private_http" if checked.base_url.startswith("http://") else "required"
+                        )
+                        connection.execute(
+                            "INSERT INTO ima.model_gateways(id,name,normalized_base_url,enabled,allowed_capabilities,tls_mode,insecure_private,connect_timeout_ms,read_timeout_ms,write_timeout_ms,pool_timeout_ms,max_response_bytes,allowed_hosts,allowed_cidrs,secret_id,created_at,updated_at) VALUES (%s,%s,%s,false,%s,%s,%s,5000,30000,30000,5000,8388608,%s,%s,%s,now(),now())",
+                            (
+                                gateway_id,
+                                checked.name,
+                                checked.base_url.rstrip("/"),
+                                list(item.value for item in checked.allowed_capabilities),
+                                scheme,
+                                checked.insecure_private,
+                                list(checked.allowed_hosts),
+                                list(checked.allowed_cidrs),
+                                secret_id,
+                            ),
+                        )
+                        connection.execute(
+                            "UPDATE ima.legacy_model_governance_migration SET status='complete',mapped_target_id=%s,processed_at=now(),updated_at=now() WHERE source_kind='provider' AND source_id=%s",
+                            (gateway_id, source_id),
+                        )
+                    except Exception as exc:
+                        connection.execute(
+                            "UPDATE ima.legacy_model_governance_migration SET status='review',last_error=%s,updated_at=now() WHERE source_kind='provider' AND source_id=%s",
+                            (type(exc).__name__, source_id),
+                        )
+                        summary["review"] += 1
+            for model_id, _root_id, provider_id, remote_name, label, raw_model_settings in models:
+                source_id = str(model_id)
+                fingerprint = hashlib.sha256(
+                    json.dumps(raw_model_settings or {}, sort_keys=True, default=str).encode()
+                ).hexdigest()
+                checkpoint = connection.execute(
+                    "SELECT status,source_fingerprint FROM ima.legacy_model_governance_migration WHERE source_kind='model' AND source_id=%s",
+                    (source_id,),
+                ).fetchone()
+                if checkpoint and checkpoint[0] == "complete" and checkpoint[1] == fingerprint:
+                    continue
+                with connection.transaction():
+                    connection.execute(
+                        "INSERT INTO ima.legacy_model_governance_migration(source_kind,source_id,source_fingerprint,status,attempts,updated_at) VALUES ('model',%s,%s,'running',1,now()) ON CONFLICT(source_kind,source_id) DO UPDATE SET attempts=ima.legacy_model_governance_migration.attempts+1,updated_at=now()",
+                        (source_id, fingerprint),
+                    )
+                    explicit = mapping.get(source_id)
+                    capability = explicit.get("capability") if isinstance(explicit, dict) else None
+                    if capability not in {"chat", "embedding", "rerank"}:
+                        connection.execute(
+                            "UPDATE ima.legacy_model_governance_migration SET status='review',last_error='ambiguous_capability',updated_at=now() WHERE source_kind='model' AND source_id=%s",
+                            (source_id,),
+                        )
+                        summary["review"] += 1
+                        continue
+                    gateway = connection.execute(
+                        "SELECT mapped_target_id FROM ima.legacy_model_governance_migration WHERE source_kind='provider' AND source_id=%s AND status='complete'",
+                        (str(provider_id),),
+                    ).fetchone()
+                    dimension = explicit.get("dimension") if isinstance(explicit, dict) else None
+                    if capability == "embedding" and (
+                        not isinstance(dimension, int) or dimension < 1
+                    ):
+                        connection.execute(
+                            "UPDATE ima.legacy_model_governance_migration SET status='review',last_error='embedding_dimension_required',updated_at=now() WHERE source_kind='model' AND source_id=%s",
+                            (source_id,),
+                        )
+                        summary["review"] += 1
+                        continue
+                    if not gateway or not gateway[0]:
+                        connection.execute(
+                            "UPDATE ima.legacy_model_governance_migration SET status='review',last_error='missing_provider_mapping',updated_at=now() WHERE source_kind='model' AND source_id=%s",
+                            (source_id,),
+                        )
+                        summary["review"] += 1
+                        continue
+                    try:
+                        target_id = uuid4()
+                        connection.execute(
+                            "INSERT INTO ima.governed_models(id,gateway_id,remote_name,capability,business_label,enabled,validated,embedding_dimension,created_at,updated_at) VALUES (%s,%s,%s,%s,%s,false,false,%s,now(),now())",
+                            (
+                                target_id,
+                                gateway[0],
+                                str(remote_name),
+                                capability,
+                                str(label or remote_name),
+                                dimension if capability == "embedding" else None,
+                            ),
+                        )
+                        connection.execute(
+                            "UPDATE ima.legacy_model_governance_migration SET status='complete',mapped_target_id=%s,processed_at=now(),updated_at=now() WHERE source_kind='model' AND source_id=%s",
+                            (target_id, source_id),
+                        )
+                    except Exception as exc:
+                        connection.execute(
+                            "UPDATE ima.legacy_model_governance_migration SET status='review',last_error=%s,updated_at=now() WHERE source_kind='model' AND source_id=%s",
+                            (type(exc).__name__, source_id),
+                        )
+                        summary["review"] += 1
+        if action in {"verify", "report"}:
+            statuses = connection.execute(
+                "SELECT status,count(*) FROM ima.legacy_model_governance_migration GROUP BY status ORDER BY status"
+            ).fetchall()
+            summary["statuses"] = {str(status): int(count) for status, count in statuses}
+        print(summary)
 
 
 def _bootstrap_admin() -> None:

@@ -24,16 +24,12 @@
         to="/workspace"
       />
       <q-route-tab
-        :label="t('Models')"
+        :label="t('Capabilities')"
         to="/workspace/models"
       />
       <q-route-tab
         :label="t('Connectors')"
         to="/workspace/connectors"
-      />
-      <q-route-tab
-        :label="t('Logs')"
-        to="/workspace/usage"
       />
     </q-tabs>
   </q-header>

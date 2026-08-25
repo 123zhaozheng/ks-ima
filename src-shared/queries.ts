@@ -2,10 +2,9 @@ import { z } from 'zod'
 import type { DefaultSchema, Query, QueryResultType, Row } from '@rocicorp/zero'
 import { defineQueries, defineQuery } from '@rocicorp/zero'
 import { zql } from './schema.gen'
-import { assertAdmin, assertAuthorized, withMember, withReadable, withRole } from './table-permission'
+import { assertAuthorized, withMember, withReadable, withRole } from './table-permission'
 import type { EntityListOptions } from './utils/validators'
 import { entityListOptionsSchema, entityStartSchema, entityTypeSchema } from './utils/validators'
-import { PUBLIC_ROOT_ID } from './utils/config'
 
 type EntityQuery = Query<'entity', DefaultSchema, any>
 function withParent(q: EntityQuery, depth: number, userId?: string) {
@@ -170,51 +169,6 @@ export const queries = defineQueries({
       )
     },
   ),
-  fullModel: defineQuery(
-    z.string(),
-    ({ ctx, args: id }) => {
-      return withReadable(
-        zql.model
-          .where('id', id)
-          .related('provider'),
-        ctx.userId,
-      ).one()
-    },
-  ),
-  fullProvider: defineQuery(
-    z.string(),
-    ({ ctx, args: id }) => {
-      return withReadable(
-        zql.provider
-          .where('id', id)
-          .related('entity')
-          .related('models'),
-        ctx.userId,
-      ).one()
-    },
-  ),
-  recentProviders: defineQuery(
-    z.string(),
-    ({ ctx, args: workspaceId }) => {
-      return withReadable(
-        zql.provider
-          .where('rootId', workspaceId)
-          .related('entity')
-          .related('models')
-          .orderBy('id', 'desc'),
-        ctx.userId,
-      ).limit(10)
-    },
-  ),
-  models: defineQuery(
-    z.string(),
-    ({ ctx, args: workspaceId }) => {
-      return withReadable(
-        zql.model.where('rootId', workspaceId).orderBy('sortPriority', 'desc'),
-        ctx.userId,
-      )
-    },
-  ),
   fullPage: defineQuery(
     z.string(),
     ({ ctx, args: id }) => {
@@ -288,7 +242,6 @@ export const queries = defineQueries({
         .where('id', workspaceId)
         .related('member', q => q.where('userId', userId).related('user'))
         .related('members', q => q.related('user'))
-        .related('plan')
         .related('invitations', q => q.where('inviterId', userId).orderBy('expiresAt', 'desc'))
         .one()
     },
@@ -341,41 +294,6 @@ export const queries = defineQueries({
       return q.limit(limit)
     },
   ),
-  plans: defineQuery(z.undefined(), () => zql.plan.related('prices', q => q.where('enabled', true))),
-  publicModels: defineQuery(z.undefined(), () => zql.model.where('entityId', PUBLIC_ROOT_ID).orderBy('sortPriority', 'desc')),
-  adminWorkspaces: defineQuery(
-    z.object({
-      ownerId: z.string().nullish(),
-      planId: z.string().nullish(),
-      limit: z.number().default(40),
-    }),
-    ({ ctx, args: { ownerId, planId, limit } }) => {
-      assertAdmin(ctx)
-      let q = zql.workspace.related('plan')
-      if (ownerId) q = q.where('ownerId', ownerId)
-      if (planId) q = q.where('planId', planId)
-      return q.limit(limit)
-    },
-  ),
-  workspaceUsages: defineQuery(
-    z.object({
-      workspaceId: z.string(),
-      limit: z.number().default(40),
-      from: z.string().nullish(),
-      to: z.string().nullish(),
-    }),
-    ({ ctx: { userId }, args: { workspaceId, limit, from, to } }) => {
-      assertAuthorized(userId)
-      let q = zql.usage
-        .where('workspaceId', workspaceId)
-        .orderBy('id', 'desc')
-        .related('user')
-        .limit(limit)
-      if (from) q = q.where('id', '>=', from)
-      if (to) q = q.where('id', '<=', to)
-      return withMember(q, userId)
-    },
-  ),
   entityAccesses: defineQuery(
     z.string(),
     ({ ctx: { userId }, args: workspaceId }) => {
@@ -397,8 +315,6 @@ export const queries = defineQueries({
 
 export type SearchWithRecords = NonNullable<QueryResultType<typeof queries.searchWithRecords>>
 export type FullChat = NonNullable<QueryResultType<typeof queries.fullChat>>
-export type FullModel = NonNullable<QueryResultType<typeof queries.fullModel>>
-export type FullProvider = NonNullable<QueryResultType<typeof queries.fullProvider>>
 export type FullMessage = ReturnType<typeof fullMessage> extends Query<'message', DefaultSchema, infer T> ? T : never
 export type ToolCall = FullMessage['toolCalls'][number]
 export type FullAssistant = NonNullable<QueryResultType<typeof queries.fullAssistant>>
@@ -410,5 +326,3 @@ export type EntityWithItem = Row['entity'] & { item?: Row['item'] | null }
 
 export type FullWorkspace = NonNullable<QueryResultType<typeof queries.fullWorkspace>>
 export type FullMember = FullWorkspace['members'][number]
-
-export type FullUsage = NonNullable<QueryResultType<typeof queries.workspaceUsages>>[number]

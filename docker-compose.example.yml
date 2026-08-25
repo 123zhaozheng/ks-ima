@@ -55,6 +55,13 @@ services:
       IMA_DIAGNOSTIC_QUEUE: ${IMA_DIAGNOSTIC_QUEUE:-diagnostic}
       IMA_WORKER_NAME: ${IMA_WORKER_NAME:-diagnostic-worker}
       IMA_BRIDGE_TOKEN: ${IMA_BRIDGE_TOKEN:?set a private bridge token}
+      IMA_MODEL_KEY_RING: ${IMA_MODEL_KEY_RING:?set the versioned model key ring}
+      IMA_MODEL_CURRENT_KEY_VERSION: ${IMA_MODEL_CURRENT_KEY_VERSION:-v1}
+      IMA_MODEL_FINGERPRINT_KEY: ${IMA_MODEL_FINGERPRINT_KEY:?set the model fingerprint key}
+      IMA_MODEL_CUSTOM_CA_DIR: ${IMA_MODEL_CUSTOM_CA_DIR:-/run/secrets/model-ca}
+      IMA_MODEL_ALLOWED_HOSTS: ${IMA_MODEL_ALLOWED_HOSTS:-}
+      IMA_MODEL_ALLOWED_CIDRS: ${IMA_MODEL_ALLOWED_CIDRS:-}
+      IMA_MODEL_ALLOW_INSECURE_PRIVATE: ${IMA_MODEL_ALLOW_INSECURE_PRIVATE:-false}
     depends_on:
       ima-migrate:
         condition: service_completed_successfully

@@ -7,10 +7,6 @@
     v-else-if="type === 'item'"
     :id
   />
-  <provider-view-wrapper
-    v-else-if="type === 'provider'"
-    :id
-  />
   <dir-view
     v-else-if="type === 'folder'"
     :id
@@ -23,7 +19,6 @@ import { provide, toRef } from 'vue'
 import ChatViewWrapper from './ChatViewWrapper.vue'
 import DirView from './DirView.vue'
 import ItemViewWrapper from './ItemViewWrapper.vue'
-import ProviderViewWrapper from './ProviderViewWrapper.vue'
 
 const props = defineProps<{
   id: string

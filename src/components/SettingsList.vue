@@ -71,7 +71,7 @@
     <q-item text-on-sur-var>
       <q-item-section>
         <q-item-label caption>
-          {{ t('Gateway, embedding, and retrieval are under Workspace → Models.') }}
+          {{ t('Model capabilities are centrally managed by a platform administrator.') }}
         </q-item-label>
       </q-item-section>
     </q-item>

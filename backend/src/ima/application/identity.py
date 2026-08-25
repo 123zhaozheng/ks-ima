@@ -223,6 +223,10 @@ class IdentityService:
             return "security_auditor" in roles or "platform_admin" in roles
         if capability == "workspaces_read":
             return "security_auditor" in roles or "platform_admin" in roles
+        if capability == "model_governance_read":
+            return bool({"super_admin", "platform_admin", "security_auditor"}.intersection(roles))
+        if capability == "model_governance_manage":
+            return bool({"super_admin", "platform_admin"}.intersection(roles))
         if capability in {"users_manage", "workspaces_manage", "settings_manage"}:
             return "platform_admin" in roles
         return False

@@ -54,6 +54,21 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = Field(default=None, repr=False)
     smtp_from: str | None = None
     allow_registration: bool = False
+    # Central model-governance controls.  The key ring is deliberately a
+    # SecretStr so settings repr/logging can never expose its contents.
+    model_key_ring: SecretStr = SecretStr('{"v1":"development-model-key-change-me-32bytes!"}')
+    model_current_key_version: str = "v1"
+    model_fingerprint_key: SecretStr = SecretStr("development-model-fingerprint-change-me-32bytes!")
+    model_custom_ca_dir: str | None = None
+    model_allowed_hosts: Annotated[tuple[str, ...], NoDecode] = ()
+    model_allowed_cidrs: Annotated[tuple[str, ...], NoDecode] = ()
+    model_allow_insecure_private: bool = False
+    model_max_response_bytes: int = 8 * 1024 * 1024
+    model_connect_timeout_seconds: float = 5.0
+    model_read_timeout_seconds: float = 30.0
+    model_write_timeout_seconds: float = 30.0
+    model_pool_timeout_seconds: float = 5.0
+    model_health_min_interval_seconds: int = 30
 
     @field_validator("public_origin")
     @classmethod
@@ -77,6 +92,49 @@ class Settings(BaseSettings):
         for network in result:
             ip_network(network, strict=False)
         return result
+
+    @field_validator("model_allowed_hosts", "model_allowed_cidrs", mode="before")
+    @classmethod
+    def parse_model_network_allowlist(cls, value: object) -> tuple[str, ...]:
+        if value in (None, ""):
+            return ()
+        values = value.split(",") if isinstance(value, str) else value
+        if not isinstance(values, list | tuple):
+            raise ValueError("model network allowlists must be comma-separated lists")
+        return tuple(str(item).strip().lower() for item in values if str(item).strip())
+
+    @field_validator("model_current_key_version")
+    @classmethod
+    def validate_model_key_version(cls, value: str) -> str:
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,32}", value):
+            raise ValueError("model_current_key_version is invalid")
+        return value
+
+    @field_validator("model_max_response_bytes")
+    @classmethod
+    def validate_model_response_limit(cls, value: int) -> int:
+        if value < 1024 or value > 128 * 1024 * 1024:
+            raise ValueError("model_max_response_bytes must be between 1024 and 134217728")
+        return value
+
+    @field_validator(
+        "model_connect_timeout_seconds",
+        "model_read_timeout_seconds",
+        "model_write_timeout_seconds",
+        "model_pool_timeout_seconds",
+    )
+    @classmethod
+    def validate_model_timeout(cls, value: float) -> float:
+        if value <= 0 or value > 300:
+            raise ValueError("model timeouts must be between 0 and 300 seconds")
+        return value
+
+    @field_validator("model_health_min_interval_seconds")
+    @classmethod
+    def validate_model_health_interval(cls, value: int) -> int:
+        if value < 1 or value > 86400:
+            raise ValueError("model health interval is invalid")
+        return value
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -135,6 +193,10 @@ class Settings(BaseSettings):
             }.items():
                 if "change-me" in value.get_secret_value() or len(value.get_secret_value()) < 32:
                     raise ValueError(f"production requires a high-entropy {key}")
+            if "change-me" in self.model_key_ring.get_secret_value():
+                raise ValueError("production requires a high-entropy model key ring")
+            if "change-me" in self.model_fingerprint_key.get_secret_value():
+                raise ValueError("production requires a high-entropy model fingerprint key")
         return self
 
     @property

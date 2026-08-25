@@ -4,8 +4,6 @@
       v-if="workspace"
       to="/workspace"
       :workspace
-      :members="workspace.members"
-      :plan="workspace.plan"
     />
     <q-separator />
     <div
@@ -29,11 +27,6 @@
       >
         <q-menu>
           <q-list>
-            <menu-item
-              :label="t('Create workspace')"
-              icon="sym_o_add"
-              @click="createWorkspace"
-            />
             <menu-item
               :label="t('Join workspace')"
               icon="sym_o_join"
@@ -76,9 +69,6 @@ import { workspaceAvatar } from 'src/utils/defaults'
 import { useWorkspaceStore } from 'src/stores/workspace'
 import { t } from 'src/utils/i18n'
 import { useQuasar } from 'quasar'
-import { mutate } from 'src/utils/zero-session'
-import { mutators } from 'app/src-shared/mutators'
-import { genId, genIds } from 'app/src-shared/utils/id'
 import MenuItem from './MenuItem.vue'
 import { toRef } from 'vue'
 import { useRouter } from 'vue-router'
@@ -87,28 +77,10 @@ import { identityClient } from 'src/utils/identity-client'
 
 const workspaceStore = useWorkspaceStore()
 const workspace = toRef(workspaceStore, 'workspace')
+const $q = useQuasar()
 
 const { data: workspaces } = useQuery(queries.workspaces())
 
-const $q = useQuasar()
-function createWorkspace() {
-  $q.dialog({
-    title: t('Create Workspace'),
-    prompt: {
-      model: '',
-      label: t('Name'),
-    },
-    cancel: true,
-    ok: t('Create'),
-  }).onOk(async name => {
-    const id = genId()
-    await mutate(mutators.createWorkspace({
-      ids: [id, ...genIds(22)],
-      name,
-    })).client
-    workspaceStore.switchWorkspace(id)
-  })
-}
 const router = useRouter()
 function joinWorkspace() {
   $q.dialog({

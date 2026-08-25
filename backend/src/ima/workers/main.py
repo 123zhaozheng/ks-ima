@@ -13,6 +13,7 @@ from ima.infrastructure.db.engine import create_engine
 from ima.infrastructure.observability.logging import configure_logging
 from ima.infrastructure.tasks.app import create_task_app
 from ima.infrastructure.tasks.diagnostic import register_tasks
+from ima.infrastructure.tasks.model_health import register_model_health_task
 
 
 async def heartbeat(engine: object, interval: int, worker_name: str) -> None:
@@ -34,6 +35,7 @@ async def run() -> None:
     configure_logging(settings.log_level)
     task_app = create_task_app(settings)
     register_tasks(task_app, queue_name=settings.diagnostic_queue)
+    register_model_health_task(task_app, settings)
     engine = create_engine(settings)
     async with task_app.open_async():
         heartbeat_task = asyncio.create_task(

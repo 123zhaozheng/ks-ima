@@ -40,6 +40,24 @@ type Invitation = components['schemas']['Invitation']
 type UserSearchResult = components['schemas']['UserSearchResult']
 type AclSubject = components['schemas']['AclSubject']
 type PermissionPreviewRequest = components['schemas']['PermissionPreviewRequest']
+type ModelGateway = components['schemas']['ModelGateway']
+type ModelGatewayList = components['schemas']['ModelGatewayList']
+type GatewayCreateRequest = components['schemas']['GatewayCreateRequest']
+type GatewayPatchRequest = components['schemas']['GatewayPatchRequest']
+type SecretRotateRequest = components['schemas']['SecretRotateRequest']
+type GovernedModel = components['schemas']['GovernedModel']
+type GovernedModelList = components['schemas']['GovernedModelList']
+type GovernedModelCreateRequest = components['schemas']['GovernedModelCreateRequest']
+type GovernedModelPatchRequest = components['schemas']['GovernedModelPatchRequest']
+type CapabilityProfile = components['schemas']['CapabilityProfile']
+type ProfileList = components['schemas']['ProfileList']
+type ProfileVersionList = components['schemas']['ProfileVersionList']
+type ProfileCreateRequest = components['schemas']['ProfileCreateRequest']
+type ProfilePatchRequest = components['schemas']['ProfilePatchRequest']
+type WorkspaceCapability = components['schemas']['WorkspaceCapability']
+type AssignmentList = components['schemas']['AssignmentList']
+type AssignmentRequest = components['schemas']['AssignmentRequest']
+type ImpactResponse = components['schemas']['ImpactResponse']
 type Result<T> = { data?: T, error?: { code?: string, message: string } }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<Result<T>> {
@@ -146,4 +164,35 @@ export const identityClient = {
   acceptWorkspaceInvitation: (token: string) => request(`/workspace-invitations/${encodeURIComponent(token)}/accept`, { method: 'POST', body: '{}' }),
   previewWorkspacePermissions: (workspaceId: string, input: PermissionPreviewRequest) => request<Folder[]>(`/workspaces/${encodeURIComponent(workspaceId)}/permission-preview`, { method: 'POST', body: JSON.stringify(input) }),
   repairWorkspaceAdmin: (workspaceId: string, userId: string) => request(`/admin/workspaces/${encodeURIComponent(workspaceId)}/workspace-admin-repair`, { method: 'POST', body: JSON.stringify({ userId }) }),
+  listModelGateways: () => request<ModelGatewayList>('/admin/model-gateways'),
+  createModelGateway: (input: GatewayCreateRequest) => request<ModelGateway>('/admin/model-gateways', { method: 'POST', body: JSON.stringify(input) }),
+  updateModelGateway: (id: string, input: GatewayPatchRequest) => request<ModelGateway>(`/admin/model-gateways/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  deleteModelGateway: (id: string) => request(`/admin/model-gateways/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  rotateModelGatewaySecret: (id: string, input: SecretRotateRequest) => request<ModelGateway>(`/admin/model-gateways/${encodeURIComponent(id)}/rotate-secret`, { method: 'POST', body: JSON.stringify(input) }),
+  enableModelGateway: (id: string, input: components['schemas']['VersionRequest'] = {}) => request<ModelGateway>(`/admin/model-gateways/${encodeURIComponent(id)}/enable`, { method: 'POST', body: JSON.stringify(input) }),
+  disableModelGateway: (id: string, input: components['schemas']['VersionRequest'] = {}) => request<ModelGateway>(`/admin/model-gateways/${encodeURIComponent(id)}/disable`, { method: 'POST', body: JSON.stringify(input) }),
+  discoverModelGateway: (id: string) => request<{ names: string[] }>(`/admin/model-gateways/${encodeURIComponent(id)}/discover`, { method: 'POST', body: '{}' }),
+  checkModelGatewayHealth: (id: string, capability?: components['schemas']['HealthRequest']['capability']) => request<Record<string, unknown>[]>(`/admin/model-gateways/${encodeURIComponent(id)}/health`, { method: 'POST', body: JSON.stringify({ capability }) }),
+  listGovernedModels: () => request<GovernedModelList>('/admin/governed-models'),
+  createGovernedModel: (input: GovernedModelCreateRequest) => request<GovernedModel>('/admin/governed-models', { method: 'POST', body: JSON.stringify(input) }),
+  updateGovernedModel: (id: string, input: GovernedModelPatchRequest) => request<GovernedModel>(`/admin/governed-models/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  validateGovernedModel: (id: string, input: components['schemas']['VersionRequest'] = {}) => request<GovernedModel>(`/admin/governed-models/${encodeURIComponent(id)}/validate`, { method: 'POST', body: JSON.stringify(input) }),
+  enableGovernedModel: (id: string, input: components['schemas']['VersionRequest'] = {}) => request<GovernedModel>(`/admin/governed-models/${encodeURIComponent(id)}/enable`, { method: 'POST', body: JSON.stringify(input) }),
+  disableGovernedModel: (id: string, input: components['schemas']['VersionRequest'] = {}) => request<GovernedModel>(`/admin/governed-models/${encodeURIComponent(id)}/disable`, { method: 'POST', body: JSON.stringify(input) }),
+  deleteGovernedModel: (id: string) => request(`/admin/governed-models/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  listCapabilityProfiles: () => request<ProfileList>('/admin/capability-profiles'),
+  createCapabilityProfile: (input: ProfileCreateRequest) => request<CapabilityProfile>('/admin/capability-profiles', { method: 'POST', body: JSON.stringify(input) }),
+  listCapabilityProfileVersions: (id: string) => request<ProfileVersionList>(`/admin/capability-profiles/${encodeURIComponent(id)}/versions`),
+  patchCapabilityProfileDraft: (id: string, input: ProfilePatchRequest) => request(`/admin/capability-profiles/${encodeURIComponent(id)}/draft`, { method: 'PATCH', body: JSON.stringify(input) }),
+  publishCapabilityProfile: (id: string, input: ProfilePatchRequest) => request(`/admin/capability-profiles/${encodeURIComponent(id)}/publish`, { method: 'POST', body: JSON.stringify(input) }),
+  validateCapabilityProfile: (id: string) => request<Record<string, unknown>>(`/admin/capability-profiles/${encodeURIComponent(id)}/validate`, { method: 'POST', body: '{}' }),
+  cloneCapabilityProfile: (id: string, input: components['schemas']['ProfileCloneRequest'] = {}) => request<CapabilityProfile>(`/admin/capability-profiles/${encodeURIComponent(id)}/clone`, { method: 'POST', body: JSON.stringify(input) }),
+  disableCapabilityProfile: (id: string) => request(`/admin/capability-profiles/${encodeURIComponent(id)}/disable`, { method: 'POST', body: '{}' }),
+  restoreCapabilityProfile: (id: string) => request(`/admin/capability-profiles/${encodeURIComponent(id)}/restore`, { method: 'POST', body: '{}' }),
+  deleteCapabilityProfile: (id: string) => request(`/admin/capability-profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  listCapabilityAssignments: (workspaceId: string) => request<AssignmentList>(`/admin/workspaces/${encodeURIComponent(workspaceId)}/profile-assignments`),
+  assignCapabilityProfile: (workspaceId: string, workflow: string, input: AssignmentRequest) => request(`/admin/workspaces/${encodeURIComponent(workspaceId)}/profile-assignments/${encodeURIComponent(workflow)}`, { method: 'PUT', body: JSON.stringify(input) }),
+  removeCapabilityProfile: (workspaceId: string, workflow: string, expectedVersion?: number) => request(`/admin/workspaces/${encodeURIComponent(workspaceId)}/profile-assignments/${encodeURIComponent(workflow)}${expectedVersion ? `?expected_version=${expectedVersion}` : ''}`, { method: 'DELETE' }),
+  modelGovernanceImpact: (modelId: string) => request<ImpactResponse>(`/admin/model-governance/impact?model_id=${encodeURIComponent(modelId)}`),
+  workspaceCapabilities: (workspaceId: string) => request<WorkspaceCapability[]>(`/workspaces/${encodeURIComponent(workspaceId)}/capabilities`),
 }

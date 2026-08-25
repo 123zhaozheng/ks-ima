@@ -9,8 +9,7 @@ import { putObject, presignedGetObject } from '../utils/s3'
 import { enqueueParse } from './ingest'
 import { kbRetrieve, type RetrieveOpts } from './retrieve'
 import { zdb } from '../zero/db'
-import { answerQuestion } from './answer'
-import { chatGateway } from './models'
+import { executeManagedChat, executeManagedLegacyChat } from './model-governance'
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
@@ -54,8 +53,30 @@ export async function kbSearch(actor: Actor, q: string, opts: RetrieveOpts = {})
 
 export async function kbAsk(actor: Actor, question: string, opts: RetrieveOpts = {}) {
   const citations = await kbRetrieve(actor, question, opts, 'ask')
-  const gateway = citations.length ? await chatGateway(actor.workspaceId) : null
-  const { answer, knowledgeGap } = await answerQuestion(question, citations, gateway)
+  if (!citations.length) return { answer: '知识库未收录相关内容。请补充文件后再问。', citations, knowledgeGap: true }
+  const context = citations.map((citation, index) =>
+    `[${index + 1}] ${citation.path || citation.title || citation.entityId}\n${citation.quote}`,
+  ).join('\n\n')
+  const managed = await executeManagedChat(actor.workspaceId, 'grounded_ask', [{
+    role: 'user',
+    content: `问题：${question}\n\n知识库原文：\n${context}`,
+  }], undefined, false)
+  let answer: string | undefined
+  if (managed.kind === 'target' && managed.response?.ok) {
+    const data = await managed.response.json() as { choices?: Array<{ message?: { content?: string } }> }
+    answer = data.choices?.[0]?.message?.content?.trim()
+  } else if (managed.kind === 'unmigrated') {
+    const legacy = await executeManagedLegacyChat(actor.workspaceId, 'grounded_ask', [{
+      role: 'user',
+      content: `闂锛?{question}\n\n鐭ヨ瘑搴撳師鏂囷細\n${context}`,
+    }])
+    if (legacy.kind === 'unmigrated' && legacy.response?.ok) {
+      const data = await legacy.response.json() as { choices?: Array<{ message?: { content?: string } }> }
+      answer = data.choices?.[0]?.message?.content?.trim()
+    }
+  }
+  if (!answer) answer = citations.map(citation => citation.quote).join('\n\n')
+  const knowledgeGap = false
   return { answer, citations, knowledgeGap }
 }
 

@@ -1,0 +1,1 @@
+"""Guarded model-gateway infrastructure."""

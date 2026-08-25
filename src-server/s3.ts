@@ -62,11 +62,7 @@ const app = new Hono()
           },
         },
         with: {
-          workspace: {
-            with: {
-              plan: true,
-            },
-          },
+          workspace: true,
         },
       })
       if (!item?.workspace) return c.json({ error: 'item not found' }, 404)
@@ -79,15 +75,6 @@ const app = new Hono()
         },
       })
 
-      const size = blob ? blob.size : contentLength
-
-      const { storageUsed, plan } = item.workspace
-      if (size > plan!.fileSizeLimit) {
-        return c.json({ error: 'File too large' }, 413)
-      }
-      if (storageUsed + size > plan!.storageLimit) {
-        return c.json({ error: 'Storage limit exceeded' }, 403)
-      }
       if (blob) {
         await tx.update(schema.item).set({
           blobId: blob.id,

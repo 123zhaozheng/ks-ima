@@ -15,6 +15,7 @@ from ima.api.contracts import DiagnosticJob
 from ima.config import Settings
 from ima.infrastructure.tasks.app import create_task_app
 from ima.infrastructure.tasks.diagnostic import register_tasks
+from ima.infrastructure.tasks.model_health import register_model_health_task
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,12 @@ class JobService:
         self.engine = engine
         self._app: App = create_task_app(settings)
         self._diagnostic_task = register_tasks(self._app, queue_name=settings.diagnostic_queue)
+        self._model_health_task = register_model_health_task(self._app, settings)
+
+    async def enqueue_model_health(self, gateway_id: UUID, capability: str | None = None) -> None:
+        await self._model_health_task.defer_async(  # type: ignore[attr-defined]
+            gateway_id=str(gateway_id), capability=capability
+        )
 
     async def start(self) -> None:
         await self._app.open_async()

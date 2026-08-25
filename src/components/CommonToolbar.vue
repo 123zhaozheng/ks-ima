@@ -53,7 +53,7 @@ const store = useUiStateStore()
 const route = useRoute()
 const showRightDrawerBtn = computed(() => {
   const type = route.params.type
-  return type === 'assistant' || type === 'provider'
+  return type === 'assistant'
 })
 
 const position = inject<LayoutPosition>('position')!

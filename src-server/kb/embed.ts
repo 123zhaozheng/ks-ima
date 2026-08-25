@@ -1,38 +1,13 @@
-import { embeddingGateway, type GatewayModel } from './models'
+import { executeManagedEmbedding, executeManagedLegacyEmbedding } from './model-governance'
 import { log } from '../utils/functions'
-
-async function embedBatch(gateway: GatewayModel, inputs: string[]) {
-  const res = await fetch(`${gateway.baseURL}/embeddings`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${gateway.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: gateway.name,
-      input: inputs,
-    }),
-  })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Embedding gateway ${res.status}: ${body.slice(0, 400)}`)
-  }
-  const json = await res.json() as { data?: { embedding: number[], index: number }[] }
-  const data = [...(json.data ?? [])].sort((a, b) => a.index - b.index)
-  return data.map(d => d.embedding)
-}
 
 export async function embedTexts(texts: string[], workspaceId: string): Promise<number[][] | null> {
   if (!texts.length) return []
-  const gateway = await embeddingGateway(workspaceId)
-  if (!gateway) return null
-  const out: number[][] = []
-  const size = 16
-  for (let i = 0; i < texts.length; i += size) {
-    const batch = texts.slice(i, i + size)
-    out.push(...await embedBatch(gateway, batch))
-  }
-  return out
+  const managed = await executeManagedEmbedding(workspaceId, texts)
+  if (managed.kind === 'target') return managed.vectors ?? null
+  if (managed.kind === 'denied') return null
+  const legacy = await executeManagedLegacyEmbedding(workspaceId, texts)
+  return legacy.kind === 'unmigrated' ? legacy.vectors ?? null : null
 }
 
 export async function embedQuery(q: string, workspaceId: string): Promise<number[] | null> {

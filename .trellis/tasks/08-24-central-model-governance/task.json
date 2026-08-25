@@ -3,7 +3,7 @@
   "name": "central-model-governance",
   "title": "Central model governance",
   "description": "Implement platform-admin-only model gateways, encrypted credentials, model registry, capability profiles, health, and workspace assignments.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

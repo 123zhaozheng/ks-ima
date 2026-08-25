@@ -1,1 +1,14 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify restrictive dependencies, immutable versions, migrations, checkpoints, locks, indexes, and rollback guard."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify safe Problem Details for egress, health, dependency, version, assignment, and reindex-required failures."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify secrets, ciphertext, gateway responses, endpoints, prompts, headers, and provider options are recursively redacted."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify strict Python quality, tests, import safety, no placeholders, and no duplicate mutable authority."}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "Verify OpenAPI, durable tasks, Caddy/Compose, isolated forced PostgreSQL, and clean test resources."}
+{"file": ".trellis/spec/backend/identity-platform-contracts.md", "reason": "Verify platform/auditor hierarchy, CSRF/recent auth, envelope security, audit, and secret-safe responses."}
+{"file": ".trellis/spec/backend/workspace-authorization-contracts.md", "reason": "Verify platform roles do not imply content access and target-first private bridge semantics fail closed."}
+{"file": ".trellis/spec/frontend/openapi-client-contracts.md", "reason": "Verify generated model-governance DTO/client drift and complete Vue Query error/loading behavior."}
+{"file": ".trellis/spec/frontend/identity-admin-contracts.md", "reason": "Verify role-aware admin actions and real component/browser journeys rather than hidden-button authorization claims."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify frontend lint/build quality, complete states, and removal of duplicate client/product state."}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Verify generated DTO authority and absence of arbitrary provider/config casts in target UI."}
+{"file": ".trellis/spec/frontend/workspace-authorization-contracts.md", "reason": "Verify workspace settings expose only safe read-only business capabilities after infrastructure removal."}
+{"file": ".trellis/tasks/08-24-central-model-governance/research/model-governance-evidence.md", "reason": "Check all CodeGraph-identified browser/Bun/admin/workspace consumers, deletion targets, and fallback ownership."}
+{"file": ".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md", "reason": "Check RAG continuity, commercial residue deletion, provider/model migration, and complete cutover coverage."}

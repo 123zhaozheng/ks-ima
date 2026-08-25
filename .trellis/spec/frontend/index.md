@@ -23,6 +23,7 @@ This directory contains guidelines for frontend development. Fill in each file w
 | [OpenAPI Client Contracts](./openapi-client-contracts.md) | Generated schema, runtime client, Vue Query, and cross-layer tests | Active |
 | [Identity And Administration](./identity-admin-contracts.md) | Generated identity client, role-aware UI, account security, and E2E | Active |
 | [Workspace Authorization](./workspace-authorization-contracts.md) | Generated workspace/member/group/folder ACL workflows and compatibility UX | Active |
+| [Model Governance](./model-governance-contracts.md) | Central admin model workflows, safe capability projection, and browser cutover | Active |
 
 ---
 

@@ -1,1 +1,10 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/index.md", "reason": "Discover active database, error, logging, quality, identity, authorization, and foundation contracts."}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "Preserve import-safe FastAPI, explicit Alembic, durable task, deployment, OpenAPI, and forced PostgreSQL conventions."}
+{"file": ".trellis/spec/backend/identity-platform-contracts.md", "reason": "Reuse local session, CSRF, recent-auth, platform capability, secret redaction, and audit invariants."}
+{"file": ".trellis/spec/backend/workspace-authorization-contracts.md", "reason": "Keep platform infrastructure authority separate from workspace content access and preserve private bridge fail-closed conventions."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Discover active generated-client, identity/admin, type safety, and quality conventions."}
+{"file": ".trellis/spec/frontend/openapi-client-contracts.md", "reason": "Extend the single generated OpenAPI transport without duplicate DTOs or component-local HTTP clients."}
+{"file": ".trellis/spec/frontend/identity-admin-contracts.md", "reason": "Reuse capability-aware admin navigation, session/CSRF client, Vitest, and full Playwright setup."}
+{"file": ".trellis/spec/frontend/workspace-authorization-contracts.md", "reason": "Replace editable workspace model infrastructure with read-only business capability projections while retaining server authority."}
+{"file": ".trellis/tasks/08-24-central-model-governance/research/model-governance-evidence.md", "reason": "Use CodeGraph-backed current provider/model/browser/Bun consumer inventory, locked decisions, and deletion targets."}
+{"file": ".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md", "reason": "Use the repository-wide RAG, provider, public-model, commercial residue, and migration evidence."}

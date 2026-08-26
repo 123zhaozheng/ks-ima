@@ -114,3 +114,24 @@ Implemented Python-owned knowledge documents, Markdown versions, tags, unified t
 ### Status
 
 [OK] **Completed**
+
+
+## Session 6: Object storage and durable ingestion
+
+**Date**: 2026-08-26
+**Task**: Object storage and durable ingestion
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Implemented private S3-compatible upload/download/preview, immutable file replacement/history, bounded parsing, durable parse/chunk/embed/cleanup work, model-governed embeddings, legacy object migration, Vue progress/retry/cancel workflows, and executable storage specs. Verified full backend/frontend/browser gates, isolated PostgreSQL 28/28, and real MinIO upload/copy cleanup.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8886ed4` | (see git log) |
+
+### Status
+
+[OK] **Completed**

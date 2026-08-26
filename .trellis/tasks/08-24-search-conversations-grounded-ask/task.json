@@ -3,7 +3,7 @@
   "name": "search-conversations-grounded-ask",
   "title": "Search conversations and grounded Ask",
   "description": "Implement ACL-first FTS/pgvector retrieval, optional rerank, private conversations, SSE grounded answers, and stable citations.",
-  "status": "planning",
+  "status": "completed",
   "dev_type": null,
   "scope": null,
   "package": null,

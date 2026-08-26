@@ -243,6 +243,18 @@ class StorageService:
                     "actor": actor,
                 },
             )
+            await conn.execute(
+                text(
+                    "INSERT INTO ima.document_versions(document_id,version,kind,digest,created_by,created_at) VALUES (:document,:version,'file',:digest,:actor,:now)"
+                ),
+                {
+                    "document": document_id,
+                    "version": version,
+                    "digest": row["checksum"],
+                    "actor": actor,
+                    "now": now(),
+                },
+            )
             await self.jobs.create_ingestion_jobs(conn, document_id, version, 1, actor)
         await self.jobs.defer_ingestion_parse(document_id, version, 1)
         return await self.status(actor, document_id)

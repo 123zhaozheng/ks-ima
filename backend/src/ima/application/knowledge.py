@@ -776,6 +776,12 @@ class KnowledgeService:
             )
             if row["lifecycle"] != "trashed":
                 raise KnowledgeError(409, "VERSION_CONFLICT", "Document must be trashed first")
+            citation_exists = await conn.scalar(
+                text("SELECT EXISTS(SELECT 1 FROM ima.message_citations WHERE document_id=:id)"),
+                {"id": document_id},
+            )
+            if citation_exists:
+                raise KnowledgeError(409, "DEPENDENCY_EXISTS", "Document has retained citations")
             try:
                 result = await conn.execute(
                     text("DELETE FROM ima.documents WHERE id=:id AND lifecycle='trashed'"),

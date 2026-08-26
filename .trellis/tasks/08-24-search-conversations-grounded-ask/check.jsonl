@@ -1,1 +1,13 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Verify FTS/ANN index lifecycle, conversation/citation constraints, immutable identity, owner indexes, migration repeat/downgrade, and deletion dependencies."}
+{"file":".trellis/spec/backend/workspace-authorization-contracts.md","reason":"Verify ACL-first SQL, same-subject ask/view_content, revoke races, platform/content separation, and complete non-disclosure."}
+{"file":".trellis/spec/backend/model-governance-contracts.md","reason":"Verify exact embedding/rerank/chat stream assignment, finite values, cancellation, target terminal denial, and no public/legacy fallback."}
+{"file":".trellis/spec/backend/object-storage-ingestion-contracts.md","reason":"Verify search consumes only ready immutable target generations and coordinates chunk/object/index/citation deletion."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Verify stable Problem Details/SSE errors, stream lifecycle, hidden resources, and no raw upstream/content details."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Verify queries, prompts, answers, chunks, quotes, hidden paths/titles, secrets, and upstream bodies never enter logs/audit."}
+{"file":".trellis/spec/frontend/openapi-client-contracts.md","reason":"Verify generated operation IDs/DTOs, one shared client, cancellation, SSE parsing, and drift gates."}
+{"file":".trellis/spec/frontend/file-upload-ingestion-contracts.md","reason":"Verify exact version/generation citation navigation and workspace-scoped query/stream cancellation."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Verify search/Ask/conversation/citation states, lint/type/build, and desktop/mobile regressions."}
+{"file":".trellis/tasks/08-24-search-conversations-grounded-ask/research/current-search-ask-evidence.md","reason":"Check every identified target/legacy caller, retrieval/index gap, stable citation rule, security boundary, and validation row."}
+{"file":".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md","reason":"Check complete coexistence, rollback, MCP ownership, legacy deletion blockers, and target-only corpus behavior."}
+{"file": ".trellis/spec/backend/search-grounded-ask-contracts.md", "reason": "Verify PostgreSQL indexes, ACL/privacy, SSE persistence, citation dependencies and no fallback."}
+{"file": ".trellis/spec/frontend/grounded-search-ask-contracts.md", "reason": "Verify real mounted Vue and desktop/mobile target Ask behavior, workspace cancellation and coexistence."}

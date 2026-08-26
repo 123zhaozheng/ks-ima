@@ -35,6 +35,10 @@
         :label="t('Tags')"
         to="/workspace/tags"
       />
+      <q-route-tab
+        :label="t('Ask')"
+        to="/workspace/ask"
+      />
     </q-tabs>
   </q-header>
   <router-view v-if="workspaceStore.id" />

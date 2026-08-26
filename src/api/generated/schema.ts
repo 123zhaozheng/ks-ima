@@ -1448,6 +1448,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask */
+        post: operations["streamGroundedAsk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/capabilities": {
         parameters: {
             query?: never;
@@ -1459,6 +1476,59 @@ export interface paths {
         get: operations["listWorkspaceModelCapabilities"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Conversations */
+        get: operations["listGroundedConversations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/conversations/{conversation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Conversation */
+        get: operations["getGroundedConversation"];
+        put?: never;
+        post?: never;
+        /** Delete Conversation */
+        delete: operations["deleteGroundedConversation"];
+        options?: never;
+        head?: never;
+        /** Update Conversation */
+        patch: operations["updateGroundedConversation"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/conversations/{conversation_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Conversation */
+        post: operations["retryGroundedConversation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1798,6 +1868,23 @@ export interface paths {
         patch: operations["updateWorkspaceMember"];
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/messages/{message_id}/citations/{ordinal}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Citation */
+        get: operations["resolveGroundedCitation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/permission-preview": {
         parameters: {
             query?: never;
@@ -1809,6 +1896,40 @@ export interface paths {
         put?: never;
         /** Permission Preview */
         post: operations["previewWorkspacePermissions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search */
+        get: operations["searchWorkspaceKnowledge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/search-indexes/build": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Build Index */
+        post: operations["buildGroundedSearchIndex"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1994,6 +2115,13 @@ export interface components {
             /** Nextcursor */
             nextCursor?: string | null;
         };
+        /** AskRequest */
+        AskRequest: {
+            /** Conversationid */
+            conversationId?: string | null;
+            /** Question */
+            question: string;
+        };
         /** Assignment */
         Assignment: {
             /**
@@ -2173,6 +2301,28 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** CitationResponse */
+        CitationResponse: {
+            /** Chunkdigest */
+            chunkDigest: string;
+            /** Chunkordinal */
+            chunkOrdinal: number;
+            /**
+             * Documentid
+             * Format: uuid
+             */
+            documentId: string;
+            /** Documentversion */
+            documentVersion: number;
+            /** Filegeneration */
+            fileGeneration: number | null;
+            /** Quote */
+            quote: string;
+            /** Rank */
+            rank: number;
+            /** Score */
+            score: number;
+        };
         /** ContentPage */
         ContentPage: {
             /** Childrenversion */
@@ -2208,6 +2358,90 @@ export interface components {
             title: string;
             /** Version */
             version: number;
+        };
+        /** ConversationDetail */
+        ConversationDetail: {
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Lifecycle
+             * @enum {string}
+             */
+            lifecycle: "active" | "archived";
+            /** Messages */
+            messages: components["schemas"]["MessageResponse"][];
+            /** Title */
+            title: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Version */
+            version: number;
+            /** Workspaceid */
+            workspaceId: string;
+        };
+        /** ConversationPage */
+        ConversationPage: {
+            /** Items */
+            items: components["schemas"]["ConversationResponse"][];
+        };
+        /** ConversationPatchRequest */
+        ConversationPatchRequest: {
+            /** Archived */
+            archived?: boolean | null;
+            /** Expectedversion */
+            expectedVersion: number;
+            /** Title */
+            title?: string | null;
+        };
+        /** ConversationResponse */
+        ConversationResponse: {
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Lifecycle
+             * @enum {string}
+             */
+            lifecycle: "active" | "archived";
+            /** Title */
+            title: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Version */
+            version: number;
+            /** Workspaceid */
+            workspaceId: string;
+        };
+        /** ConversationRetryRequest */
+        ConversationRetryRequest: {
+            /** Expectedversion */
+            expectedVersion: number;
+            /**
+             * Messageid
+             * Format: uuid
+             */
+            messageId: string;
         };
         /** CreateUserRequest */
         CreateUserRequest: {
@@ -2819,6 +3053,42 @@ export interface components {
              */
             updatedAt: string;
         };
+        /** MessageResponse */
+        MessageResponse: {
+            /** Completedat */
+            completedAt: string | null;
+            /** Content */
+            content: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Sequence */
+            sequence: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "streaming" | "completed" | "knowledge_gap" | "failed" | "cancelled";
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Version */
+            version: number;
+        };
         /** ModelDiscoveryResponse */
         ModelDiscoveryResponse: {
             /** Names */
@@ -3062,6 +3332,39 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** SearchResponse */
+        SearchResponse: {
+            /** Degraded */
+            degraded?: string | null;
+            /** Items */
+            items: components["schemas"]["SearchResult"][];
+            /** Profiletopk */
+            profileTopK: number;
+        };
+        /** SearchResult */
+        SearchResult: {
+            /** Chunkdigest */
+            chunkDigest: string;
+            /** Chunkordinal */
+            chunkOrdinal: number;
+            /**
+             * Documentid
+             * Format: uuid
+             */
+            documentId: string;
+            /** Documentversion */
+            documentVersion: number;
+            /** Filegeneration */
+            fileGeneration: number | null;
+            /** Quote */
+            quote: string;
+            /** Rank */
+            rank: number;
+            /** Score */
+            score: number;
+            /** Title */
+            title: string;
+        };
         /** SecretRotateRequest */
         SecretRotateRequest: {
             /** Expectedversion */
@@ -3264,6 +3567,30 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VectorIndexResponse */
+        VectorIndexResponse: {
+            /** Dimension */
+            dimension: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Modelid
+             * Format: uuid
+             */
+            modelId: string;
+            /** Modelversion */
+            modelVersion: number;
+            /** Sourcecount */
+            sourceCount: number;
+            /**
+             * Status
+             * @constant
+             */
+            status: "active";
         };
         /** VersionRequest */
         VersionRequest: {
@@ -6605,6 +6932,41 @@ export interface operations {
             };
         };
     };
+    streamGroundedAsk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listWorkspaceModelCapabilities: {
         parameters: {
             query?: never;
@@ -6623,6 +6985,173 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceCapability"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listGroundedConversations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getGroundedConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteGroundedConversation: {
+        parameters: {
+            query: {
+                expectedVersion: number;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateGroundedConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retryGroundedConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationRetryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -7601,6 +8130,39 @@ export interface operations {
             };
         };
     };
+    resolveGroundedCitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                message_id: string;
+                ordinal: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CitationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     previewWorkspacePermissions: {
         parameters: {
             query?: never;
@@ -7625,6 +8187,75 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    searchWorkspaceKnowledge: {
+        parameters: {
+            query: {
+                query: string;
+                mode?: string;
+                topK?: number;
+                threshold?: number;
+                folderId?: string | null;
+                tagId?: string | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    buildGroundedSearchIndex: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VectorIndexResponse"];
                 };
             };
             /** @description Validation Error */

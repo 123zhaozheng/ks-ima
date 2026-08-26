@@ -34,6 +34,7 @@ from ima.api.v1.model_governance import (
 from ima.api.v1.model_governance import (
     workspace_router as model_workspace_router,
 )
+from ima.api.v1.search import router as search_router
 from ima.api.v1.system import readiness
 from ima.api.v1.system import router as system_router
 from ima.api.v1.workspaces import admin_router as workspace_admin_router
@@ -43,6 +44,7 @@ from ima.application.authorization import WorkspaceError, WorkspaceService
 from ima.application.identity import IdentityError, IdentityService
 from ima.application.knowledge import KnowledgeError, KnowledgeService
 from ima.application.model_governance import ModelGovernanceError, ModelGovernanceService
+from ima.application.search import SearchError, SearchService
 from ima.application.storage import StorageService
 from ima.config import Settings, get_settings
 from ima.infrastructure.db.engine import create_engine
@@ -65,6 +67,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.workspace_service = WorkspaceService(engine, app_settings)
         app.state.model_governance_service = ModelGovernanceService(engine, app_settings)
         app.state.knowledge_service = KnowledgeService(engine, app.state.workspace_service)
+        app.state.search_service = SearchService(
+            engine, app.state.workspace_service, app.state.model_governance_service
+        )
         app.state.storage_service = StorageService(
             app_settings, engine, app.state.workspace_service, service
         )
@@ -140,6 +145,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.add_exception_handler(KnowledgeError, knowledge_exception_handler)  # type: ignore[arg-type]
+
+    async def search_exception_handler(request: Request, exc: SearchError) -> JSONResponse:
+        from ima.api.errors import make_problem
+
+        return make_problem(
+            request,
+            status=exc.status_code,
+            title="Search request failed",
+            detail=exc.detail,
+            code=exc.code,
+        )
+
+    app.add_exception_handler(SearchError, search_exception_handler)  # type: ignore[arg-type]
     app.add_middleware(CorrelationMiddleware)
     app.add_middleware(RequestTimingMiddleware)
     if app_settings.trusted_proxies:
@@ -188,6 +206,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.include_router(model_workspace_router)
     api.include_router(model_governance_bridge_router)
     api.include_router(knowledge_router)
+    api.include_router(search_router)
     app.include_router(api)
     # Route dependencies must use the same immutable settings instance as the
     # application factory, including in contract tests and embedded deployments.

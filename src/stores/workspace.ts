@@ -59,6 +59,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }))
   })
 
+  watch(id, (next, previous) => {
+    if (!previous || previous === next) return
+    queryClient.cancelQueries({ queryKey: ['grounded', 'workspace', previous] })
+    queryClient.removeQueries({ queryKey: ['grounded', 'workspace', previous] })
+  })
+
   async function updateData(updates: Partial<MemberData>) {
     if (!id.value) return
     await mutate(mutators.updateMemberData({ workspaceId: id.value, ...updates })).client
@@ -71,6 +77,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (previous) {
         queryClient.cancelQueries({ queryKey: ['knowledge', 'workspace', previous] })
         queryClient.removeQueries({ queryKey: ['knowledge', 'workspace', previous] })
+        queryClient.cancelQueries({ queryKey: ['grounded', 'workspace', previous] })
+        queryClient.removeQueries({ queryKey: ['grounded', 'workspace', previous] })
       }
       mutate(mutators.updateLastWorkspaceId(to))
     }

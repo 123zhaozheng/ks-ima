@@ -16,6 +16,7 @@ import AccountSecurity from 'src/pages/AccountSecurity.vue'
 import WorkspaceModels from 'src/pages/WorkspaceModels.vue'
 import WorkspaceTags from 'src/pages/WorkspaceTags.vue'
 import KnowledgeDocumentPage from 'src/pages/KnowledgeDocumentPage.vue'
+import GroundedAskPage from 'src/pages/GroundedAskPage.vue'
 import { t } from 'src/utils/i18n'
 
 const routes: RouteRecordRaw[] = [
@@ -71,6 +72,11 @@ const routes: RouteRecordRaw[] = [
             path: 'tags',
             component: WorkspaceTags,
             meta: { title: t('Tags') },
+          },
+          {
+            path: 'ask',
+            component: GroundedAskPage,
+            meta: { title: t('Ask') },
           },
         ],
       },

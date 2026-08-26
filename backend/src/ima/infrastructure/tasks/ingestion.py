@@ -213,12 +213,19 @@ def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
                     return
                 if await cancelled(conn, job["id"]):
                     return
+                workspace_id = await conn.scalar(
+                    text("SELECT workspace_id FROM ima.documents WHERE id=:id"), {"id": identifier}
+                )
+                if not workspace_id:
+                    await failed(conn, job, "DOCUMENT_NOT_FOUND", retryable=False)
+                    return
                 for ordinal, content, digest in chunks:
                     await conn.execute(
                         text(
-                            """INSERT INTO ima.document_chunks(document_id,version,generation,ordinal,text_content,content_digest,created_at,updated_at) VALUES (:id,:version,:generation,:ordinal,:content,:digest,:now,:now) ON CONFLICT(document_id,version,generation,ordinal) DO NOTHING"""
+                            """INSERT INTO ima.document_chunks(workspace_id,document_id,version,generation,ordinal,text_content,content_digest,created_at,updated_at) VALUES (:workspace,:id,:version,:generation,:ordinal,:content,:digest,:now,:now) ON CONFLICT(document_id,version,generation,ordinal) DO NOTHING"""
                         ),
                         {
+                            "workspace": workspace_id,
                             "id": identifier,
                             "version": version,
                             "generation": generation,
@@ -260,6 +267,20 @@ def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
                 workspace_id = await conn.scalar(
                     text("SELECT workspace_id FROM ima.documents WHERE id=:id"), {"id": identifier}
                 )
+                model = (
+                    (
+                        await conn.execute(
+                            text("""SELECT m.id,m.version,m.embedding_dimension FROM ima.workspace_profile_assignments a
+                            JOIN ima.capability_profile_versions p ON p.profile_id=a.profile_id AND p.version=a.profile_version
+                            JOIN ima.governed_models m ON m.id=CAST(p.config->>'embeddingModelId' AS uuid)
+                            WHERE a.workspace_id=:workspace AND a.workflow='embedding'
+                              AND m.capability='embedding' AND m.enabled AND m.validated"""),
+                            {"workspace": workspace_id},
+                        )
+                    )
+                    .mappings()
+                    .first()
+                )
                 chunks = (
                     (
                         await conn.execute(
@@ -272,16 +293,20 @@ def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
                     .mappings()
                     .all()
                 )
-                if not workspace_id:
+                if not workspace_id or not model:
                     await failed(conn, job, "DOCUMENT_NOT_FOUND", retryable=False)
                     return
             try:
                 vectors = await ModelGovernanceService(engine, settings).managed_embeddings(
                     str(workspace_id), [row["text_content"] for row in chunks]
                 )
-                if len(vectors) != len(chunks) or any(
-                    not vector or any(not math.isfinite(value) for value in vector)
-                    for vector in vectors
+                if (
+                    len(vectors) != len(chunks)
+                    or any(
+                        not vector or any(not math.isfinite(value) for value in vector)
+                        for vector in vectors
+                    )
+                    or any(len(vector) != int(model["embedding_dimension"]) for vector in vectors)
                 ):
                     raise ValueError
                 dimensions = {len(vector) for vector in vectors}
@@ -301,10 +326,13 @@ def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
                 for row, vector in zip(chunks, vectors, strict=True):
                     await conn.execute(
                         text(
-                            "UPDATE ima.document_chunks SET embedding=CAST(:embedding AS vector),embedding_dimension=:dimension,embedding_status='ready',updated_at=:now WHERE document_id=:id AND version=:version AND generation=:generation AND ordinal=:ordinal"
+                            "UPDATE ima.document_chunks SET workspace_id=:workspace,embedding=CAST(:embedding AS vector),model_id=:model,model_version=:model_version,embedding_dimension=:dimension,embedding_status='ready',updated_at=:now WHERE document_id=:id AND version=:version AND generation=:generation AND ordinal=:ordinal"
                         ),
                         {
                             "embedding": "[" + ",".join(str(value) for value in vector) + "]",
+                            "workspace": workspace_id,
+                            "model": model["id"],
+                            "model_version": model["version"],
                             "dimension": len(vector),
                             "id": identifier,
                             "version": version,

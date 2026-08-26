@@ -1,1 +1,13 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Implement additive conversation/citation/search-index schema, FTS/pgvector indexes, restrictive dependencies, transactions, and migration gates."}
+{"file":".trellis/spec/backend/workspace-authorization-contracts.md","reason":"Reuse canonical same-subject view_content/ask authorization, ACL-first SQL, lifecycle, audit, and 404 non-disclosure."}
+{"file":".trellis/spec/backend/model-governance-contracts.md","reason":"Use exact governed embedding/rerank/chat stream assignments, guarded clients, finite validation, target terminal denial, and reindex dependencies."}
+{"file":".trellis/spec/backend/object-storage-ingestion-contracts.md","reason":"Consume immutable document/version/generation/chunk identities and preserve ingestion/index/deletion dependencies."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Implement safe pre-stream Problem Details and bounded post-start SSE error codes without content/upstream leakage."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Keep query, question, prompt, answer, quotes, chunks, hidden titles/paths, secrets, and raw upstream details out of logs/audit."}
+{"file":".trellis/spec/frontend/openapi-client-contracts.md","reason":"Keep generated DTO/client authority, shared transport, cancellation, Problem Details, and OpenAPI drift."}
+{"file":".trellis/spec/frontend/file-upload-ingestion-contracts.md","reason":"Preserve immutable version/generation history and workspace-scoped cancellation when linking search/citations to ingested files."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Apply Vue Query, lint/type/build, complete states, and desktop/mobile browser verification."}
+{"file":".trellis/tasks/08-24-search-conversations-grounded-ask/research/current-search-ask-evidence.md","reason":"Use code-backed target chunk/model/ACL evidence, legacy caller inventory, stable citation identity, MVP recommendation, and validation matrix."}
+{"file":".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md","reason":"Preserve repository-wide search/chat/MCP/Zero coexistence, model governance, rollback, and deletion boundaries."}
+{"file": ".trellis/spec/backend/search-grounded-ask-contracts.md", "reason": "Implement ACL-first FTS/ANN, rerank, private conversations, SSE and immutable citation contracts."}
+{"file": ".trellis/spec/frontend/grounded-search-ask-contracts.md", "reason": "Implement generated target search/Ask, conversation, SSE, cancellation and citation UI contracts."}

@@ -31,6 +31,7 @@ from ima.application.legacy_knowledge import (
 from ima.config import get_settings
 from ima.domain.authorization import DEFAULT_ROLE_GRANTS, legacy_role
 from ima.infrastructure.auth.security import encrypt_secret
+from ima.infrastructure.storage import ObjectStorageClient, StorageClientError
 from ima.infrastructure.tasks.app import create_task_app
 
 
@@ -798,7 +799,9 @@ def _legacy_knowledge_report(action: str = "report") -> None:
                                     "mimeType": mime_type,
                                     "source": "legacy",
                                 }
-                                current_version = len(bodies) or (1 if info["kind"] == "file" else None)
+                                current_version = len(bodies) or (
+                                    1 if info["kind"] == "file" else None
+                                )
                                 connection.execute(
                                     """INSERT INTO ima.documents
                                     (id,workspace_id,folder_id,kind,title,normalized_title,order_key,lifecycle,
@@ -889,6 +892,7 @@ def _legacy_knowledge_report(action: str = "report") -> None:
                         (source_id, fingerprint, type(exc).__name__, type(exc).__name__),
                     )
                     warning("migration_failed")
+            summary["storage"] = _legacy_knowledge_storage_phase(action, settings, connection)
             summary["statuses"] = {
                 str(status): int(count)
                 for status, count in connection.execute(
@@ -897,6 +901,8 @@ def _legacy_knowledge_report(action: str = "report") -> None:
             }
             print(summary)
             return
+        storage_summary = _legacy_knowledge_storage_phase(action, settings, connection)
+        summary["storage"] = storage_summary
         statuses = {
             str(status): int(count)
             for status, count in connection.execute(
@@ -1005,7 +1011,105 @@ def _legacy_knowledge_report(action: str = "report") -> None:
         print(summary)
 
 
+def _legacy_knowledge_storage_phase(action: str, settings: Any, connection: Any) -> dict[str, int]:
+    """Copy verified legacy file bytes without mutating or deleting legacy rows."""
+    summary = {"complete": 0, "review": 0, "failed": 0}
+    if not all((settings.storage_endpoint, settings.storage_bucket)):
+        return summary
+    blob_table = connection.execute("SELECT to_regclass('public.\"blob\"')").fetchone()[0]
+    if not blob_table or action != "apply":
+        return summary
+    client = ObjectStorageClient(settings)
+    rows = connection.execute(
+        """SELECT m.source_id,m.source_fingerprint,m.target_id,m.status,i."blobId",i."mimeType",b.id,b.size,b.sha256
+        FROM ima.legacy_knowledge_migration m JOIN public."item" i ON i.id=m.source_id
+        LEFT JOIN public."blob" b ON b.id=i."blobId"
+        WHERE m.source_kind='entity' AND m.target_kind='file' AND m.status='complete' ORDER BY m.source_id"""
+    ).fetchall()
+    for (
+        source_id,
+        fingerprint,
+        target_id,
+        _status,
+        blob_id,
+        mime_type,
+        resolved_blob_id,
+        size_bytes,
+        checksum,
+    ) in rows:
+        checkpoint_id = f"{source_id}:storage"
+        if not blob_id or not resolved_blob_id or not size_bytes or not checksum:
+            connection.execute(
+                """INSERT INTO ima.legacy_knowledge_migration(source_kind,source_id,source_fingerprint,status,attempts,last_error,updated_at) VALUES ('storage',%s,%s,'review',1,'missing_legacy_blob',now()) ON CONFLICT(source_kind,source_id) DO UPDATE SET source_fingerprint=EXCLUDED.source_fingerprint,status='review',last_error='missing_legacy_blob',updated_at=now()""",
+                (checkpoint_id, fingerprint),
+            )
+            summary["review"] += 1
+            continue
+        source_key = str(blob_id)
+        target_key = client.object_key(target_id, 1)
+        current = connection.execute(
+            "SELECT status,source_fingerprint,mapping FROM ima.legacy_knowledge_migration WHERE source_kind='storage' AND source_id=%s",
+            (checkpoint_id,),
+        ).fetchone()
+        if current and current[0] == "complete" and current[1] == fingerprint:
+            summary["complete"] += 1
+            continue
+        try:
+            client.copy_verified(
+                source_key,
+                target_key,
+                str(checksum),
+                int(size_bytes),
+                str(mime_type or "application/octet-stream"),
+            )
+            mapping = json.dumps(
+                {
+                    "sourceBlobId": str(blob_id),
+                    "targetObjectKey": target_key,
+                    "checksum": str(checksum),
+                    "sizeBytes": int(size_bytes),
+                }
+            )
+            connection.execute(
+                """INSERT INTO ima.document_file_versions(document_id,version,workspace_id,object_state,object_key,checksum,size_bytes,mime_type,original_filename,source_fingerprint,created_at,verified_at) SELECT d.id,1,d.workspace_id,'verified',%s,%s,%s,%s,d.title,%s,now(),now() FROM ima.documents d WHERE d.id=%s ON CONFLICT(document_id,version) DO NOTHING""",
+                (
+                    target_key,
+                    str(checksum),
+                    int(size_bytes),
+                    str(mime_type or "application/octet-stream"),
+                    fingerprint,
+                    target_id,
+                ),
+            )
+            connection.execute(
+                """UPDATE ima.documents SET storage_key=%s,checksum=%s,size_bytes=%s,mime_type=%s,file_state='pending',updated_at=now() WHERE id=%s AND current_version=1""",
+                (
+                    target_key,
+                    str(checksum),
+                    int(size_bytes),
+                    str(mime_type or "application/octet-stream"),
+                    target_id,
+                ),
+            )
+            connection.execute(
+                """INSERT INTO ima.legacy_knowledge_migration(source_kind,source_id,source_fingerprint,target_kind,target_id,status,attempts,mapping,processed_at,updated_at) VALUES ('storage',%s,%s,'file',%s,'complete',1,%s::jsonb,now(),now()) ON CONFLICT(source_kind,source_id) DO UPDATE SET source_fingerprint=EXCLUDED.source_fingerprint,target_kind='file',target_id=EXCLUDED.target_id,status='complete',mapping=EXCLUDED.mapping,processed_at=now(),updated_at=now(),last_error=NULL""",
+                (checkpoint_id, fingerprint, target_id, mapping),
+            )
+            summary["complete"] += 1
+        except StorageClientError as exc:
+            status = (
+                "review" if exc.code in {"OBJECT_MISSING", "SOURCE_OBJECT_CHANGED"} else "failed"
+            )
+            connection.execute(
+                """INSERT INTO ima.legacy_knowledge_migration(source_kind,source_id,source_fingerprint,status,attempts,last_error,updated_at) VALUES ('storage',%s,%s,%s,1,%s,now()) ON CONFLICT(source_kind,source_id) DO UPDATE SET source_fingerprint=EXCLUDED.source_fingerprint,status=EXCLUDED.status,attempts=ima.legacy_knowledge_migration.attempts+1,last_error=EXCLUDED.last_error,updated_at=now()""",
+                (checkpoint_id, fingerprint, status, exc.code),
+            )
+            summary[status] += 1
+    return summary
+
+
 def _bootstrap_admin() -> None:
+    """Create the first super administrator through a local operator command."""
     """Create the first super administrator through a local operator command."""
     settings = get_settings()
     email = os.environ.get("IMA_BOOTSTRAP_EMAIL")

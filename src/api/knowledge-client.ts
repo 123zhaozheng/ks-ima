@@ -13,11 +13,26 @@ type TagPatch = components['schemas']['TagPatchRequest']
 type TagDelete = components['schemas']['TagDeleteRequest']
 type TagMerge = components['schemas']['TagMergeRequest']
 type TrashPage = components['schemas']['TrashPage']
+type UploadTicket = components['schemas']['UploadTicketResponse']
+type UploadTicketInput = components['schemas']['UploadTicketRequest']
+type IngestionStatus = components['schemas']['IngestionStatusResponse']
+type FileAccess = components['schemas']['FileAccessResponse']
+type FileVersions = components['schemas']['FileVersionPage']
+type ReplaceFileInput = components['schemas']['ReplaceFileRequest']
 
 const path = (value: string) => encodeURIComponent(value)
 
 export const knowledgeClient = {
   capabilities: (workspaceId: string, signal?: AbortSignal) => imaClient.request<Capabilities>(`/api/v1/workspaces/${path(workspaceId)}/knowledge-capabilities`, { signal }),
+  uploadTicket: (folderId: string, input: UploadTicketInput) => imaClient.request<UploadTicket>(`/api/v1/folders/${path(folderId)}/files/upload-ticket`, { method: 'POST', body: JSON.stringify(input) }),
+  replacementUploadTicket: (documentId: string, input: ReplaceFileInput) => imaClient.request<UploadTicket>(`/api/v1/documents/${path(documentId)}/file-versions/upload-ticket`, { method: 'POST', body: JSON.stringify(input) }),
+  fileVersions: (documentId: string, signal?: AbortSignal) => imaClient.request<FileVersions>(`/api/v1/documents/${path(documentId)}/file-versions`, { signal }),
+  completeUpload: (documentId: string, ticketId: string) => imaClient.request<IngestionStatus>(`/api/v1/documents/${path(documentId)}/file-versions/complete`, { method: 'POST', body: JSON.stringify({ ticketId }) }),
+  ingestion: (documentId: string, signal?: AbortSignal) => imaClient.request<IngestionStatus>(`/api/v1/documents/${path(documentId)}/ingestion`, { signal }),
+  retryIngestion: (documentId: string) => imaClient.request<IngestionStatus>(`/api/v1/documents/${path(documentId)}/ingestion/retry`, { method: 'POST' }),
+  cancelIngestion: (documentId: string) => imaClient.request<IngestionStatus>(`/api/v1/documents/${path(documentId)}/ingestion/cancel`, { method: 'POST' }),
+  download: (documentId: string, signal?: AbortSignal) => imaClient.request<FileAccess>(`/api/v1/documents/${path(documentId)}/file/download`, { signal }),
+  preview: (documentId: string, signal?: AbortSignal) => imaClient.request<FileAccess>(`/api/v1/documents/${path(documentId)}/file/preview`, { signal }),
   contents: (folderId: string, options: { cursor?: string, limit?: number, kind?: 'folder' | 'file' | 'note', tagId?: string, signal?: AbortSignal } = {}) => {
     const params = new URLSearchParams()
     if (options.cursor) params.set('cursor', options.cursor)

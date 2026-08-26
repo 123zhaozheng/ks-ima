@@ -63,6 +63,9 @@ def test_legacy_zero_is_scoped_not_claimed_deleted() -> None:
 
     assert "zero-session" in mixed_component
     assert "zero" in workspace_store.casefold()
-    assert (
-        ROOT / ".trellis/tasks/08-24-knowledge-tree-vue-api/research/retained-legacy-symbols.md"
-    ).is_file()
+    retained_manifest = (
+        ROOT
+        / ".trellis/tasks/archive/2026-08/08-24-knowledge-tree-vue-api"
+        / "research/retained-legacy-symbols.md"
+    )
+    assert retained_manifest.is_file()

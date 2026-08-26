@@ -1,5 +1,7 @@
 """Versioned knowledge tree HTTP adapters."""
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 from typing import Annotated, cast
@@ -12,10 +14,14 @@ from ima.api.v1.knowledge_contracts import (
     ContentPage,
     DocumentPatchRequest,
     DocumentResponse,
+    FileAccessResponse,
+    FileVersionPage,
+    IngestionStatusResponse,
     KnowledgeCapabilities,
     LifecycleRequest,
     MoveRequest,
     NoteCreateRequest,
+    ReplaceFileRequest,
     TagAssignmentRequest,
     TagCreateRequest,
     TagDeleteRequest,
@@ -23,9 +29,13 @@ from ima.api.v1.knowledge_contracts import (
     TagPatchRequest,
     TagResponse,
     TrashPage,
+    UploadCompleteRequest,
+    UploadTicketRequest,
+    UploadTicketResponse,
     VersionResponse,
 )
 from ima.application.knowledge import KnowledgeService
+from ima.application.storage import StorageService
 
 router = APIRouter(tags=["knowledge"])
 
@@ -34,13 +44,137 @@ def service(request: Request) -> KnowledgeService:
     return cast(KnowledgeService, request.app.state.knowledge_service)
 
 
+def storage(request: Request) -> StorageService:
+    return cast(StorageService, request.app.state.storage_service)
+
+
 @router.get(
     "/workspaces/{workspace_id}/knowledge-capabilities",
     response_model=KnowledgeCapabilities,
     operation_id="getKnowledgeCapabilities",
 )
 async def capabilities(workspace_id: str, request: Request, current: Current) -> dict[str, object]:
-    return await service(request).capabilities(current[1].id, workspace_id)
+    return await storage(request).capabilities(current[1].id, workspace_id)
+
+
+@router.post(
+    "/folders/{folder_id}/files/upload-ticket",
+    response_model=UploadTicketResponse,
+    operation_id="createFileUploadTicket",
+)
+async def upload_ticket(
+    folder_id: str, payload: UploadTicketRequest, request: Request, current: Current
+) -> dict[str, object]:
+    session, actor = current
+    check_csrf(request, session)
+    return await storage(request).upload_ticket(
+        actor.id,
+        folder_id,
+        payload.title,
+        payload.filename,
+        payload.mime_type,
+        payload.size_bytes,
+        payload.checksum,
+    )
+
+
+@router.post(
+    "/documents/{document_id}/file-versions/upload-ticket",
+    response_model=UploadTicketResponse,
+    operation_id="createFileReplacementUploadTicket",
+)
+async def replacement_upload_ticket(
+    document_id: UUID, payload: ReplaceFileRequest, request: Request, current: Current
+) -> dict[str, object]:
+    session, actor = current
+    check_csrf(request, session)
+    return await storage(request).replacement_ticket(
+        actor.id,
+        document_id,
+        payload.filename,
+        payload.mime_type,
+        payload.size_bytes,
+        payload.checksum,
+        payload.expected_version,
+        payload.expected_content_version,
+    )
+
+
+@router.get(
+    "/documents/{document_id}/file-versions",
+    response_model=FileVersionPage,
+    operation_id="listFileVersions",
+)
+async def file_versions(document_id: UUID, request: Request, current: Current) -> dict[str, object]:
+    return await storage(request).file_versions(current[1].id, document_id)
+
+
+@router.post(
+    "/documents/{document_id}/file-versions/complete",
+    response_model=IngestionStatusResponse,
+    operation_id="completeFileUpload",
+)
+async def complete_upload(
+    document_id: UUID, payload: UploadCompleteRequest, request: Request, current: Current
+) -> dict[str, object]:
+    session, actor = current
+    check_csrf(request, session)
+    return await storage(request).complete(actor.id, document_id, payload.ticket_id)
+
+
+@router.get(
+    "/documents/{document_id}/file/download",
+    response_model=FileAccessResponse,
+    operation_id="getFileDownload",
+)
+async def download_file(document_id: UUID, request: Request, current: Current) -> dict[str, object]:
+    return await storage(request).download(current[1].id, document_id)
+
+
+@router.get(
+    "/documents/{document_id}/file/preview",
+    response_model=FileAccessResponse,
+    operation_id="getFilePreview",
+)
+async def preview_file(document_id: UUID, request: Request, current: Current) -> dict[str, object]:
+    return await storage(request).download(current[1].id, document_id, preview=True)
+
+
+@router.get(
+    "/documents/{document_id}/ingestion",
+    response_model=IngestionStatusResponse,
+    operation_id="getDocumentIngestion",
+)
+async def ingestion_status(
+    document_id: UUID, request: Request, current: Current
+) -> dict[str, object]:
+    return await storage(request).status(current[1].id, document_id)
+
+
+@router.post(
+    "/documents/{document_id}/ingestion/retry",
+    response_model=IngestionStatusResponse,
+    operation_id="retryDocumentIngestion",
+)
+async def retry_ingestion(
+    document_id: UUID, request: Request, current: Current
+) -> dict[str, object]:
+    session, actor = current
+    check_csrf(request, session)
+    return await storage(request).retry(actor.id, document_id)
+
+
+@router.post(
+    "/documents/{document_id}/ingestion/cancel",
+    response_model=IngestionStatusResponse,
+    operation_id="cancelDocumentIngestion",
+)
+async def cancel_ingestion(
+    document_id: UUID, request: Request, current: Current
+) -> dict[str, object]:
+    session, actor = current
+    check_csrf(request, session)
+    return await storage(request).cancel(actor.id, document_id)
 
 
 @router.get(

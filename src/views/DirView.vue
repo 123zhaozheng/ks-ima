@@ -28,9 +28,11 @@
         no-caps
         icon="sym_o_upload_file"
         :label="t('Upload files')"
-        disable
-        :title="t('File storage migration is pending')"
+        :disable="!storageAvailable"
+        :title="storageAvailable ? t('Upload files') : t('File storage is unavailable')"
+        @click="fileInput?.click()"
       />
+      <input ref="fileInput" type="file" multiple hidden @change="uploadFiles">
       <q-btn
         flat
         no-caps
@@ -120,6 +122,8 @@ import KnowledgeList from 'src/components/KnowledgeList.vue'
 import { identityClient } from 'src/utils/identity-client'
 import { knowledgeClient } from 'src/api/knowledge-client'
 import { Notify, useQuasar } from 'quasar'
+import { useKnowledgeCapabilities, useKnowledgeMutations } from 'src/composables/use-knowledge'
+import { createTask, tasks } from 'src/utils/tasks'
 
 const props = defineProps<{
   id: string
@@ -137,6 +141,18 @@ watch(currentId, id => {
 const workspaceStore = useWorkspaceStore()
 const folderTitle = computed(() => currentId.value === workspaceStore.id ? t('All files') : t('Knowledge'))
 const $q = useQuasar()
+const capabilities = useKnowledgeCapabilities(() => workspaceStore.id)
+const storageAvailable = computed(() => capabilities.data.value?.upload.status === 'available')
+const fileInput = ref<HTMLInputElement>()
+const mutations = useKnowledgeMutations()
+const uploadPrefix = ref('')
+
+watch(() => workspaceStore.id, workspaceId => {
+  for (const task of tasks) {
+    if (uploadPrefix.value && task.id.startsWith(uploadPrefix.value) && task.status === 'running') task.abort()
+  }
+  uploadPrefix.value = workspaceId ? `upload:${workspaceId}:` : ''
+})
 
 function createFolder() {
   if (!workspaceStore.id) return
@@ -144,6 +160,17 @@ function createFolder() {
     const result = await identityClient.createWorkspaceFolder(workspaceStore.id!, { parentId: currentId.value, name })
     if (result.error) Notify.create({ type: 'negative', message: result.error.message })
   })
+}
+
+function uploadFiles(event: Event) {
+  const files = Array.from((event.target as HTMLInputElement).files ?? [])
+  for (const file of files) {
+    const task = createTask({ id: `${uploadPrefix.value}${file.name}:${Date.now()}`, title: file.name }, async ({ abortSignal, updateProgress }) => {
+      await mutations.uploadFile.mutateAsync({ folderId: currentId.value, file, title: file.name, signal: abortSignal, onProgress: value => updateProgress({ progress: value, progressText: `${Math.round(value * 100)}%` }) })
+    })
+    task.promise.catch(error => Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Upload failed') }))
+  }
+  ;(event.target as HTMLInputElement).value = ''
 }
 
 function createNote() {

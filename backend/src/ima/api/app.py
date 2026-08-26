@@ -43,6 +43,7 @@ from ima.application.authorization import WorkspaceError, WorkspaceService
 from ima.application.identity import IdentityError, IdentityService
 from ima.application.knowledge import KnowledgeError, KnowledgeService
 from ima.application.model_governance import ModelGovernanceError, ModelGovernanceService
+from ima.application.storage import StorageService
 from ima.config import Settings, get_settings
 from ima.infrastructure.db.engine import create_engine
 from ima.infrastructure.observability.logging import configure_logging
@@ -64,6 +65,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.workspace_service = WorkspaceService(engine, app_settings)
         app.state.model_governance_service = ModelGovernanceService(engine, app_settings)
         app.state.knowledge_service = KnowledgeService(engine, app.state.workspace_service)
+        app.state.storage_service = StorageService(
+            app_settings, engine, app.state.workspace_service, service
+        )
         await service.start()
         try:
             yield

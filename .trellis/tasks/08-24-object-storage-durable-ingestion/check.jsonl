@@ -1,1 +1,11 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/backend/python-foundation-contracts.md","reason":"Check API/worker deployment, migration, readiness, queue isolation, body limits, and required PostgreSQL extension gates."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check schema constraints, immutable versions, restrictive dependencies, cleanup, and migration repeat/downgrade behavior."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check import safety, no detached/in-memory work, strict typing/lint, redaction, tests, and generated drift."}
+{"file":".trellis/spec/backend/model-governance-contracts.md","reason":"Check exact embedding assignment, guarded outbound calls, dimension/finite validation, target terminal denial, and reindex dependency behavior."}
+{"file":".trellis/spec/backend/workspace-authorization-contracts.md","reason":"Check ACL-first non-disclosure for metadata, upload tickets, bytes, preview, status, retry/cancel, and cleanup."}
+{"file":".trellis/spec/frontend/openapi-client-contracts.md","reason":"Check operation IDs, generated JSON/TS drift, one shared transport/client, Vue Query cancellation, and Problem Details."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check UI loading/error/progress/retry/access states, generated boundaries, lint/type/build, and browser regressions."}
+{"file":".trellis/tasks/08-24-object-storage-durable-ingestion/research/current-storage-ingestion-evidence.md","reason":"Check every retained legacy storage/parser/chunk/embedding caller, format safety boundary, cleanup owner, and executable validation row."}
+{"file":".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md","reason":"Check coexistence, rollback, later search/MCP ownership, model governance, and deletion milestones."}
+{"file": ".trellis/spec/backend/object-storage-ingestion-contracts.md", "reason": "Verify storage security, state machine, real PostgreSQL/MinIO gates, migration, and cleanup contracts."}
+{"file": ".trellis/spec/frontend/file-upload-ingestion-contracts.md", "reason": "Verify generated frontend contracts, failure states, desktop/mobile journeys, and no legacy byte path."}

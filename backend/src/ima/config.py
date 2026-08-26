@@ -69,6 +69,21 @@ class Settings(BaseSettings):
     model_write_timeout_seconds: float = 30.0
     model_pool_timeout_seconds: float = 5.0
     model_health_min_interval_seconds: int = 30
+    storage_endpoint: str | None = None
+    storage_region: str = "us-east-1"
+    storage_bucket: str | None = None
+    storage_access_key_id: SecretStr | None = Field(default=None, repr=False)
+    storage_secret_access_key: SecretStr | None = Field(default=None, repr=False)
+    storage_max_object_bytes: int = 25 * 1024 * 1024
+    storage_presign_seconds: int = 300
+    storage_connect_timeout_seconds: float = 5.0
+    storage_read_timeout_seconds: float = 30.0
+    storage_retention_seconds: int = 604800
+    ingestion_queue: str = "ingestion"
+    ingestion_max_text_bytes: int = 5 * 1024 * 1024
+    ingestion_max_chunks: int = 10000
+    ingestion_chunk_size: int = 1200
+    ingestion_chunk_overlap: int = 160
 
     @field_validator("public_origin")
     @classmethod
@@ -167,7 +182,43 @@ class Settings(BaseSettings):
             raise ValueError("max_body_bytes must be between 1 and 536870912")
         return value
 
-    @field_validator("diagnostic_queue", "worker_name")
+    @field_validator("storage_endpoint")
+    @classmethod
+    def validate_storage_endpoint(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parsed = urlparse(value)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("storage_endpoint must be an absolute HTTP(S) URL")
+        return value.rstrip("/")
+
+    @field_validator("storage_max_object_bytes", "ingestion_max_text_bytes")
+    @classmethod
+    def validate_storage_limits(cls, value: int) -> int:
+        if value < 1 or value > 512 * 1024 * 1024:
+            raise ValueError("storage and ingestion limits must be between 1 and 536870912")
+        return value
+
+    @field_validator("storage_presign_seconds", "storage_retention_seconds", "ingestion_max_chunks")
+    @classmethod
+    def validate_positive_limits(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("storage and ingestion limits must be positive")
+        return value
+
+    @field_validator("storage_connect_timeout_seconds", "storage_read_timeout_seconds")
+    @classmethod
+    def validate_storage_timeouts(cls, value: float) -> float:
+        if value <= 0 or value > 300:
+            raise ValueError("storage timeouts must be between 0 and 300 seconds")
+        return value
+
+    @field_validator("diagnostic_queue", "ingestion_queue", "worker_name")
     @classmethod
     def validate_runtime_identity(cls, value: str) -> str:
         if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", value):
@@ -178,6 +229,18 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_environment_constraints(self) -> Settings:
+        storage_values = (
+            self.storage_endpoint,
+            self.storage_bucket,
+            self.storage_access_key_id,
+            self.storage_secret_access_key,
+        )
+        if any(value is not None for value in storage_values) and not all(storage_values):
+            raise ValueError(
+                "storage endpoint, bucket, and credentials must be configured together"
+            )
+        if self.ingestion_chunk_overlap >= self.ingestion_chunk_size:
+            raise ValueError("ingestion_chunk_overlap must be less than ingestion_chunk_size")
         if self.environment == "production":
             if not self.public_origin.startswith("https://"):
                 raise ValueError("production public_origin must use HTTPS")

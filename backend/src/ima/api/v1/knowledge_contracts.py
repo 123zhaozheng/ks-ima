@@ -22,6 +22,67 @@ class KnowledgeCapabilities(ContractModel):
     preview: Capability
 
 
+class UploadTicketRequest(ContractModel):
+    title: str = Field(min_length=1, max_length=200)
+    filename: str = Field(min_length=1, max_length=255)
+    mime_type: str = Field(alias="mimeType", min_length=1, max_length=255)
+    size_bytes: int = Field(alias="sizeBytes", gt=0)
+    checksum: str = Field(min_length=64, max_length=64)
+
+
+class UploadTicketResponse(ContractModel):
+    ticket_id: str = Field(alias="ticketId")
+    upload_url: str = Field(alias="uploadUrl")
+    document_id: UUID = Field(alias="documentId")
+    version: int
+    expires_at: datetime = Field(alias="expiresAt")
+    required_checksum: str = Field(alias="requiredChecksum")
+    required_size_bytes: int = Field(alias="requiredSizeBytes")
+    required_mime_type: str = Field(alias="requiredMimeType")
+
+
+class UploadCompleteRequest(ContractModel):
+    ticket_id: str = Field(alias="ticketId", min_length=1)
+
+
+class ReplaceFileRequest(UploadTicketRequest):
+    expected_version: int = Field(alias="expectedVersion", gt=0)
+    expected_content_version: int = Field(alias="expectedContentVersion", gt=0)
+
+
+class FileVersionResponse(ContractModel):
+    version: int
+    generation: int
+    object_state: str = Field(alias="objectState")
+    original_filename: str = Field(alias="originalFilename")
+    created_at: datetime = Field(alias="createdAt")
+
+
+class FileVersionPage(ContractModel):
+    items: tuple[FileVersionResponse, ...]
+
+
+class FileAccessResponse(ContractModel):
+    url: str
+    expires_at: datetime = Field(alias="expiresAt")
+
+
+class IngestionJobResponse(ContractModel):
+    stage: str
+    status: str
+    completed_units: int = Field(alias="completedUnits")
+    total_units: int = Field(alias="totalUnits")
+    error_code: str | None = Field(alias="errorCode")
+    updated_at: datetime = Field(alias="updatedAt")
+
+
+class IngestionStatusResponse(ContractModel):
+    document_id: UUID = Field(alias="documentId")
+    version: int
+    object_state: str = Field(alias="objectState")
+    jobs: tuple[IngestionJobResponse, ...]
+
+
 class ContentRow(ContractModel):
     id: str
     kind: Literal["folder", "file", "note"]

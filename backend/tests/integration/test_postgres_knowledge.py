@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import subprocess
 from datetime import UTC, datetime
@@ -59,8 +60,9 @@ async def context(label: str) -> tuple[object, KnowledgeService, str, str, str]:
     """Create an isolated workspace and users, cleaning a prior interrupted run."""
     engine = create_engine(settings())
     workspace_service = WorkspaceService(engine, settings())
-    actor = f"knowledge-{label}-admin"
-    viewer = f"knowledge-{label}-viewer"
+    digest = hashlib.sha256(label.encode()).hexdigest()[:16]
+    actor = f"knowledge-{digest}-a"
+    viewer = f"knowledge-{digest}-v"
     stamp = datetime.now(UTC)
     async with engine.begin() as conn:
         await conn.execute(
@@ -179,7 +181,7 @@ def test_knowledge_migration_is_fresh_and_repeatable() -> None:
     with psycopg.connect(SYNC_URL) as connection:
         assert (
             connection.execute("SELECT version_num FROM ima.alembic_version").fetchone()[0]
-            == "20260825_0005"
+            == "20260825_0006"
         )
         for table in (
             "documents",
@@ -371,10 +373,15 @@ async def test_tag_merge_and_delete_are_versioned_and_dependency_safe() -> None:
             1,
         )
         async with engine.connect() as conn:  # type: ignore[attr-defined]
-            assert await conn.scalar(
-                text("SELECT count(*) FROM ima.document_tags WHERE document_id=:document AND tag_id=:tag"),
-                {"document": note["id"], "tag": target["id"]},
-            ) == 1
+            assert (
+                await conn.scalar(
+                    text(
+                        "SELECT count(*) FROM ima.document_tags WHERE document_id=:document AND tag_id=:tag"
+                    ),
+                    {"document": note["id"], "tag": target["id"]},
+                )
+                == 1
+            )
         with pytest.raises(KnowledgeError) as hidden_source:
             await service.delete_tag(actor, workspace_id, UUID(str(source["id"])), 2)
         assert hidden_source.value.code == "TAG_NOT_FOUND"
@@ -421,7 +428,10 @@ async def test_mixed_trash_lists_files_and_notes_and_restricts_version_delete() 
             )
         await service.trash_document(actor, UUID(str(note["id"])), int(note["version"]))
         await service.trash_document(actor, file_id, 1)
-        kinds = {item["kind"] for item in (await service.list_trash(actor, workspace_id, None, 50))["items"]}
+        kinds = {
+            item["kind"]
+            for item in (await service.list_trash(actor, workspace_id, None, 50))["items"]
+        }
         assert {"note", "file"} <= kinds
         with pytest.raises(KnowledgeError) as dependency:
             await service.delete_document(actor, UUID(str(note["id"])))

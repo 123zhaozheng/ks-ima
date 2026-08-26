@@ -14,6 +14,15 @@ def test_openapi_has_model_governance_operations_but_no_private_bridge() -> None
     assert schema["paths"]["/api/v1/system/info"]["get"]["operationId"] == "getSystemInfo"
     assert "/api/v1/admin/model-gateways" in schema["paths"]
     assert "/api/v1/admin/capability-profiles" in schema["paths"]
+    assert "/api/v1/documents/{document_id}/ingestion/retry" in schema["paths"]
+    assert (
+        schema["paths"]["/api/v1/documents/{document_id}/ingestion/cancel"]["post"]["operationId"]
+        == "cancelDocumentIngestion"
+    )
+    assert (
+        schema["paths"]["/api/v1/folders/{folder_id}/files/upload-ticket"]["post"]["operationId"]
+        == "createFileUploadTicket"
+    )
     assert not any("/internal/" in path for path in schema["paths"])
     assert "gatewaySecret" not in str(schema)
     assert "gatewayBaseUrl" not in str(schema)

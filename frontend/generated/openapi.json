@@ -1115,6 +1115,78 @@
         "title": "DocumentResponse",
         "type": "object"
       },
+      "FileAccessResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expiresAt"
+        ],
+        "title": "FileAccessResponse",
+        "type": "object"
+      },
+      "FileVersionPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FileVersionResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "FileVersionPage",
+        "type": "object"
+      },
+      "FileVersionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "generation": {
+            "title": "Generation",
+            "type": "integer"
+          },
+          "objectState": {
+            "title": "Objectstate",
+            "type": "string"
+          },
+          "originalFilename": {
+            "title": "Originalfilename",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "generation",
+          "objectState",
+          "originalFilename",
+          "createdAt"
+        ],
+        "title": "FileVersionResponse",
+        "type": "object"
+      },
       "Folder": {
         "additionalProperties": false,
         "properties": {
@@ -2247,6 +2319,86 @@
         "title": "ImpactResponse",
         "type": "object"
       },
+      "IngestionJobResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "completedUnits": {
+            "title": "Completedunits",
+            "type": "integer"
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "totalUnits": {
+            "title": "Totalunits",
+            "type": "integer"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "status",
+          "completedUnits",
+          "totalUnits",
+          "errorCode",
+          "updatedAt"
+        ],
+        "title": "IngestionJobResponse",
+        "type": "object"
+      },
+      "IngestionStatusResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "documentId": {
+            "format": "uuid",
+            "title": "Documentid",
+            "type": "string"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/IngestionJobResponse"
+            },
+            "title": "Jobs",
+            "type": "array"
+          },
+          "objectState": {
+            "title": "Objectstate",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "documentId",
+          "version",
+          "objectState",
+          "jobs"
+        ],
+        "title": "IngestionStatusResponse",
+        "type": "object"
+      },
       "Invitation": {
         "additionalProperties": false,
         "properties": {
@@ -3189,6 +3341,61 @@
         "title": "RegisterRequest",
         "type": "object"
       },
+      "ReplaceFileRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "checksum": {
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Checksum",
+            "type": "string"
+          },
+          "expectedContentVersion": {
+            "exclusiveMinimum": 0.0,
+            "title": "Expectedcontentversion",
+            "type": "integer"
+          },
+          "expectedVersion": {
+            "exclusiveMinimum": 0.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "filename": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Filename",
+            "type": "string"
+          },
+          "mimeType": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Mimetype",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "exclusiveMinimum": 0.0,
+            "title": "Sizebytes",
+            "type": "integer"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "filename",
+          "mimeType",
+          "sizeBytes",
+          "checksum",
+          "expectedVersion",
+          "expectedContentVersion"
+        ],
+        "title": "ReplaceFileRequest",
+        "type": "object"
+      },
       "SecretRotateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3566,6 +3773,115 @@
           "items"
         ],
         "title": "TrashPage",
+        "type": "object"
+      },
+      "UploadCompleteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "ticketId": {
+            "minLength": 1,
+            "title": "Ticketid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticketId"
+        ],
+        "title": "UploadCompleteRequest",
+        "type": "object"
+      },
+      "UploadTicketRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "checksum": {
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Checksum",
+            "type": "string"
+          },
+          "filename": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Filename",
+            "type": "string"
+          },
+          "mimeType": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Mimetype",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "exclusiveMinimum": 0.0,
+            "title": "Sizebytes",
+            "type": "integer"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "filename",
+          "mimeType",
+          "sizeBytes",
+          "checksum"
+        ],
+        "title": "UploadTicketRequest",
+        "type": "object"
+      },
+      "UploadTicketResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "documentId": {
+            "format": "uuid",
+            "title": "Documentid",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "requiredChecksum": {
+            "title": "Requiredchecksum",
+            "type": "string"
+          },
+          "requiredMimeType": {
+            "title": "Requiredmimetype",
+            "type": "string"
+          },
+          "requiredSizeBytes": {
+            "title": "Requiredsizebytes",
+            "type": "integer"
+          },
+          "ticketId": {
+            "title": "Ticketid",
+            "type": "string"
+          },
+          "uploadUrl": {
+            "title": "Uploadurl",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ticketId",
+          "uploadUrl",
+          "documentId",
+          "version",
+          "expiresAt",
+          "requiredChecksum",
+          "requiredSizeBytes",
+          "requiredMimeType"
+        ],
+        "title": "UploadTicketResponse",
         "type": "object"
       },
       "UserPatch": {
@@ -7390,6 +7706,370 @@
         ]
       }
     },
+    "/api/v1/documents/{document_id}/file-versions": {
+      "get": {
+        "operationId": "listFileVersions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileVersionPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "File Versions",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/file-versions/complete": {
+      "post": {
+        "operationId": "completeFileUpload",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Complete Upload",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/file-versions/upload-ticket": {
+      "post": {
+        "operationId": "createFileReplacementUploadTicket",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceFileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadTicketResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replacement Upload Ticket",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/file/download": {
+      "get": {
+        "operationId": "getFileDownload",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileAccessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download File",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/file/preview": {
+      "get": {
+        "operationId": "getFilePreview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileAccessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview File",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/ingestion": {
+      "get": {
+        "operationId": "getDocumentIngestion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingestion Status",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/ingestion/cancel": {
+      "post": {
+        "operationId": "cancelDocumentIngestion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Ingestion",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/ingestion/retry": {
+      "post": {
+        "operationId": "retryDocumentIngestion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Ingestion",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
     "/api/v1/documents/{document_id}/move": {
       "post": {
         "operationId": "moveKnowledgeDocument",
@@ -7841,6 +8521,58 @@
           }
         },
         "summary": "Contents",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/api/v1/folders/{folder_id}/files/upload-ticket": {
+      "post": {
+        "operationId": "createFileUploadTicket",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "folder_id",
+            "required": true,
+            "schema": {
+              "title": "Folder Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadTicketRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadTicketResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Ticket",
         "tags": [
           "knowledge"
         ]

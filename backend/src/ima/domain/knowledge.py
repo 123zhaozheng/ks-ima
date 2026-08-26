@@ -64,7 +64,6 @@ class ListingCursor:
             raise ValueError("invalid cursor") from exc
 
 
-
 @dataclass(frozen=True, slots=True)
 class TrashCursor:
     workspace_id: str

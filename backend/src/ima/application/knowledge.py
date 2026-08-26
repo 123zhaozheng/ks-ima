@@ -621,9 +621,17 @@ class KnowledgeService:
             by_id = {row["id"]: dict(row) for row in tags}
             source = by_id.get(source_tag_id)
             target = by_id.get(target_tag_id)
-            if not source or not target or source["lifecycle"] != "active" or target["lifecycle"] != "active":
+            if (
+                not source
+                or not target
+                or source["lifecycle"] != "active"
+                or target["lifecycle"] != "active"
+            ):
                 raise KnowledgeError(404, "TAG_NOT_FOUND", "Tag not found")
-            if int(source["version"]) != expected_version or int(target["version"]) != expected_target_version:
+            if (
+                int(source["version"]) != expected_version
+                or int(target["version"]) != expected_target_version
+            ):
                 raise KnowledgeError(409, "VERSION_CONFLICT", "Tag has changed")
             await conn.execute(
                 text(
@@ -634,7 +642,8 @@ class KnowledgeService:
                 {"source": source_tag_id, "target": target_tag_id, "actor": actor, "now": now()},
             )
             await conn.execute(
-                text("DELETE FROM ima.document_tags WHERE tag_id=:source"), {"source": source_tag_id}
+                text("DELETE FROM ima.document_tags WHERE tag_id=:source"),
+                {"source": source_tag_id},
             )
             await conn.execute(
                 text(
@@ -691,6 +700,13 @@ class KnowledgeService:
                     raise KnowledgeError(400, "INVALID_CURSOR", "Cursor is invalid") from exc
                 if decoded.workspace_id != workspace_id:
                     raise KnowledgeError(400, "INVALID_CURSOR", "Cursor is invalid")
+            if decoded:
+                try:
+                    after_trashed_at = datetime.fromisoformat(decoded.trashed_at)
+                except ValueError as exc:
+                    raise KnowledgeError(400, "INVALID_CURSOR", "Cursor is invalid") from exc
+            else:
+                after_trashed_at = datetime(1970, 1, 1, tzinfo=UTC)
             visible_folders = await accessible_folder_ids(
                 conn, info["subject"], AclAction.VIEW_METADATA, include_trashed=True
             )
@@ -699,7 +715,7 @@ class KnowledgeService:
                 "folders": list(visible_folders),
                 "limit": limit + 1,
                 "has_after": decoded is not None,
-                "after_trashed_at": decoded.trashed_at if decoded else "1970-01-01T00:00:00+00:00",
+                "after_trashed_at": after_trashed_at,
                 "after_id": decoded.item_id if decoded else "",
             }
             rows = (
@@ -735,7 +751,12 @@ class KnowledgeService:
                 ).encode()
             return {
                 "items": [
-                    {**row, "orderKey": row.pop("order_key"), "fileState": row.pop("file_state"), "trashedAt": row.pop("trashed_at")}
+                    {
+                        **row,
+                        "orderKey": row.pop("order_key"),
+                        "fileState": row.pop("file_state"),
+                        "trashedAt": row.pop("trashed_at"),
+                    }
                     for row in payload
                 ],
                 "nextCursor": next_cursor,

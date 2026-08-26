@@ -1023,6 +1023,142 @@ export interface paths {
         patch: operations["updateKnowledgeDocument"];
         trace?: never;
     };
+    "/api/v1/documents/{document_id}/file-versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** File Versions */
+        get: operations["listFileVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/file-versions/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Upload */
+        post: operations["completeFileUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/file-versions/upload-ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replacement Upload Ticket */
+        post: operations["createFileReplacementUploadTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/file/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download File */
+        get: operations["getFileDownload"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/file/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview File */
+        get: operations["getFilePreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/ingestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ingestion Status */
+        get: operations["getDocumentIngestion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/ingestion/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Ingestion */
+        post: operations["cancelDocumentIngestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/ingestion/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Ingestion */
+        post: operations["retryDocumentIngestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/documents/{document_id}/move": {
         parameters: {
             query?: never;
@@ -1153,6 +1289,23 @@ export interface paths {
         get: operations["listFolderContents"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/folders/{folder_id}/files/upload-ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Ticket */
+        post: operations["createFileUploadTicket"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2170,6 +2323,37 @@ export interface components {
             /** Workspaceid */
             workspaceId: string;
         };
+        /** FileAccessResponse */
+        FileAccessResponse: {
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Url */
+            url: string;
+        };
+        /** FileVersionPage */
+        FileVersionPage: {
+            /** Items */
+            items: components["schemas"]["FileVersionResponse"][];
+        };
+        /** FileVersionResponse */
+        FileVersionResponse: {
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Generation */
+            generation: number;
+            /** Objectstate */
+            objectState: string;
+            /** Originalfilename */
+            originalFilename: string;
+            /** Version */
+            version: number;
+        };
         /** Folder */
         Folder: {
             /** Aclanchorid */
@@ -2506,6 +2690,38 @@ export interface components {
             /** Requiresreindex */
             requiresReindex: boolean;
         };
+        /** IngestionJobResponse */
+        IngestionJobResponse: {
+            /** Completedunits */
+            completedUnits: number;
+            /** Errorcode */
+            errorCode: string | null;
+            /** Stage */
+            stage: string;
+            /** Status */
+            status: string;
+            /** Totalunits */
+            totalUnits: number;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /** IngestionStatusResponse */
+        IngestionStatusResponse: {
+            /**
+             * Documentid
+             * Format: uuid
+             */
+            documentId: string;
+            /** Jobs */
+            jobs: components["schemas"]["IngestionJobResponse"][];
+            /** Objectstate */
+            objectState: string;
+            /** Version */
+            version: number;
+        };
         /** Invitation */
         Invitation: {
             /** Acceptedat */
@@ -2829,6 +3045,23 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** ReplaceFileRequest */
+        ReplaceFileRequest: {
+            /** Checksum */
+            checksum: string;
+            /** Expectedcontentversion */
+            expectedContentVersion: number;
+            /** Expectedversion */
+            expectedVersion: number;
+            /** Filename */
+            filename: string;
+            /** Mimetype */
+            mimeType: string;
+            /** Sizebytes */
+            sizeBytes: number;
+            /** Title */
+            title: string;
+        };
         /** SecretRotateRequest */
         SecretRotateRequest: {
             /** Expectedversion */
@@ -2959,6 +3192,49 @@ export interface components {
             items: components["schemas"]["ContentRow"][];
             /** Nextcursor */
             nextCursor?: string | null;
+        };
+        /** UploadCompleteRequest */
+        UploadCompleteRequest: {
+            /** Ticketid */
+            ticketId: string;
+        };
+        /** UploadTicketRequest */
+        UploadTicketRequest: {
+            /** Checksum */
+            checksum: string;
+            /** Filename */
+            filename: string;
+            /** Mimetype */
+            mimeType: string;
+            /** Sizebytes */
+            sizeBytes: number;
+            /** Title */
+            title: string;
+        };
+        /** UploadTicketResponse */
+        UploadTicketResponse: {
+            /**
+             * Documentid
+             * Format: uuid
+             */
+            documentId: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Requiredchecksum */
+            requiredChecksum: string;
+            /** Requiredmimetype */
+            requiredMimeType: string;
+            /** Requiredsizebytes */
+            requiredSizeBytes: number;
+            /** Ticketid */
+            ticketId: string;
+            /** Uploadurl */
+            uploadUrl: string;
+            /** Version */
+            version: number;
         };
         /** UserPatch */
         UserPatch: {
@@ -5497,6 +5773,262 @@ export interface operations {
             };
         };
     };
+    listFileVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileVersionPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    completeFileUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createFileReplacementUploadTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadTicketResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getFileDownload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileAccessResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getFilePreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileAccessResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getDocumentIngestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancelDocumentIngestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retryDocumentIngestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     moveKnowledgeDocument: {
         parameters: {
             query?: never;
@@ -5753,6 +6285,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContentPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createFileUploadTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadTicketRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadTicketResponse"];
                 };
             };
             /** @description Validation Error */

@@ -3,7 +3,7 @@
   "name": "object-storage-durable-ingestion",
   "title": "Object storage and durable ingestion",
   "description": "Implement private S3 upload/download flows, immutable document versions, durable parsing/embedding jobs, progress, retry, and previews.",
-  "status": "planning",
+  "status": "completed",
   "dev_type": null,
   "scope": null,
   "package": null,

@@ -1,1 +1,11 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/backend/python-foundation-contracts.md","reason":"Reuse import-safe API/worker startup, explicit migration, PostgreSQL task queue, deployment, health, body-limit, and no-detached-task contracts."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Apply ima/ima_jobs schema boundaries, additive Alembic migration, restrictive constraints, transaction, and cleanup conventions."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Enforce Python 3.13 Ruff/mypy/pytest, import safety, Procrastinate durability, redaction, and no placeholder implementation."}
+{"file":".trellis/spec/backend/model-governance-contracts.md","reason":"Route embedding execution through exact Python model-governance assignments, dimensions, guarded gateway, and REINDEX_REQUIRED behavior."}
+{"file":".trellis/spec/backend/workspace-authorization-contracts.md","reason":"Reuse canonical ACL/member/action checks and 404 non-disclosure for tickets, bytes, previews, ingestion, and cleanup."}
+{"file":".trellis/spec/frontend/openapi-client-contracts.md","reason":"Keep generated OpenAPI DTO/client authority, shared transport, Vue Query cancellation, error decoding, and drift gates."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Apply Quasar/Vue Query quality, generated-client boundaries, lint/type/build, and browser verification requirements."}
+{"file":".trellis/tasks/08-24-object-storage-durable-ingestion/research/current-storage-ingestion-evidence.md","reason":"Use code-backed legacy S3/parser/chunk/embedding evidence, MVP format boundary, migration blockers, retention inventory, and validation matrix."}
+{"file":".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md","reason":"Preserve repository-wide ownership boundaries for storage, ingestion, search, MCP, model governance, Zero coexistence, and rollback."}
+{"file": ".trellis/spec/backend/object-storage-ingestion-contracts.md", "reason": "Implement the executable storage, file-version, parser, durable task, embedding, migration, and cleanup contracts."}
+{"file": ".trellis/spec/frontend/file-upload-ingestion-contracts.md", "reason": "Implement generated upload, replacement, progress, abort, preview/download, history, and workspace-switch behavior."}

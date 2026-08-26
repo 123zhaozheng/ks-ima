@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
+- **Total Sessions**: 7
 - **Last Active**: 2026-08-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~137 | Active |
+| `journal-1.md` | ~158 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-08-26 | Search conversations and grounded Ask | `d1e5813` | `feat/intranet-ima` |
 | 6 | 2026-08-26 | Object storage and durable ingestion | `8886ed4` | `feat/intranet-ima` |
 | 5 | 2026-08-25 | Knowledge tree and Vue API migration | `f603b38` | `feat/intranet-ima` |
 | 4 | 2026-08-25 | Complete central model governance | `494de12`, `e68cf53` | `feat/intranet-ima` |

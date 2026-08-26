@@ -135,3 +135,24 @@ Implemented private S3-compatible upload/download/preview, immutable file replac
 ### Status
 
 [OK] **Completed**
+
+
+## Session 7: Search conversations and grounded Ask
+
+**Date**: 2026-08-26
+**Task**: Search conversations and grounded Ask
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Implemented workspace-isolated ACL-first FTS/pgvector retrieval, exact ANN lifecycle, optional governed rerank, owner-private conversations, grounded SSE, immutable citations, target Vue Ask, and executable search specs. Verified backend/frontend gates, isolated PostgreSQL 29/29, and desktop/mobile Playwright.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d1e5813` | (see git log) |
+
+### Status
+
+[OK] **Completed**

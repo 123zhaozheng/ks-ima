@@ -218,3 +218,24 @@ Full working-tree review of the uncommitted WIP against prd.md, design.md, imple
 ### Status
 
 [OK] **Check complete: 5 issues fixed, all verification green, awaiting commit**
+
+
+## Session 8: OAuth service principals and MCP delivered
+
+**Date**: 2026-08-28
+**Task**: OAuth service principals and MCP delivered
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Audited and verified all 7 phases of the OAuth/MCP plan: OAuth 2.1 authorization server, service principals, target-backed Python MCP tools, consent/access UI, and coexistence runbook. Check session fixed delegated-policy error propagation in storage authorize, revocation_epoch bump on code-reuse grant revocation, OAuth JSON error translation at the token endpoint, per-tool timeout hierarchy under lease TTL, and a gitignore gap. Full backend (ruff/mypy/pytest/forced Postgres) and frontend (unit/lint/builds/e2e 42/42) matrices green. Captured oauth-mcp-contracts spec.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `22950e0` | (see git log) |
+
+### Status
+
+[OK] **Completed**

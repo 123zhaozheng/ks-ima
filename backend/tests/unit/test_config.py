@@ -49,3 +49,29 @@ def test_runtime_identity_is_validated() -> None:
     assert settings.worker_name == "worker.integration"
     with pytest.raises(ValidationError):
         Settings(environment="test", worker_name="Worker With Spaces")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("oauth_authorization_code_seconds", 61),
+        ("oauth_access_token_seconds", 601),
+        ("oauth_refresh_absolute_seconds", 2592001),
+        ("service_credential_max_seconds", 7776001),
+        ("credential_rotation_overlap_seconds", 601),
+    ),
+)
+def test_oauth_duration_caps_cannot_be_exceeded(field: str, value: int) -> None:
+    with pytest.raises(ValidationError):
+        Settings(environment="test", **{field: value})
+
+
+def test_mcp_resource_url_is_canonical_origin_plus_path() -> None:
+    settings = Settings(
+        environment="test", public_origin="https://ima.example/", mcp_resource_path="/mcp"
+    )
+    assert settings.mcp_resource_url == "https://ima.example/mcp"
+    with pytest.raises(ValidationError):
+        Settings(environment="test", mcp_resource_path="mcp")
+    with pytest.raises(ValidationError):
+        Settings(environment="test", public_origin="https://ima.example/base")

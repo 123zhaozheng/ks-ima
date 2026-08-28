@@ -52,6 +52,8 @@ services:
       IMA_BUILD_VERSION: ${IMA_BUILD_VERSION:-dev}
       IMA_TASK_SCHEMA: ima_jobs
       IMA_CORS_ORIGINS: ${IMA_CORS_ORIGINS:-http://localhost:8080}
+      # The API is internal-only; trust forwarded client addresses solely from the Docker proxy network.
+      IMA_TRUSTED_PROXIES: ${IMA_TRUSTED_PROXIES:-172.16.0.0/12}
       IMA_DIAGNOSTIC_QUEUE: ${IMA_DIAGNOSTIC_QUEUE:-diagnostic}
       IMA_WORKER_NAME: ${IMA_WORKER_NAME:-diagnostic-worker}
       IMA_INGESTION_QUEUE: ${IMA_INGESTION_QUEUE:-ingestion}

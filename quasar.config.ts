@@ -187,6 +187,9 @@ export default defineConfig((ctx) => {
         cfg.globPatterns = ['**/*.{js,css,html,ico,png,svg,woff2}']
         cfg.navigateFallbackDenylist = [
           /^\/api\//,
+          /^\/oauth(?:\/|$)/,
+          /^\/\.well-known(?:\/|$)/,
+          /^\/mcp(?:\/|$)/,
         ]
         cfg.skipWaiting = false
         cfg.clientsClaim = true

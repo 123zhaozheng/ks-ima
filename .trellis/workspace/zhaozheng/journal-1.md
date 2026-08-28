@@ -156,3 +156,65 @@ Implemented workspace-isolated ACL-first FTS/pgvector retrieval, exact ANN lifec
 ### Status
 
 [OK] **Completed**
+
+
+## Session 8: OAuth service principals and MCP
+
+**Date**: 2026-08-28
+**Task**: OAuth service principals and MCP
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Completed and verified all seven implementation phases: pinned `mcp==2.1.1` Streamable HTTP transport mounted at canonical `/mcp` with pre-dispatch bearer authentication, OAuth 2.1 authorization-code/PKCE S256 with pepper-digested one-time codes and rotating refresh families, finite service-principal credentials with network/rate/concurrency policy, target-only tool parity through `WorkspaceService`/`KnowledgeService`/`StorageService`/`SearchService.ask_bounded`, Vue consent page and split interactive/service access management, exact Caddy route precedence with legacy `/api/mcp` retained on Bun, safe legacy inventory CLI, coexistence runbook, and a containerized pre-sunset Caddy rollback drill. No `public.connector` mutation, no FastAPI imports in application services, no legacy fallback paths.
+
+### Verification
+
+- Backend: ruff format/check clean, mypy clean (67 files), pytest 200 passed / 40 postgres-selected, forced PostgreSQL gate 40/40 passed with zero skips.
+- Frontend: generate:api in sync, vitest 32/32, bun test 26/26, lint 0 errors, build:front/build:admin/build:server passed sequentially, test:mcp passed, test:caddy-routing drill ok (current/pre_sunset_rollback/restored).
+- E2E: 42/42 passed on desktop and mobile chromium (first run flaked under concurrent container drills; clean rerun green). Live API probes confirmed RFC 9728/8414 metadata and the 401 `resource_metadata` challenge.
+- Remaining environment-blocked evidence: `test:mcp-live` needs the legacy Bun stack's database (not running locally); real Cursor/Claude Desktop client matrix is deferred to the deployed public origin per the runbook.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| pending | Commit performed in the later commit phase |
+
+### Status
+
+[OK] **Implementation complete, awaiting commit**
+
+## Session 9: Trellis check — OAuth service principals and MCP
+
+**Date**: 2026-08-28
+**Task**: OAuth service principals and MCP
+**Branch**: `feat/intranet-ima`
+
+### Review scope
+
+Full working-tree review of the uncommitted WIP against prd.md, design.md, implement.md, and the backend/frontend/identity spec contracts: digest-only secret persistence, audit redaction, no FastAPI in application layer, per-request target re-authorization, delegated entry points, canonical audience, one-time-code and refresh-replay atomicity, RFC 9457 and OAuth token error shapes, Caddy precedence, frontend no-secret persistence, and MCP tool delegation.
+
+### Issues found and fixed
+
+1. `backend/src/ima/application/storage.py` `_authorize` McpActor branch — bare `except Exception` collapsed every delegated-policy denial to a misleading 404 DOCUMENT_NOT_FOUND; now catches `WorkspaceError` and propagates status/code/detail, matching `knowledge.py`.
+2. `backend/src/ima/infrastructure/oauth.py` `consume_authorization_code` — code-reuse grant revocation now also bumps `revocation_epoch`, consistent with `exchange_authorization_code_bundle`, `revoke_grant`, and refresh-replay paths.
+3. `backend/src/ima/application/oauth.py` `exchange_service_credential` — `authorize_delegated_boundary` WorkspaceError leaked past `/oauth/token`'s McpAuthorizationError catch into the global RFC 9457 handler; now translated to `policy_denied` so the token endpoint returns OAuth JSON (`access_denied`).
+4. `backend/src/ima/application/mcp.py` — `_execute` hardcoded a 15s boundary that killed `kb_ask` before its inner bounded 30s budget could complete; `_execute` now takes `timeout_seconds` (default 15s) and kb_ask uses 45s (30s inner < 45s outer < 60s lease TTL), consistent with `_document`.
+5. `.gitignore` — Playwright `test-results/` (and report dirs) were untracked-but-not-ignored despite a stale check-ignore match; added explicit ignore entries so e2e artifacts are never committed.
+
+### Re-run verification after fixes
+
+- ruff format/check (edited files + full): clean; mypy (edited files + full `src/ima`): clean.
+- Backend pytest: 200 passed / 40 postgres-selected (default); forced postgres gate 240 passed, 0 skipped (`IMA_REQUIRE_POSTGRES=1` against 127.0.0.1:55432).
+- Frontend untouched by fixes (backend-only changes); prior green builds/lint/unit/e2e remain valid.
+
+### Remaining risks (accepted, documented in prd/runbook)
+
+- Catch-all `app.mount("/", mcp_transport.app)` returns empty-body 404 for unmatched paths; non-McpAuthorizationError exceptions inside the mounted auth path bypass FastAPI handlers (fail-closed 500).
+- `/oauth/consent` SPA route is only served via Caddy try_files.
+- External client matrix (Cursor/Claude Desktop) and `test:mcp-live` deferred to deployed public origin per runbook.
+
+### Status
+
+[OK] **Check complete: 5 issues fixed, all verification green, awaiting commit**

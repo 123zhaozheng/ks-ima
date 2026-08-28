@@ -177,6 +177,7 @@ class TagMergeRequest(ContractModel):
 
 class TagAssignmentRequest(ContractModel):
     tag_ids: tuple[UUID, ...] = Field(alias="tagIds")
+    expected_version: int = Field(alias="expectedVersion", gt=0)
 
 
 class TrashPage(ContractModel):

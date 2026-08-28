@@ -21,6 +21,8 @@ from ima.api.errors import (
 from ima.api.internal.authorization_bridge import router as authorization_bridge_router
 from ima.api.internal.session_bridge import router as bridge_router
 from ima.api.middleware import BodyLimitMiddleware, CorrelationMiddleware, RequestTimingMiddleware
+from ima.api.oauth import admin_router as oauth_admin_router
+from ima.api.oauth import public_router as oauth_public_router
 from ima.api.v1.account import router as account_router
 from ima.api.v1.admin import router as admin_router
 from ima.api.v1.auth import router as auth_router
@@ -43,11 +45,14 @@ from ima.api.v1.workspaces import router as workspace_router
 from ima.application.authorization import WorkspaceError, WorkspaceService
 from ima.application.identity import IdentityError, IdentityService
 from ima.application.knowledge import KnowledgeError, KnowledgeService
+from ima.application.mcp import McpRuntime, McpTransport
 from ima.application.model_governance import ModelGovernanceError, ModelGovernanceService
+from ima.application.oauth import McpAuthorizationError, McpAuthorizationService
 from ima.application.search import SearchError, SearchService
 from ima.application.storage import StorageService
 from ima.config import Settings, get_settings
 from ima.infrastructure.db.engine import create_engine
+from ima.infrastructure.oauth import McpOauthRepository
 from ima.infrastructure.observability.logging import configure_logging
 from ima.infrastructure.tasks.service import JobService
 
@@ -57,6 +62,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_logging(app_settings.log_level)
     engine = create_engine(app_settings)
     service = JobService(app_settings, engine)
+    mcp_runtime: dict[str, McpRuntime] = {}
+    mcp_transport = McpTransport(lambda: mcp_runtime["value"], app_settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -65,6 +72,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.job_service = service
         app.state.identity_service = IdentityService(engine, app_settings)
         app.state.workspace_service = WorkspaceService(engine, app_settings)
+        app.state.mcp_oauth_repository = McpOauthRepository(engine, app_settings)
+        app.state.mcp_authorization_service = McpAuthorizationService(
+            app.state.mcp_oauth_repository,
+            app.state.identity_service,
+            app.state.workspace_service,
+            app_settings,
+        )
         app.state.model_governance_service = ModelGovernanceService(engine, app_settings)
         app.state.knowledge_service = KnowledgeService(engine, app.state.workspace_service)
         app.state.search_service = SearchService(
@@ -73,12 +87,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.storage_service = StorageService(
             app_settings, engine, app.state.workspace_service, service
         )
-        await service.start()
+        mcp_runtime["value"] = McpRuntime(
+            authorization=app.state.mcp_authorization_service,
+            workspace=app.state.workspace_service,
+            knowledge=app.state.knowledge_service,
+            storage=app.state.storage_service,
+            search=app.state.search_service,
+        )
+        service_started = False
         try:
-            yield
+            async with mcp_transport.sdk_app.router.lifespan_context(mcp_transport.sdk_app):
+                await service.start()
+                service_started = True
+                yield
         finally:
-            await service.stop()
-            await engine.dispose()
+            try:
+                if service_started:
+                    await service.stop()
+            finally:
+                mcp_runtime.clear()
+                await engine.dispose()
 
     app = FastAPI(
         title="IMA API",
@@ -88,6 +116,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
         openapi_url="/api/v1/system/openapi.json",
     )
+    app.state.settings = app_settings
+    app.state.mcp_runtime_box = mcp_runtime
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, unhandled_exception_handler)
@@ -158,11 +188,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.add_exception_handler(SearchError, search_exception_handler)  # type: ignore[arg-type]
+
+    async def mcp_authorization_exception_handler(
+        request: Request, exc: McpAuthorizationError
+    ) -> JSONResponse:
+        from ima.api.errors import make_problem
+
+        status = 429 if exc.reason == "rate_limited" else 403
+        if exc.reason in {"invalid_principal", "invalid_credential"}:
+            status = 404
+        return make_problem(
+            request,
+            status=status,
+            title="Service access request failed",
+            detail=exc.detail,
+            code=exc.reason.upper(),
+        )
+
+    app.add_exception_handler(McpAuthorizationError, mcp_authorization_exception_handler)  # type: ignore[arg-type]
     app.add_middleware(CorrelationMiddleware)
     app.add_middleware(RequestTimingMiddleware)
     if app_settings.trusted_proxies:
         app.add_middleware(
-            ProxyHeadersMiddleware,  # type: ignore[arg-type]
+            ProxyHeadersMiddleware,
             trusted_hosts=list(app_settings.trusted_proxies),
         )
     app.add_middleware(BodyLimitMiddleware, max_bytes=app_settings.max_body_bytes)
@@ -207,7 +255,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.include_router(model_governance_bridge_router)
     api.include_router(knowledge_router)
     api.include_router(search_router)
+    api.include_router(oauth_admin_router)
     app.include_router(api)
+    app.include_router(oauth_public_router)
+    app.mount("/", mcp_transport.app, name="mcp-transport")
     # Route dependencies must use the same immutable settings instance as the
     # application factory, including in contract tests and embedded deployments.
     app.dependency_overrides[get_settings] = lambda: app_settings

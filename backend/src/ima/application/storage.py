@@ -16,9 +16,10 @@ from uuid import UUID, uuid4
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from ima.application.authorization import WorkspaceService
+from ima.application.authorization import WorkspaceError, WorkspaceService
 from ima.application.ingestion import ParseError, validate_upload_type
 from ima.application.knowledge import KnowledgeError, now
+from ima.application.mcp_contracts import McpActor
 from ima.config import Settings
 from ima.domain.authorization import AclAction
 from ima.domain.knowledge import normalize_name
@@ -260,7 +261,7 @@ class StorageService:
         return await self.status(actor, document_id)
 
     async def download(
-        self, actor: str, document_id: UUID, *, preview: bool = False
+        self, actor: str | McpActor, document_id: UUID, *, preview: bool = False
     ) -> dict[str, Any]:
         async with self.engine.connect() as conn:
             row = await self._file_row(conn, document_id, None)
@@ -436,8 +437,20 @@ class StorageService:
         return dict(row)
 
     async def _authorize(
-        self, conn: Any, actor: str, folder: dict[str, Any], action: AclAction
+        self, conn: Any, actor: str | McpActor, folder: dict[str, Any], action: AclAction
     ) -> None:
+        if isinstance(actor, McpActor):
+            try:
+                await self.workspace._require_delegated_action(
+                    conn,
+                    actor,
+                    str(folder["workspace_id"]),
+                    str(folder["id"]),
+                    action,
+                )
+            except WorkspaceError as exc:
+                raise KnowledgeError(exc.status_code, exc.code, exc.detail) from exc
+            return
         info = await self.workspace._require_member(conn, actor, str(folder["workspace_id"]))
         try:
             await self.workspace._require_folder_action(

@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
+import { frontOrigin } from './tests/e2e/environment'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -7,7 +8,7 @@ export default defineConfig({
   fullyParallel: false,
   reporter: [['list']],
   use: {
-    baseURL: 'http://127.0.0.1:9016',
+    baseURL: frontOrigin,
     trace: 'retain-on-failure',
   },
   projects: [

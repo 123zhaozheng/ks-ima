@@ -1,1 +1,16 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/tasks/08-24-oauth-service-principals-mcp/research/current-oauth-mcp-evidence.md","reason":"Check all implementation decisions against repository evidence, including token safety, target-service ownership, Caddy, UI, migration, and the executable matrix."}
+{"file":".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md","reason":"Validate the change preserves parent target architecture, MCP scope, authorization, and coexistence constraints."}
+{"file":".trellis/tasks/08-24-python-intranet-ima-migration/research/mcp-oauth-auth.md","reason":"Review OAuth/MCP discovery, PKCE, resource binding, errors, refresh, principal, and official-client interoperability behavior."}
+{"file":".trellis/spec/backend/identity-platform-contracts.md","reason":"Check digest handling, recent auth, audit, session/state lifecycle, public/private routing, and required security tests."}
+{"file":".trellis/spec/backend/workspace-authorization-contracts.md","reason":"Check every tool delegates to current target authorization, preserves dependent ACL actions/non-disclosure, and never allows target fallback."}
+{"file":".trellis/spec/backend/object-storage-ingestion-contracts.md","reason":"Check MCP file upload/download operations retain target authorization, versioning, bounded transfer, and secret-safe storage behavior."}
+{"file":".trellis/spec/backend/search-grounded-ask-contracts.md","reason":"Check search/Ask source privacy, revocation races, cancellation, citations, and absence of legacy/public fallback."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check migrations stay in ima and have fresh/repeat PostgreSQL evidence."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check OAuth and Problem Details errors expose no secret, internal detail, or protected content."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Check audit/log/metric redaction for codes, tokens, secrets, authorization headers, and content."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Run and review required backend lint, type, pytest, import-safety, and duplication constraints."}
+{"file":".trellis/spec/frontend/identity-admin-contracts.md","reason":"Check consent/service UI uses generated DTOs, cookie/CSRF transport, safe state handling, and no credential persistence."}
+{"file":".trellis/spec/frontend/workspace-authorization-contracts.md","reason":"Check workspace-admin UI capability controls, conflicts, access revocation, and server denial coverage."}
+{"file":".trellis/spec/frontend/openapi-client-contracts.md","reason":"Check operation IDs, generated API drift, handwritten client location, type safety, and Caddy route coverage."}
+{"file":".trellis/spec/frontend/file-upload-ingestion-contracts.md","reason":"Check client-side upload/download flows remain target-backed and do not persist protected material."}
+{"file":".trellis/spec/frontend/grounded-search-ask-contracts.md","reason":"Check browser search/Ask data privacy, cancellation, and no fallback behavior where MCP administration surfaces it."}

@@ -3,7 +3,7 @@
   "name": "oauth-service-principals-mcp",
   "title": "OAuth service principals and MCP",
   "description": "Implement MCP OAuth 2.1 browser authorization, service credentials, complete Python MCP tools, revocation, audit, and interoperability.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

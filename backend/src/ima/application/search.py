@@ -8,6 +8,7 @@ import asyncio
 import json
 import math
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any, cast
@@ -17,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from ima.application.authorization import WorkspaceService
+from ima.application.mcp_contracts import McpActor
 from ima.application.model_governance import ModelGovernanceError, ModelGovernanceService
 from ima.domain.authorization import AclAction
 from ima.domain.model_governance import GroundedAskConfig, Workflow, parse_profile_config
@@ -27,6 +29,15 @@ class SearchError(Exception):
     def __init__(self, status_code: int, code: str, detail: str) -> None:
         super().__init__(detail)
         self.status_code, self.code, self.detail = status_code, code, detail
+
+
+@dataclass(frozen=True, slots=True)
+class BoundedAskResult:
+    conversation_id: UUID
+    message_id: UUID
+    status: str
+    answer: str
+    citations: tuple[dict[str, object], ...]
 
 
 def now() -> datetime:
@@ -81,8 +92,17 @@ class SearchService:
         return cast(GroundedAskConfig, parse_profile_config(row["config"], Workflow.GROUNDED_ASK))
 
     async def _folders(
-        self, conn: AsyncConnection, actor: str, workspace_id: str, action: AclAction
+        self,
+        conn: AsyncConnection,
+        actor: str | McpActor,
+        workspace_id: str,
+        action: AclAction,
     ) -> set[str]:
+        if isinstance(actor, McpActor):
+            folders = await self.workspace.delegated_folder_ids(conn, actor, workspace_id, action)
+            if not folders:
+                raise SearchError(404, "WORKSPACE_NOT_FOUND", "Workspace not found")
+            return folders
         subject = (await self.workspace._require_member(conn, actor, workspace_id))["subject"]
         folders = await accessible_folder_ids(conn, subject, action)
         if not folders:
@@ -337,7 +357,7 @@ class SearchService:
 
     async def search(
         self,
-        actor: str,
+        actor: str | McpActor,
         workspace_id: str,
         query: str,
         *,
@@ -651,6 +671,181 @@ class SearchService:
                 )
             question = str(row["content"])
         return await self.ask(actor, workspace_id, question, conversation_id)
+
+    async def ask_bounded(
+        self,
+        actor: str,
+        workspace_id: str,
+        question: str,
+        conversation_id: UUID | None = None,
+        *,
+        max_answer_chars: int = 20000,
+        max_citations: int = 20,
+        timeout_seconds: float = 30,
+    ) -> BoundedAskResult:
+        """Run grounded Ask without SSE while preserving target persistence and ACLs."""
+        if not question.strip() or len(question) > 20000:
+            raise SearchError(422, "INVALID_QUESTION", "Question is invalid")
+        if (
+            not 1 <= max_answer_chars <= 100000
+            or not 1 <= max_citations <= 50
+            or not 0 < timeout_seconds <= 60
+        ):
+            raise SearchError(422, "INVALID_BOUNDS", "Ask bounds are invalid")
+        async with self.engine.begin() as conn:
+            await self._folders(conn, actor, workspace_id, AclAction.ASK)
+            if conversation_id:
+                conversation = await self._owned_conversation(
+                    conn, actor, workspace_id, conversation_id
+                )
+                if conversation["lifecycle"] != "active":
+                    raise SearchError(409, "CONVERSATION_ARCHIVED", "Conversation is archived")
+            else:
+                conversation = {
+                    "id": uuid4(),
+                    "workspace_id": workspace_id,
+                    "owner_user_id": actor,
+                    "title": question.strip()[:200],
+                    "lifecycle": "active",
+                    "version": 1,
+                    "created_at": now(),
+                    "updated_at": now(),
+                }
+                await conn.execute(
+                    text(
+                        "INSERT INTO ima.conversations(id,workspace_id,owner_user_id,title,lifecycle,version,created_at,updated_at) VALUES (:id,:workspace_id,:owner_user_id,:title,:lifecycle,:version,:created_at,:updated_at)"
+                    ),
+                    conversation,
+                )
+            sequence = int(
+                await conn.scalar(
+                    text(
+                        "SELECT COALESCE(MAX(sequence),0)+1 FROM ima.conversation_messages WHERE conversation_id=:id"
+                    ),
+                    {"id": conversation["id"]},
+                )
+                or 1
+            )
+            user_id, assistant_id, timestamp = uuid4(), uuid4(), now()
+            for values in (
+                (user_id, "user", "completed", question, sequence),
+                (assistant_id, "assistant", "pending", "", sequence + 1),
+            ):
+                await conn.execute(
+                    text(
+                        "INSERT INTO ima.conversation_messages(id,conversation_id,workspace_id,owner_user_id,role,status,content,sequence,created_at,updated_at,completed_at) VALUES (:id,:conversation,:workspace,:owner,:role,:status,:content,:sequence,:now,:now,:completed)"
+                    ),
+                    {
+                        "id": values[0],
+                        "conversation": conversation["id"],
+                        "workspace": workspace_id,
+                        "owner": actor,
+                        "role": values[1],
+                        "status": values[2],
+                        "content": values[3],
+                        "sequence": values[4],
+                        "now": timestamp,
+                        "completed": timestamp if values[1] == "user" else None,
+                    },
+                )
+        try:
+            async with asyncio.timeout(timeout_seconds):
+                async with self.engine.connect() as conn:
+                    config = await self._profile(conn, workspace_id)
+                results = await self.search(
+                    actor,
+                    workspace_id,
+                    question,
+                    mode=config.retrieval_mode,
+                    top_k=min(config.top_k, max_citations),
+                    action=AclAction.ASK,
+                )
+                citations = cast(list[dict[str, object]], results["items"])[:max_citations]
+                if not citations:
+                    answer = "I could not find relevant information in your accessible knowledge."
+                    await self._complete(assistant_id, "knowledge_gap", answer)
+                    return BoundedAskResult(
+                        conversation_id=cast(UUID, conversation["id"]),
+                        message_id=assistant_id,
+                        status="knowledge_gap",
+                        answer=answer,
+                        citations=(),
+                    )
+                checked = await self.search(
+                    actor,
+                    workspace_id,
+                    question,
+                    mode=config.retrieval_mode,
+                    top_k=min(config.top_k, max_citations),
+                    action=AclAction.ASK,
+                )
+                checked_citations = cast(list[dict[str, object]], checked["items"])[:max_citations]
+                if not checked_citations:
+                    raise SearchError(403, "ACCESS_REVOKED", "Ask access was revoked")
+                context = "\n\n".join(
+                    f"[{item['rank']}] {str(item['quote'])[:2000]}" for item in checked_citations
+                )[:50000]
+                await self._persist_citations(assistant_id, checked_citations)
+                await self._status(assistant_id, "streaming")
+                response = await self.models.managed_chat(
+                    workspace_id,
+                    Workflow.GROUNDED_ASK,
+                    [
+                        {
+                            "role": "user",
+                            "content": f"Answer only from these sources:\n{context}\n\nQuestion: {question}",
+                        }
+                    ],
+                )
+                choices = response.get("choices") if isinstance(response, dict) else None
+                first = choices[0] if isinstance(choices, list) and choices else None
+                message = first.get("message") if isinstance(first, dict) else None
+                model_answer = message.get("content") if isinstance(message, dict) else None
+                if (
+                    not isinstance(model_answer, str)
+                    or not model_answer.strip()
+                    or len(model_answer) > max_answer_chars
+                ):
+                    raise SearchError(502, "INVALID_MODEL_RESPONSE", "Model response is invalid")
+                final_check = await self.search(
+                    actor,
+                    workspace_id,
+                    question,
+                    mode=config.retrieval_mode,
+                    top_k=min(config.top_k, max_citations),
+                    action=AclAction.ASK,
+                )
+                final_ids = {
+                    (item["documentId"], item["chunkDigest"])
+                    for item in cast(list[dict[str, object]], final_check["items"])
+                }
+                if any(
+                    (item["documentId"], item["chunkDigest"]) not in final_ids
+                    for item in checked_citations
+                ):
+                    raise SearchError(403, "ACCESS_REVOKED", "Ask access was revoked")
+                await self._complete(assistant_id, "completed", model_answer)
+                return BoundedAskResult(
+                    conversation_id=cast(UUID, conversation["id"]),
+                    message_id=assistant_id,
+                    status="completed",
+                    answer=model_answer,
+                    citations=tuple(checked_citations),
+                )
+        except asyncio.CancelledError:
+            await asyncio.shield(self._complete(assistant_id, "cancelled", ""))
+            raise
+        except TimeoutError as exc:
+            await self._complete(assistant_id, "failed", "")
+            raise SearchError(504, "ASK_TIMEOUT", "Ask timed out") from exc
+        except SearchError as exc:
+            await self._complete(
+                assistant_id, "cancelled" if exc.code == "ACCESS_REVOKED" else "failed", ""
+            )
+            raise
+        except Exception:
+            await self._complete(assistant_id, "failed", "")
+            raise
 
     async def ask(
         self, actor: str, workspace_id: str, question: str, conversation_id: UUID | None

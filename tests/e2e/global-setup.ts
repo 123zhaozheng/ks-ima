@@ -2,9 +2,10 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { promisify } from 'node:util'
 import { execFile } from 'node:child_process'
 import { request } from '@playwright/test'
+import { adminOrigin, apiOrigin, e2eEnvironment, frontOrigin } from './environment'
 
 const exec = promisify(execFile)
-const project = 'ima-identity-e2e'
+const project = e2eEnvironment.composeProject
 const compose = ['compose', '-p', project, '-f', 'backend/tests/integration/identity-compose.yml']
 let api: ChildProcess | undefined
 let front: ChildProcess | undefined
@@ -44,9 +45,11 @@ async function waitFor(url: string) {
 export default async function globalSetup() {
   const env = {
     ...process.env,
-    IMA_DATABASE_URL: 'postgresql+asyncpg://postgres:identity-gate-password@127.0.0.1:55432/app',
-    IMA_PUBLIC_ORIGIN: 'http://127.0.0.1:9016',
-    IMA_CORS_ORIGINS: 'http://127.0.0.1:9016,http://127.0.0.1:9017',
+    IMA_TEST_POSTGRES_PORT: e2eEnvironment.postgresPort,
+    IMA_DATABASE_URL: `postgresql+asyncpg://postgres:identity-gate-password@127.0.0.1:${e2eEnvironment.postgresPort}/app`,
+    IMA_E2E_API_PORT: e2eEnvironment.apiPort,
+    IMA_PUBLIC_ORIGIN: frontOrigin,
+    IMA_CORS_ORIGINS: `${frontOrigin},${adminOrigin}`,
     IMA_ENVIRONMENT: 'test',
     IMA_TOTP_ENCRYPTION_KEY: 'e2e-totp-key',
     IMA_TOKEN_PEPPER: 'e2e-token-pepper',
@@ -54,26 +57,38 @@ export default async function globalSetup() {
     PYTHONWARNINGS: 'error',
   }
   try {
-    await exec('docker', [...compose, 'up', '-d', '--wait'], { cwd: process.cwd() })
+    await exec('docker', [...compose, 'up', '-d', '--wait'], { cwd: process.cwd(), env })
     await exec('uv', ['run', 'ima', 'migrate'], { cwd: 'backend', env })
     await exec('uv', ['run', 'python', 'scripts/seed_identity_e2e.py'], { cwd: 'backend', env })
-    api = spawn('uv', ['run', 'python', '-c', "import asyncio; asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy()); import uvicorn; uvicorn.run('ima.main:app',host='127.0.0.1',port=8787,ws='none')"], { cwd: 'backend', env, stdio: 'inherit' })
-    await waitFor('http://127.0.0.1:8787/health/live')
+    for (const projectName of ['chromium', 'mobile-chromium']) {
+      await exec('uv', [
+        'run', 'ima', 'register-mcp-client',
+        '--client-id', `e2e-oauth-${projectName}`,
+        '--client-name', `E2E OAuth Client (${projectName})`,
+        '--client-type', 'public',
+        '--app-type', 'native',
+        '--auth-method', 'none',
+        '--redirect-uri', `${frontOrigin}/oauth/callback/${projectName}`,
+        '--operator-id', 'e2e-super-id',
+      ], { cwd: 'backend', env })
+    }
+    api = spawn('uv', ['run', 'python', '-c', `import asyncio; asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy()); import uvicorn; uvicorn.run('ima.main:app',host='127.0.0.1',port=${e2eEnvironment.apiPort},ws='none')`], { cwd: 'backend', env, stdio: 'inherit' })
+    await waitFor(`${apiOrigin}/health/live`)
     await exec('bun', ['run', 'build:front'], { cwd: process.cwd(), env })
     await exec('bun', ['run', 'build:admin'], { cwd: process.cwd(), env })
-    front = spawnService('bun', ['tests/e2e/static-server.ts', 'dist/pwa', '9016'], env)
-    admin = spawnService('bun', ['tests/e2e/static-server.ts', 'dist/spa', '9017'], env)
+    front = spawnService('bun', ['tests/e2e/static-server.ts', 'dist/pwa', e2eEnvironment.frontPort], env)
+    admin = spawnService('bun', ['tests/e2e/static-server.ts', 'dist/spa', e2eEnvironment.adminPort], env)
     await Promise.all([
-      waitFor('http://127.0.0.1:9016/auth/sign-in'),
-      waitFor('http://127.0.0.1:9017/auth/sign-in'),
+      waitFor(`${frontOrigin}/auth/sign-in`),
+      waitFor(`${adminOrigin}/auth/sign-in`),
     ])
   } catch (error) {
     await Promise.all([stopService(api), stopService(front), stopService(admin)])
-    await exec('docker', [...compose, 'down', '-v'], { cwd: process.cwd() }).catch(() => undefined)
+    await exec('docker', [...compose, 'down', '-v'], { cwd: process.cwd(), env }).catch(() => undefined)
     throw error
   }
   return async () => {
     await Promise.all([stopService(api), stopService(front), stopService(admin)])
-    await exec('docker', [...compose, 'down', '-v'], { cwd: process.cwd() })
+    await exec('docker', [...compose, 'down', '-v'], { cwd: process.cwd(), env })
   }
 }

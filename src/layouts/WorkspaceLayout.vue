@@ -28,7 +28,7 @@
         to="/workspace/models"
       />
       <q-route-tab
-        :label="t('Connectors')"
+        :label="t('Agent access')"
         to="/workspace/connectors"
       />
       <q-route-tab

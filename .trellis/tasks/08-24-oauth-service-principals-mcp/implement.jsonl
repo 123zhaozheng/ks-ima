@@ -1,1 +1,18 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/tasks/08-24-oauth-service-principals-mcp/research/current-oauth-mcp-evidence.md","reason":"Primary repository evidence for current identity, ACL, legacy connector/MCP, target service, Caddy, UI, coexistence, and validation constraints."}
+{"file":".trellis/tasks/08-24-python-intranet-ima-migration/research/current-state.md","reason":"Parent architecture baseline defining target Python ownership, authorization boundaries, MCP parity, coexistence, and migration direction."}
+{"file":".trellis/tasks/08-24-python-intranet-ima-migration/research/mcp-oauth-auth.md","reason":"Prior standards research and interoperability/security matrix; follow this task's approved decisions where they intentionally narrow it."}
+{"file":".trellis/spec/backend/index.md","reason":"Backend quality and module guidance entry point."}
+{"file":".trellis/spec/backend/identity-platform-contracts.md","reason":"Peppered opaque-token, session/recent-auth, audit, internal-route, and Caddy security contracts."}
+{"file":".trellis/spec/backend/workspace-authorization-contracts.md","reason":"Dynamic active membership/folder ACL, dependent-action, non-disclosure, transaction, and no-target-fallback requirements."}
+{"file":".trellis/spec/backend/object-storage-ingestion-contracts.md","reason":"Target-only file/upload/download authorization, immutable-version, safe storage, and no-fallback requirements for MCP file tools."}
+{"file":".trellis/spec/backend/search-grounded-ask-contracts.md","reason":"Target-only ACL-filtered search/Ask, citation privacy, cancellation, and no-public-or-legacy-fallback requirements."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Schema isolation, async SQL, migration, and PostgreSQL verification rules."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"RFC 9457 safe public-error and correlation-ID requirements alongside OAuth protocol errors."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Structured safe logging and recursive secret redaction constraints."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Python quality commands, import-safe application factory, and forbidden background/duplicate implementation patterns."}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend guideline entry point."}
+{"file":".trellis/spec/frontend/identity-admin-contracts.md","reason":"Generated DTO, cookie/CSRF, token non-persistence, account/admin states, and test requirements for consent/service UI."}
+{"file":".trellis/spec/frontend/workspace-authorization-contracts.md","reason":"Workspace-admin capability UX, generated contracts, conflict/revocation states, and server-authoritative authorization requirements."}
+{"file":".trellis/spec/frontend/openapi-client-contracts.md","reason":"Stable operation IDs, OpenAPI export/generation, typed client, Vue Query, and Caddy verification requirements."}
+{"file":".trellis/spec/frontend/file-upload-ingestion-contracts.md","reason":"Target upload-ticket/download state and browser secret/storage constraints for MCP-adjacent service UI."}
+{"file":".trellis/spec/frontend/grounded-search-ask-contracts.md","reason":"Target search/Ask privacy, cancellation, generated-client, and no-fallback frontend contracts."}

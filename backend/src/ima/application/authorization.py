@@ -18,6 +18,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from ima.application.identity import new_legacy_id
+from ima.application.mcp_contracts import McpActor
 from ima.config import Settings
 from ima.domain.authorization import (
     DEFAULT_ROLE_GRANTS,
@@ -254,6 +255,320 @@ class WorkspaceService:
             if not row:
                 raise WorkspaceError(404, "WORKSPACE_NOT_FOUND", "Workspace not found")
             return dict(row)
+
+    async def authorize_oauth_boundary(
+        self,
+        actor_id: str,
+        workspace_id: str,
+        folder_root_id: str | None,
+        target_folder_id: str | None = None,
+        target_action: AclAction = AclAction.VIEW_METADATA,
+    ) -> None:
+        """Validate current human membership and an optional consent root."""
+        async with self.engine.connect() as conn:
+            member = await self._require_member(conn, actor_id, workspace_id)
+            if folder_root_id is not None:
+                await self._require_folder_action(
+                    conn,
+                    member["subject"],
+                    workspace_id,
+                    folder_root_id,
+                    AclAction.VIEW_METADATA,
+                )
+            if target_folder_id is not None:
+                await self._require_folder_action(
+                    conn,
+                    member["subject"],
+                    workspace_id,
+                    target_folder_id,
+                    target_action,
+                )
+            if folder_root_id is not None and target_folder_id is not None:
+                within_root = await conn.scalar(
+                    text(
+                        """SELECT EXISTS (
+                             SELECT 1 FROM ima.folder_closure
+                             WHERE workspace_id=:workspace
+                               AND ancestor_id=:root AND descendant_id=:target
+                           )"""
+                    ),
+                    {
+                        "workspace": workspace_id,
+                        "root": folder_root_id,
+                        "target": target_folder_id,
+                    },
+                )
+                if not within_root:
+                    raise WorkspaceError(404, "FOLDER_NOT_FOUND", "Folder not found")
+
+    async def require_workspace_admin(self, actor_id: str, workspace_id: str) -> None:
+        """Require active workspace administration for service management."""
+        async with self.engine.connect() as conn:
+            member = await self._require_member(conn, actor_id, workspace_id)
+            if member["role"] != WorkspaceRole.WORKSPACE_ADMIN.value:
+                raise WorkspaceError(
+                    403, "WORKSPACE_ADMIN_REQUIRED", "Workspace administration is required"
+                )
+
+    async def authorize_delegated_boundary(
+        self,
+        workspace_id: str,
+        approved_root_id: str | None,
+        target_folder_id: str | None = None,
+    ) -> None:
+        """Validate service-principal lifecycle and root ancestry.
+
+        The principal is the delegated policy subject and never borrows its
+        owner or creator's membership or ACL entries.
+        """
+        async with self.engine.connect() as conn:
+            workspace_active = await conn.scalar(
+                text("SELECT is_active FROM ima.workspaces WHERE id=:id"),
+                {"id": workspace_id},
+            )
+            if not workspace_active:
+                raise WorkspaceError(404, "WORKSPACE_NOT_FOUND", "Workspace not found")
+            selected = target_folder_id or approved_root_id
+            if selected is None:
+                return
+            target_active = await conn.scalar(
+                text(
+                    """SELECT EXISTS (
+                         SELECT 1 FROM ima.folders
+                         WHERE workspace_id=:workspace AND id=:selected AND lifecycle='active'
+                       )"""
+                ),
+                {"workspace": workspace_id, "selected": selected},
+            )
+            if not target_active:
+                raise WorkspaceError(404, "FOLDER_NOT_FOUND", "Folder not found")
+            if approved_root_id:
+                within_root = await conn.scalar(
+                    text(
+                        """SELECT EXISTS (
+                             SELECT 1
+                             FROM ima.folder_closure closure
+                             JOIN ima.folders root
+                               ON root.workspace_id=closure.workspace_id
+                              AND root.id=closure.ancestor_id
+                              AND root.lifecycle='active'
+                             WHERE closure.workspace_id=:workspace
+                               AND closure.ancestor_id=:root
+                               AND closure.descendant_id=:selected
+                           )"""
+                    ),
+                    {
+                        "workspace": workspace_id,
+                        "root": approved_root_id,
+                        "selected": selected,
+                    },
+                )
+                if not within_root:
+                    raise WorkspaceError(404, "FOLDER_NOT_FOUND", "Folder not found")
+
+    async def _require_delegated_action(
+        self,
+        conn: AsyncConnection,
+        actor: McpActor,
+        workspace_id: str,
+        folder_id: str | None,
+        action: AclAction,
+    ) -> None:
+        if actor.actor_type != "service_principal" or actor.principal_id is None:
+            raise WorkspaceError(404, "WORKSPACE_NOT_FOUND", "Workspace not found")
+        row = (
+            (
+                await conn.execute(
+                    text(
+                        """SELECT p.workspace_id,p.folder_root_id,p.scopes,w.is_active
+                           FROM ima.mcp_service_principals p
+                           JOIN ima.workspaces w ON w.id=p.workspace_id
+                           WHERE p.id=CAST(:principal AS uuid) AND p.state='active'
+                             AND p.expires_at>:now"""
+                    ),
+                    {"principal": actor.principal_id, "now": now()},
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if (
+            not row
+            or not row["is_active"]
+            or str(row["workspace_id"]) != workspace_id
+            or actor.workspace_id != workspace_id
+            or row["folder_root_id"] != actor.folder_root_id
+            or not set(actor.scopes).issubset(set(row["scopes"]))
+        ):
+            raise WorkspaceError(404, "WORKSPACE_NOT_FOUND", "Workspace not found")
+        allowed_scopes = {
+            AclAction.VIEW_METADATA: {
+                "mcp:workspaces:read",
+                "mcp:knowledge:read",
+                "mcp:knowledge:search",
+            },
+            AclAction.VIEW_CONTENT: {
+                "mcp:knowledge:read",
+                "mcp:knowledge:search",
+            },
+            AclAction.DOWNLOAD: {"mcp:knowledge:read"},
+            AclAction.ASK: {"mcp:knowledge:ask"},
+        }.get(action, {"mcp:knowledge:write"})
+        if not set(actor.scopes).intersection(allowed_scopes):
+            raise WorkspaceError(404, "FOLDER_NOT_FOUND", "Folder not found")
+        selected = folder_id or actor.folder_root_id
+        if selected is None:
+            return
+        active = await conn.scalar(
+            text(
+                "SELECT EXISTS(SELECT 1 FROM ima.folders WHERE workspace_id=:workspace AND id=:folder AND lifecycle='active')"
+            ),
+            {"workspace": workspace_id, "folder": selected},
+        )
+        if not active:
+            raise WorkspaceError(404, "FOLDER_NOT_FOUND", "Folder not found")
+        if actor.folder_root_id:
+            within = await conn.scalar(
+                text(
+                    "SELECT EXISTS(SELECT 1 FROM ima.folder_closure WHERE workspace_id=:workspace AND ancestor_id=:root AND descendant_id=:folder)"
+                ),
+                {
+                    "workspace": workspace_id,
+                    "root": actor.folder_root_id,
+                    "folder": selected,
+                },
+            )
+            if not within:
+                raise WorkspaceError(404, "FOLDER_NOT_FOUND", "Folder not found")
+        if action in {AclAction.ASK, AclAction.DOWNLOAD}:
+            # Dependent content visibility is represented by the same active,
+            # in-root delegated policy; no owner membership is consulted.
+            return
+
+    async def delegated_folder_ids(
+        self, conn: AsyncConnection, actor: McpActor, workspace_id: str, action: AclAction
+    ) -> set[str]:
+        await self._require_delegated_action(
+            conn, actor, workspace_id, actor.folder_root_id, action
+        )
+        if actor.folder_root_id:
+            rows = await conn.execute(
+                text(
+                    """SELECT f.id FROM ima.folder_closure c
+                       JOIN ima.folders f ON f.workspace_id=c.workspace_id AND f.id=c.descendant_id
+                       WHERE c.workspace_id=:workspace AND c.ancestor_id=:root
+                         AND f.lifecycle='active'"""
+                ),
+                {"workspace": workspace_id, "root": actor.folder_root_id},
+            )
+        else:
+            rows = await conn.execute(
+                text(
+                    "SELECT id FROM ima.folders WHERE workspace_id=:workspace AND lifecycle='active'"
+                ),
+                {"workspace": workspace_id},
+            )
+        return {str(row[0]) for row in rows}
+
+    async def delegated_workspace(self, actor: McpActor) -> dict[str, Any]:
+        async with self.engine.connect() as conn:
+            await self._require_delegated_action(
+                conn, actor, actor.workspace_id, actor.folder_root_id, AclAction.VIEW_METADATA
+            )
+            row = (
+                (
+                    await conn.execute(
+                        text(
+                            "SELECT id,name,is_active,archived_at,created_at,updated_at FROM ima.workspaces WHERE id=:id AND is_active"
+                        ),
+                        {"id": actor.workspace_id},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if not row:
+                raise WorkspaceError(404, "WORKSPACE_NOT_FOUND", "Workspace not found")
+            return dict(row)
+
+    async def delegated_folder(self, actor: McpActor, folder_id: str) -> dict[str, Any]:
+        async with self.engine.connect() as conn:
+            await self._require_delegated_action(
+                conn, actor, actor.workspace_id, folder_id, AclAction.VIEW_METADATA
+            )
+            row = (
+                (
+                    await conn.execute(
+                        text(
+                            "SELECT id,workspace_id,parent_id,name,order_key,lifecycle,version,is_root,acl_anchor_id FROM ima.folders WHERE workspace_id=:workspace AND id=:id AND lifecycle='active'"
+                        ),
+                        {"workspace": actor.workspace_id, "id": folder_id},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if not row:
+                raise WorkspaceError(404, "FOLDER_NOT_FOUND", "Folder not found")
+            return dict(row)
+
+    async def delegated_folders(self, actor: McpActor, parent_id: str) -> list[dict[str, Any]]:
+        async with self.engine.connect() as conn:
+            visible = await self.delegated_folder_ids(
+                conn, actor, actor.workspace_id, AclAction.VIEW_METADATA
+            )
+            await self._require_delegated_action(
+                conn, actor, actor.workspace_id, parent_id, AclAction.VIEW_METADATA
+            )
+            rows = (
+                (
+                    await conn.execute(
+                        text(
+                            "SELECT id,workspace_id,parent_id,name,order_key,lifecycle,version,is_root,acl_anchor_id FROM ima.folders WHERE workspace_id=:workspace AND parent_id=:parent AND id=ANY(:visible) AND lifecycle='active' ORDER BY order_key,name,id"
+                        ),
+                        {
+                            "workspace": actor.workspace_id,
+                            "parent": parent_id,
+                            "visible": list(visible),
+                        },
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            return [dict(row) for row in rows]
+
+    async def delegated_breadcrumbs(self, actor: McpActor, folder_id: str) -> list[dict[str, Any]]:
+        async with self.engine.connect() as conn:
+            await self._require_delegated_action(
+                conn, actor, actor.workspace_id, folder_id, AclAction.VIEW_METADATA
+            )
+            rows = (
+                (
+                    await conn.execute(
+                        text(
+                            """SELECT f.id,f.workspace_id,f.parent_id,f.name,f.order_key,f.lifecycle,
+                                      f.version,f.is_root,f.acl_anchor_id,c.depth
+                               FROM ima.folder_closure c JOIN ima.folders f ON f.id=c.ancestor_id
+                                WHERE c.workspace_id=:workspace AND c.descendant_id=:folder
+                                  AND f.lifecycle='active'
+                                 AND (:root IS NULL OR EXISTS(
+                                   SELECT 1 FROM ima.folder_closure scope
+                                   WHERE scope.workspace_id=:workspace AND scope.ancestor_id=:root
+                                     AND scope.descendant_id=f.id))
+                               ORDER BY c.depth DESC"""
+                        ),
+                        {
+                            "workspace": actor.workspace_id,
+                            "folder": folder_id,
+                            "root": actor.folder_root_id,
+                        },
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            return [dict(row) for row in rows]
 
     async def create_workspace(
         self, actor_id: str, name: str, admin_user_id: str

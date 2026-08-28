@@ -1,7 +1,7 @@
 {
-  servers {
-    trusted_proxies static 172.16.0.0/12
-  }
+	servers {
+		trusted_proxies static 172.16.0.0/12
+	}
 }
 
 :8080 {
@@ -19,6 +19,11 @@
 
 	@ima_identity path /api/v1/auth/* /api/v1/account/* /api/v1/admin/*
 	handle @ima_identity {
+		reverse_proxy {$PYTHON_API_URL}
+	}
+
+	@ima_mcp path /mcp /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/mcp /.well-known/oauth-authorization-server /oauth/authorize /oauth/authorize/decision /oauth/token /oauth/revoke /api/v1/oauth/*
+	handle @ima_mcp {
 		reverse_proxy {$PYTHON_API_URL}
 	}
 
@@ -76,6 +81,11 @@
 
 	@ima_identity path /api/v1/auth/* /api/v1/account/* /api/v1/admin/*
 	handle @ima_identity {
+		reverse_proxy {$PYTHON_API_URL}
+	}
+
+	@ima_mcp path /mcp /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/mcp /.well-known/oauth-authorization-server /oauth/authorize /oauth/authorize/decision /oauth/token /oauth/revoke /api/v1/oauth/*
+	handle @ima_mcp {
 		reverse_proxy {$PYTHON_API_URL}
 	}
 

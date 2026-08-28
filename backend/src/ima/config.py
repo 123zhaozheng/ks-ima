@@ -84,6 +84,23 @@ class Settings(BaseSettings):
     ingestion_max_chunks: int = 10000
     ingestion_chunk_size: int = 1200
     ingestion_chunk_overlap: int = 160
+    # OAuth/MCP protected-resource controls.  Duration values are caps; a
+    # deployment may shorten but never exceed them.  The canonical resource is
+    # always the public origin plus the fixed `/mcp` path.
+    mcp_resource_path: str = "/mcp"
+    oauth_authorization_code_seconds: int = 60
+    oauth_access_token_seconds: int = 600
+    oauth_refresh_absolute_seconds: int = 2592000
+    oauth_refresh_rolling_seconds: int = 2592000
+    service_credential_max_seconds: int = 7776000
+    credential_rotation_overlap_seconds: int = 600
+    mcp_legacy_alias_enabled: bool = False
+    mcp_request_max_bytes: int = 4 * 1024 * 1024
+    mcp_body_max_bytes: int = 8 * 1024 * 1024
+    mcp_default_rate_limit: int = 300
+    mcp_default_concurrency: int = 10
+    oauth_authorize_rate_limit: int = 60
+    oauth_token_rate_limit: int = 120
 
     @field_validator("public_origin")
     @classmethod
@@ -93,6 +110,8 @@ class Settings(BaseSettings):
             raise ValueError("public_origin must be an absolute HTTP(S) URL")
         if parsed.query or parsed.fragment:
             raise ValueError("public_origin cannot contain query or fragment")
+        if parsed.path not in {"", "/"} or parsed.params:
+            raise ValueError("public_origin must not contain a path")
         return value.rstrip("/")
 
     @field_validator("trusted_proxies", mode="before")
@@ -173,6 +192,46 @@ class Settings(BaseSettings):
     def validate_schema_name(cls, value: str) -> str:
         if not value.isidentifier():
             raise ValueError("schema names must be valid identifiers")
+        return value
+
+    @field_validator("mcp_resource_path")
+    @classmethod
+    def validate_resource_path(cls, value: str) -> str:
+        if value != "/mcp":
+            raise ValueError("mcp_resource_path must be the canonical '/mcp' path")
+        return value
+
+    @field_validator(
+        "oauth_authorization_code_seconds",
+        "oauth_access_token_seconds",
+        "oauth_refresh_absolute_seconds",
+        "oauth_refresh_rolling_seconds",
+        "service_credential_max_seconds",
+        "credential_rotation_overlap_seconds",
+    )
+    @classmethod
+    def validate_oauth_durations(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("OAuth durations must be positive")
+        return value
+
+    @field_validator("mcp_request_max_bytes", "mcp_body_max_bytes")
+    @classmethod
+    def validate_mcp_body_limits(cls, value: int) -> int:
+        if value < 1 or value > 128 * 1024 * 1024:
+            raise ValueError("MCP body limits must be between 1 and 134217728 bytes")
+        return value
+
+    @field_validator(
+        "mcp_default_rate_limit",
+        "mcp_default_concurrency",
+        "oauth_authorize_rate_limit",
+        "oauth_token_rate_limit",
+    )
+    @classmethod
+    def validate_mcp_rate_limits(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("MCP rate and concurrency limits must be positive")
         return value
 
     @field_validator("max_body_bytes")
@@ -260,11 +319,30 @@ class Settings(BaseSettings):
                 raise ValueError("production requires a high-entropy model key ring")
             if "change-me" in self.model_fingerprint_key.get_secret_value():
                 raise ValueError("production requires a high-entropy model fingerprint key")
+        if not self.mcp_resource_path.startswith("/"):
+            raise ValueError("mcp_resource_path must start with '/'")
+        if self.oauth_authorization_code_seconds > 60:
+            raise ValueError("oauth_authorization_code_seconds cannot exceed 60")
+        if self.oauth_access_token_seconds > 600:
+            raise ValueError("oauth_access_token_seconds cannot exceed 600")
+        if self.oauth_refresh_absolute_seconds > 2592000:
+            raise ValueError("oauth_refresh_absolute_seconds cannot exceed 2592000")
+        if self.oauth_refresh_rolling_seconds > self.oauth_refresh_absolute_seconds:
+            raise ValueError("oauth_refresh_rolling_seconds cannot exceed absolute lifetime")
+        if self.service_credential_max_seconds > 7776000:
+            raise ValueError("service_credential_max_seconds cannot exceed 7776000")
+        if self.credential_rotation_overlap_seconds > 600:
+            raise ValueError("credential_rotation_overlap_seconds cannot exceed 600")
         return self
 
     @property
     def task_url(self) -> str:
         return (self.task_database_url or self.database_url).get_secret_value()
+
+    @property
+    def mcp_resource_url(self) -> str:
+        """Canonical public protected-resource URL (origin + resource path)."""
+        return f"{self.public_origin}{self.mcp_resource_path}"
 
 
 @lru_cache(maxsize=1)

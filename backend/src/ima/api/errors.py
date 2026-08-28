@@ -29,7 +29,9 @@ def make_problem(
         title=title,
         status=status,
         detail=detail,
-        instance=str(request.url),
+        # Query strings can carry OAuth state, PKCE challenges, or malformed
+        # credentials. Problem Details identifies the route without echoing them.
+        instance=request.url.path,
         code=code,
         correlationId=correlation,
         errors=errors,
@@ -38,7 +40,11 @@ def make_problem(
         status_code=status,
         content=problem_payload(problem),
         media_type="application/problem+json",
-        headers={"X-Correlation-ID": correlation},
+        headers={
+            "X-Correlation-ID": correlation,
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+        },
     )
 
 

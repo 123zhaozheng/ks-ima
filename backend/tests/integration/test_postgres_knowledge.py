@@ -181,7 +181,7 @@ def test_knowledge_migration_is_fresh_and_repeatable() -> None:
     with psycopg.connect(SYNC_URL) as connection:
         assert (
             connection.execute("SELECT version_num FROM ima.alembic_version").fetchone()[0]
-            == "20260826_0007"
+            == "20260828_0009"
         )
         for table in (
             "documents",
@@ -316,8 +316,10 @@ async def test_acl_hides_document_tag_and_trash_metadata() -> None:
         )
         note = await service.create_note(actor, private["id"], "Hidden note", "secret")
         tag = await service.create_tag(actor, workspace_id, "Restricted")
-        await service.assign_tags(actor, UUID(str(note["id"])), (UUID(str(tag["id"])),))
-        await service.trash_document(actor, UUID(str(note["id"])), int(note["version"]))
+        await service.assign_tags(
+            actor, UUID(str(note["id"])), (UUID(str(tag["id"])),), int(note["version"])
+        )
+        await service.trash_document(actor, UUID(str(note["id"])), int(note["version"]) + 1)
         with pytest.raises(KnowledgeError) as hidden:
             await service.get_document(viewer, UUID(str(note["id"])))
         assert hidden.value.code == "DOCUMENT_NOT_FOUND"
@@ -342,7 +344,9 @@ async def test_unicode_tags_normalize_assign_and_enforce_role() -> None:
         with pytest.raises(KnowledgeError) as duplicate:
             await service.create_tag(actor, workspace_id, "CAFE\u0301")
         assert duplicate.value.code == "NAME_CONFLICT"
-        await service.assign_tags(actor, UUID(str(note["id"])), (UUID(str(tag["id"])),))
+        await service.assign_tags(
+            actor, UUID(str(note["id"])), (UUID(str(tag["id"])),), int(note["version"])
+        )
         listed = await service.list_tags(viewer, workspace_id)
         assert [(item["name"], item["count"]) for item in listed] == [("Café", 1)]
         with pytest.raises(KnowledgeError) as forbidden:
@@ -360,7 +364,9 @@ async def test_tag_merge_and_delete_are_versioned_and_dependency_safe() -> None:
         note = await service.create_note(actor, workspace_id, "Merge target", "text")
         source = await service.create_tag(actor, workspace_id, "Source")
         target = await service.create_tag(actor, workspace_id, "Target")
-        await service.assign_tags(actor, UUID(str(note["id"])), (UUID(str(source["id"])),))
+        await service.assign_tags(
+            actor, UUID(str(note["id"])), (UUID(str(source["id"])),), int(note["version"])
+        )
         with pytest.raises(KnowledgeError) as dependent:
             await service.delete_tag(actor, workspace_id, UUID(str(source["id"])), 1)
         assert dependent.value.code == "DEPENDENCY_EXISTS"

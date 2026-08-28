@@ -1,10 +1,40 @@
 import { expect, test, type Page } from '@playwright/test'
 import { TOTP } from 'otpauth'
+import { adminOrigin, frontOrigin } from './environment'
+
+const identityProjectSuffixes = {
+  chromium: { suffix: 'CHROMIUM', totpSecret: 'JBSWY3DPEHPK3PXP' },
+  'mobile-chromium': { suffix: 'MOBILE', totpSecret: 'KRSXG5DSNFXGOIDB' },
+} as const
+type IdentityProjectName = keyof typeof identityProjectSuffixes
+
+function isIdentityProjectName(projectName: string): projectName is IdentityProjectName {
+  return Object.prototype.hasOwnProperty.call(identityProjectSuffixes, projectName)
+}
+
+function identityFixture(projectName: string) {
+  if (!isIdentityProjectName(projectName)) {
+    throw new Error(`Unsupported identity E2E project: ${projectName}`)
+  }
+  const project = identityProjectSuffixes[projectName]
+  return {
+    invite: {
+      email: `e2e-invite-${projectName}@example.com`,
+      token: `E2E-INVITATION-TOKEN-${project.suffix}`,
+    },
+    recovery: {
+      email: `e2e-recovery-${projectName}@example.com`,
+      code: `E2E-RECOVERY-CODE-${project.suffix}`,
+    },
+    totp: {
+      email: `e2e-totp-${projectName}@example.com`,
+      secret: project.totpSecret,
+    },
+  }
+}
 
 test.describe('local identity journeys', () => {
-  const frontOrigin = 'http://127.0.0.1:9016'
-  const adminOrigin = 'http://127.0.0.1:9017'
-  const accounts = { ordinary: ['e2e-ordinary@example.com', 'E2E-password-123'], super: ['e2e-super@example.com', 'E2E-password-123'], platform: ['e2e-platform@example.com', 'E2E-password-123'], auditor: ['e2e-auditor@example.com', 'E2E-password-123'], disabled: ['e2e-disabled@example.com', 'E2E-password-123'], totp: ['e2e-totp@example.com', 'E2E-password-123'], recovery: ['e2e-recovery@example.com', 'E2E-password-123'] }
+  const accounts = { ordinary: ['e2e-ordinary@example.com', 'E2E-password-123'], super: ['e2e-super@example.com', 'E2E-password-123'], platform: ['e2e-platform@example.com', 'E2E-password-123'], auditor: ['e2e-auditor@example.com', 'E2E-password-123'], disabled: ['e2e-disabled@example.com', 'E2E-password-123'] }
   async function login(page: Page, email: string, password: string) {
     const response = await page.request.post('/api/v1/auth/sign-in', { data: { email, password }, headers: { Origin: frontOrigin } })
     const body = await response.json() as { status?: string, challenge?: string, detail?: unknown }
@@ -45,15 +75,21 @@ test.describe('local identity journeys', () => {
     expect(body.accepted).toBe(true)
   })
 
-  test('invited user accepts a single-use invitation and signs in', async ({ page }) => {
+  test('invited user accepts a single-use invitation and signs in', async ({ page }, testInfo) => {
+    const fixture = identityFixture(testInfo.project.name)
     const password = 'E2E-invited-password-123'
-    await page.goto('/auth/accept-invite?token=E2E-INVITATION-TOKEN-0000000001')
+    await page.goto(`/auth/accept-invite?token=${fixture.invite.token}`)
     await page.getByLabel('Display name').fill('Accepted Invite')
     await page.getByLabel('Password').fill(password)
     await page.getByRole('button', { name: 'Accept invitation' }).click()
     await expect(page).toHaveURL(/auth\/sign-in/)
-    const result = await login(page, 'e2e-invite@example.com', password)
+    const result = await login(page, fixture.invite.email, password)
     expect(result.status).toBe('authenticated')
+    const replay = await page.request.post('/api/v1/auth/invitations/accept', {
+      data: { token: fixture.invite.token, password, displayName: 'Replay must fail' },
+      headers: { Origin: frontOrigin },
+    })
+    expect(replay.status()).toBe(400)
   })
 
   test('ordinary user can use profile and session security', async ({ page }) => {
@@ -75,7 +111,9 @@ test.describe('local identity journeys', () => {
     await page.goto(`${adminOrigin}/workspaces`)
     await expect(page.getByLabel('Search workspaces')).toBeVisible()
     await page.goto(`${adminOrigin}/audit`)
-    await expect(page.getByText('auth.sign_in').first()).toBeVisible()
+    await expect(page.getByRole('table')).toBeVisible()
+    await expect(page.getByText('Action', { exact: true })).toBeVisible()
+    await expect.poll(() => page.getByRole('row').count()).toBeGreaterThan(1)
   })
 
   test('workspace roles use target ACLs and platform roles do not imply content access', async ({ page, browser }) => {
@@ -152,7 +190,8 @@ test.describe('local identity journeys', () => {
     await login(page, accounts.auditor[0], accounts.auditor[1])
     expect((await page.request.get('/api/v1/admin/audit-events')).ok()).toBeTruthy()
     await page.goto(`${adminOrigin}/audit`)
-    await expect(page.getByText('auth.sign_in').first()).toBeVisible()
+    await expect(page.getByRole('table')).toBeVisible()
+    await expect.poll(() => page.getByRole('row').count()).toBeGreaterThan(1)
     const response = await page.request.post('/api/v1/admin/workspaces', { data: { name: 'auditor-must-not-create', initialAdminUserId: 'e2e-ordinary-id' }, headers: await csrfHeaders(page) })
     expect(response.status()).toBe(403)
   })
@@ -168,32 +207,36 @@ test.describe('local identity journeys', () => {
     expect(response.status()).toBe(401)
   })
 
-  test('TOTP challenge can be completed', async ({ page }) => {
+  test('TOTP challenge can be completed', async ({ page }, testInfo) => {
+    const fixture = identityFixture(testInfo.project.name)
     await page.goto('/auth/sign-in')
-    await page.getByLabel('Email').fill(accounts.totp[0])
-    await page.getByLabel('Password').fill(accounts.totp[1])
+    await page.getByLabel('Email').fill(fixture.totp.email)
+    await page.getByLabel('Password').fill('E2E-password-123')
     await page.getByRole('button', { name: /sign in/i }).click()
     await expect(page.getByLabel('TOTP code')).toBeVisible()
-    const code = new TOTP({ secret: 'JBSWY3DPEHPK3PXP', algorithm: 'SHA1', digits: 6, period: 30 }).generate()
+    const code = new TOTP({ secret: fixture.totp.secret, algorithm: 'SHA1', digits: 6, period: 30 }).generate()
     await page.getByLabel('TOTP code').fill(code)
     const verifyResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/auth/totp/verify') && response.request().method() === 'POST')
     await page.getByRole('button', { name: 'Verify' }).click()
     expect((await verifyResponse).ok()).toBeTruthy()
   })
 
-  test('recovery-code challenge can be completed exactly once', async ({ page }) => {
+  test('recovery-code challenge can be completed exactly once', async ({ page }, testInfo) => {
+    const fixture = identityFixture(testInfo.project.name)
     await page.goto('/auth/sign-in')
-    await page.getByLabel('Email').fill(accounts.recovery[0])
-    await page.getByLabel('Password').fill(accounts.recovery[1])
+    await page.getByLabel('Email').fill(fixture.recovery.email)
+    await page.getByLabel('Password').fill('E2E-password-123')
     await page.getByRole('button', { name: /sign in/i }).click()
     await page.getByRole('button', { name: 'Use recovery code' }).click()
     await expect(page.getByLabel('Recovery code')).toBeVisible()
-    const code = 'E2E-RECOVERY-CODE'
+    const code = fixture.recovery.code
     await page.getByLabel('Recovery code').fill(code)
     const verifyResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/auth/recovery/verify') && response.request().method() === 'POST')
     await page.getByRole('button', { name: 'Verify' }).click()
     expect((await verifyResponse).ok()).toBeTruthy()
-    const result = await login(page, accounts.recovery[0], accounts.recovery[1])
+    const result = await login(page, fixture.recovery.email, 'E2E-password-123')
+    expect(result.status).toBe('totp_required')
+    if (!result.challenge) throw new Error('Recovery replay requires a fresh sign-in challenge')
     const second = await page.request.post('/api/v1/auth/recovery/verify', { data: { challenge: result.challenge, code }, headers: { Origin: frontOrigin } })
     expect(second.status()).toBe(401)
   })

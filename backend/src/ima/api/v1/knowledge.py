@@ -408,7 +408,9 @@ async def replace_tags(
 ) -> None:
     session, actor = current
     check_csrf(request, session)
-    await service(request).assign_tags(actor.id, document_id, payload.tag_ids)
+    await service(request).assign_tags(
+        actor.id, document_id, payload.tag_ids, payload.expected_version
+    )
 
 
 @router.get(

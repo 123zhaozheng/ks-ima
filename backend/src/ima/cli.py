@@ -10,11 +10,14 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import secrets
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import psycopg
@@ -28,6 +31,7 @@ from ima.application.legacy_knowledge import (
     normalize_legacy_tags,
     source_fingerprint,
 )
+from ima.application.legacy_mcp_inventory import LegacyConnector, safe_inventory
 from ima.config import get_settings
 from ima.domain.authorization import DEFAULT_ROLE_GRANTS, legacy_role
 from ima.infrastructure.auth.security import encrypt_secret
@@ -50,7 +54,50 @@ def main() -> None:
             "rotate-model-secrets",
             "migrate-legacy-model-governance",
             "migrate-legacy-knowledge",
+            "inventory-legacy-mcp",
+            "register-mcp-client",
         ),
+    )
+    parser.add_argument(
+        "--client-id",
+        dest="client_id",
+        type=str,
+        help="Public client ID (lowercase alphanumeric with hyphens)",
+    )
+    parser.add_argument(
+        "--client-name",
+        dest="client_name",
+        type=str,
+        help="Human-readable client name",
+    )
+    parser.add_argument(
+        "--client-type",
+        dest="client_type",
+        type=str,
+        choices=("public", "confidential"),
+        help="OAuth client type",
+    )
+    parser.add_argument(
+        "--app-type",
+        dest="app_type",
+        type=str,
+        choices=("native", "web"),
+        help="Application type",
+    )
+    parser.add_argument(
+        "--auth-method",
+        dest="auth_method",
+        type=str,
+        choices=("none",),
+        help="Token endpoint auth method (MVP: none only for public clients)",
+    )
+    parser.add_argument(
+        "--redirect-uri",
+        dest="redirect_uris",
+        type=str,
+        action="append",
+        metavar="URI",
+        help="Exact redirect URI (can be specified multiple times)",
     )
     parser.add_argument(
         "action", nargs="?", choices=("plan", "apply", "verify", "report"), default="report"
@@ -60,6 +107,11 @@ def main() -> None:
         dest="mapping_file",
         type=Path,
         help="Explicit JSON source-to-target capability mapping for legacy model governance",
+    )
+    parser.add_argument(
+        "--operator-id",
+        dest="operator_id",
+        help="Authenticated super-admin user ID recorded for privileged inventory apply",
     )
     args = parser.parse_args()
     if args.command == "check-config":
@@ -90,7 +142,109 @@ def main() -> None:
     if args.command == "migrate-legacy-knowledge":
         _legacy_knowledge_report(args.action)
         return
+    if args.command == "inventory-legacy-mcp":
+        _legacy_mcp_inventory(args.action, args.mapping_file, args.operator_id)
+        return
+    if args.command == "register-mcp-client":
+        _register_mcp_client_sync(
+            client_id=args.client_id,
+            client_name=args.client_name,
+            client_type=args.client_type,
+            app_type=args.app_type,
+            auth_method=args.auth_method,
+            redirect_uris=args.redirect_uris,
+            operator_id=args.operator_id,
+        )
+        return
     asyncio.run(_run_worker())
+
+
+def _json_error(code: str, message: str, *, exit_code: int = 2) -> None:
+    print(json.dumps({"error": code, "message": message}, sort_keys=True), file=sys.stderr)
+    raise SystemExit(exit_code)
+
+
+def _load_legacy_mcp_decisions(mapping_file: Path | None) -> dict[str, object]:
+    if mapping_file is None:
+        return {}
+
+    def reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate legacy connector id: {key}")
+            result[key] = value
+        return result
+
+    try:
+        payload = json.loads(
+            mapping_file.read_text(encoding="utf-8"), object_pairs_hook=reject_duplicate_keys
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        _json_error("invalid_mapping", "mapping file is unreadable or invalid JSON")
+    except ValueError as exc:
+        _json_error("invalid_mapping", str(exc))
+    if not isinstance(payload, dict):
+        _json_error("invalid_mapping", "legacy MCP mapping must be a JSON object")
+    return cast(dict[str, object], payload)
+
+
+def _legacy_mcp_inventory(
+    action: str, mapping_file: Path | None, operator_id: str | None = None
+) -> None:
+    """Inventory legacy connector rows without reading key hashes or raw keys."""
+    settings = get_settings()
+    decisions = _load_legacy_mcp_decisions(mapping_file)
+    if action == "apply" and not operator_id:
+        _json_error("operator_required", "apply requires --operator-id for a super-admin")
+    conninfo = (
+        settings.database_url.get_secret_value()
+        .replace("postgresql+asyncpg://", "postgresql://")
+        .replace("postgresql+psycopg://", "postgresql://")
+    )
+    with psycopg.connect(conninfo) as connection:
+        rows = connection.execute(
+            """SELECT id,mode,"folderRootId","expiresAt","revokedAt"
+               FROM public.connector ORDER BY id"""
+        ).fetchall()
+        connectors = tuple(LegacyConnector(*row) for row in rows)
+        try:
+            report = safe_inventory(connectors, decisions)
+        except ValueError as exc:
+            _json_error("invalid_inventory", str(exc))
+        if action == "apply":
+            authorized = connection.execute(
+                """SELECT EXISTS(
+                       SELECT 1
+                       FROM ima.platform_role_assignments AS role
+                       JOIN ima.users AS operator ON operator.id=role.user_id
+                       WHERE role.user_id=%s AND role.role='super_admin'
+                         AND operator.is_active=true AND operator.disabled_at IS NULL
+                   )""",
+                (operator_id,),
+            ).fetchone()
+            if not authorized or not authorized[0]:
+                _json_error(
+                    "operator_forbidden", "operator is not an active super-admin", exit_code=3
+                )
+            connection.execute(
+                """INSERT INTO ima.audit_events(actor_id,action,target_type,target_id,result,reason_code,metadata,created_at)
+                   VALUES (%s,'legacy.mcp.inventory','migration','all',%s,NULL,%s::jsonb,now())""",
+                (
+                    operator_id,
+                    "success" if report["complete"] else "failure",
+                    json.dumps(
+                        {
+                            "counts": report["counts"],
+                            "canonicalResource": "/mcp",
+                            "secretValues": False,
+                        }
+                    ),
+                ),
+            )
+    print(json.dumps(report, sort_keys=True))
+    if action in {"apply", "verify"} and not report["complete"]:
+        raise SystemExit(4)
 
 
 def _run_migrations() -> None:
@@ -1781,7 +1935,11 @@ def _legacy_identity_report(action: str = "report") -> None:
                 compatible_passwords = sum(compatible_argon2id_phc(user[3]) for user in users)
                 compatible_totp = sum(compatible_totp_secret(user[4]) for user in users)
                 cursor.execute(
-                    "SELECT status,count(*) FROM ima.legacy_identity_migration GROUP BY status ORDER BY status"
+                    """SELECT migration.status,count(*)
+                       FROM ima.legacy_identity_migration migration
+                       JOIN public."user" source ON source.id=migration.source_id
+                       WHERE migration.source_kind='user'
+                       GROUP BY migration.status ORDER BY migration.status"""
                 )
                 checkpoints = {str(status): int(count) for status, count in cursor.fetchall()}
                 print(
@@ -1884,7 +2042,11 @@ def _legacy_identity_report(action: str = "report") -> None:
                 return
 
             cursor.execute(
-                "SELECT status,count(*) FROM ima.legacy_identity_migration GROUP BY status ORDER BY status"
+                """SELECT migration.status,count(*)
+                   FROM ima.legacy_identity_migration migration
+                   JOIN public."user" source ON source.id=migration.source_id
+                   WHERE migration.source_kind='user'
+                   GROUP BY migration.status ORDER BY migration.status"""
             )
             statuses = {str(status): int(count) for status, count in cursor.fetchall()}
             if action == "verify":
@@ -1892,7 +2054,10 @@ def _legacy_identity_report(action: str = "report") -> None:
                 session_row = cursor.fetchone()
                 sessions = int(session_row[0]) if session_row else 0
                 cursor.execute(
-                    "SELECT count(*) FROM ima.legacy_identity_migration WHERE status='failed'"
+                    """SELECT count(*)
+                       FROM ima.legacy_identity_migration migration
+                       JOIN public."user" source ON source.id=migration.source_id
+                       WHERE migration.source_kind='user' AND migration.status='failed'"""
                 )
                 failed_row = cursor.fetchone()
                 failed = int(failed_row[0]) if failed_row else 0
@@ -1976,3 +2141,154 @@ def _legacy_identity_report(action: str = "report") -> None:
                     "secretValues": False,
                 }
             )
+
+
+def _register_mcp_client_sync(
+    *,
+    client_id: str | None,
+    client_name: str | None,
+    client_type: str | None,
+    app_type: str | None,
+    auth_method: str | None,
+    redirect_uris: list[str] | None,
+    operator_id: str | None = None,
+) -> None:
+    """Register a pre-registered OAuth MCP client."""
+    from sqlalchemy.exc import IntegrityError
+
+    from ima.infrastructure.db.engine import create_engine
+    from ima.infrastructure.oauth import McpOauthRepository
+
+    settings = get_settings()
+    errors: list[str] = []
+
+    # Validate client_id format (lowercase alphanumeric with hyphens)
+    if not client_id:
+        errors.append("--client-id is required")
+    elif len(client_id) > 128 or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", client_id):
+        errors.append("--client-id must be lowercase alphanumeric with hyphens only")
+
+    # Validate client_name
+    if not client_name:
+        errors.append("--client-name is required")
+    elif not client_name.strip():
+        errors.append("--client-name must not be blank")
+    elif len(client_name) > 200:
+        errors.append("--client-name must be <= 200 characters")
+
+    # Validate client_type
+    if not client_type:
+        errors.append("--client-type is required (public or confidential)")
+    elif client_type not in ("public", "confidential"):
+        errors.append("--client-type must be 'public' or 'confidential'")
+
+    # Validate app_type
+    if not app_type:
+        errors.append("--app-type is required (native or web)")
+    elif app_type not in ("native", "web"):
+        errors.append("--app-type must be 'native' or 'web'")
+
+    # Validate auth_method - MVP only supports "none" for public clients
+    if not auth_method:
+        errors.append("--auth-method is required; MVP supports only 'none'")
+    elif auth_method != "none":
+        errors.append("--auth-method must be 'none' (MVP limitation)")
+
+    # Validate that public clients use none auth method
+    if client_type == "confidential" and auth_method == "none":
+        errors.append(
+            "confidential clients must have token_endpoint_auth_method='client_secret_basic' (not supported in MVP)"
+        )
+    if not operator_id:
+        errors.append("--operator-id is required and must identify an active super-admin")
+
+    # Initialize seen_uris before validation loop
+    seen_uris: set[str] = set()
+
+    # Validate redirect URIs
+    if not redirect_uris:
+        errors.append("at least one --redirect-uri is required")
+    else:
+        for uri in redirect_uris:
+            try:
+                parsed = urlsplit(uri)
+                _ = parsed.port
+            except ValueError:
+                parsed = None
+            safe = bool(
+                parsed
+                and parsed.hostname
+                and not parsed.fragment
+                and not parsed.username
+                and not parsed.password
+                and (
+                    parsed.scheme == "https"
+                    or (
+                        parsed.scheme == "http"
+                        and parsed.hostname.casefold() in {"localhost", "127.0.0.1", "::1"}
+                    )
+                )
+                and len(uri) <= 512
+            )
+            if not safe:
+                errors.append(
+                    f"--redirect-uri must be HTTPS or loopback HTTP without credentials or fragment: {uri}"
+                )
+            # No duplicates
+            if uri in seen_uris:
+                errors.append(f"duplicate --redirect-uri: {uri}")
+            else:
+                seen_uris.add(uri)
+
+    if errors:
+        _json_error("invalid_request", "; ".join(errors), exit_code=1)
+
+    # Canonical resource MUST come from settings - never operator input
+    canonical_resource = settings.mcp_resource_url
+
+    # For MVP public clients, no secret needed (auth_method="none")
+    client_secret = None
+
+    async def register() -> object:
+        engine = create_engine(settings)
+        try:
+            return await McpOauthRepository(engine, settings).register_client(
+                client_id=str(client_id),
+                client_name=str(client_name).strip(),
+                client_type=str(client_type),
+                token_endpoint_auth_method=str(auth_method),
+                application_type=str(app_type),
+                canonical_resource=canonical_resource,
+                redirect_uris=tuple(sorted(seen_uris)),
+                created_by=operator_id,
+                client_secret=client_secret,
+            )
+        finally:
+            await engine.dispose()
+
+    try:
+        client_uuid = asyncio.run(register())
+
+        result = {
+            "success": True,
+            "clientId": client_id,
+            "clientName": client_name,
+            "clientType": client_type,
+            "applicationType": app_type,
+            "redirectUris": tuple(sorted(seen_uris)),
+            "resource": canonical_resource,
+            "uuid": str(client_uuid),
+        }
+
+        print(json.dumps(result, sort_keys=True))
+
+    except IntegrityError as exc:
+        if getattr(exc.orig, "sqlstate", None) == "23505":
+            _json_error(
+                "duplicate_client_id", f"client_id '{client_id}' already registered", exit_code=5
+            )
+        _json_error("registration_failed", "database constraint rejected registration", exit_code=2)
+    except PermissionError:
+        _json_error("operator_forbidden", "operator is not an active super-admin", exit_code=3)
+    except Exception as exc:
+        _json_error("registration_failed", type(exc).__name__, exit_code=2)

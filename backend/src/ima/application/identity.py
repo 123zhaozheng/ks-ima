@@ -231,6 +231,15 @@ class IdentityService:
             return "platform_admin" in roles
         return False
 
+    async def active_security_stamp(self, user_id: str) -> str | None:
+        """Return the current stamp only while the local account is active."""
+        async with self.engine.connect() as conn:
+            value = await conn.scalar(
+                text("SELECT security_stamp FROM ima.users WHERE id=:id AND is_active"),
+                {"id": user_id},
+            )
+        return str(value) if value else None
+
     async def is_super_admin(self, user_id: str) -> bool:
         async with self.engine.connect() as conn:
             return bool(

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
+import { adminOrigin, frontOrigin } from './environment'
 
-const frontOrigin = 'http://127.0.0.1:9016'
 const accounts = {
   ordinary: ['e2e-ordinary@example.com', 'E2E-password-123'],
   platform: ['e2e-platform@example.com', 'E2E-password-123'],
@@ -64,7 +64,7 @@ test.describe('central model governance boundary', () => {
 
   test('platform admin can open the governance surface', async ({ page }) => {
     await login(page, accounts.platform as [string, string])
-    await page.goto('http://127.0.0.1:9017/models')
+    await page.goto(`${adminOrigin}/models`)
     await expect(page.getByText('Model governance')).toBeVisible()
     await expect(page.getByText('Gateways')).toBeVisible()
     await expect(page.getByText('Profiles')).toBeVisible()

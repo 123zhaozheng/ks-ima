@@ -58,16 +58,24 @@ type WorkspaceCapability = components['schemas']['WorkspaceCapability']
 type AssignmentList = components['schemas']['AssignmentList']
 type AssignmentRequest = components['schemas']['AssignmentRequest']
 type ImpactResponse = components['schemas']['ImpactResponse']
+type ConsentView = components['schemas']['ConsentView']
+type ConsentSubmit = components['schemas']['ConsentSubmit']
+type ServicePrincipal = components['schemas']['ServicePrincipalResponse']
+type ServicePrincipalCreate = components['schemas']['ServicePrincipalCreate']
+type CredentialIssue = components['schemas']['CredentialIssueResponse']
+type CredentialRotate = components['schemas']['CredentialRotate']
+type ConnectedGrant = components['schemas']['ConnectedGrantResponse']
+type ServicePrincipalDetail = components['schemas']['ServicePrincipalDetailResponse']
 type Result<T> = { data?: T, error?: { code?: string, message: string } }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<Result<T>> {
+async function request<T>(path: string, init: RequestInit = {}, prefix = '/api/v1'): Promise<Result<T>> {
   const headers = new Headers(init.headers)
   headers.set('Content-Type', 'application/json')
   if (!['GET', 'HEAD'].includes(init.method ?? 'GET')) {
     const csrf = document.cookie.split('; ').find(value => value.startsWith('ima_csrf='))?.split('=').slice(1).join('=')
     if (csrf) headers.set('X-CSRF-Token', decodeURIComponent(csrf))
   }
-  const response = await fetch(`/api/v1${path}`, { ...init, headers, credentials: 'include' })
+  const response = await fetch(`${prefix}${path}`, { ...init, headers, credentials: 'include' })
   const body = await response.json().catch(() => ({})) as T & { detail?: string, code?: string }
   return response.ok ? { data: body } : { error: { code: body.code, message: body.detail ?? 'Request failed' } }
 }
@@ -195,4 +203,14 @@ export const identityClient = {
   removeCapabilityProfile: (workspaceId: string, workflow: string, expectedVersion?: number) => request(`/admin/workspaces/${encodeURIComponent(workspaceId)}/profile-assignments/${encodeURIComponent(workflow)}${expectedVersion ? `?expected_version=${expectedVersion}` : ''}`, { method: 'DELETE' }),
   modelGovernanceImpact: (modelId: string) => request<ImpactResponse>(`/admin/model-governance/impact?model_id=${encodeURIComponent(modelId)}`),
   workspaceCapabilities: (workspaceId: string) => request<WorkspaceCapability[]>(`/workspaces/${encodeURIComponent(workspaceId)}/capabilities`),
+  previewOAuthConsent: (query: string) => request<ConsentView>(`/oauth/authorize?${query}`, {}, ''),
+  submitOAuthConsent: (input: ConsentSubmit) => request('/oauth/authorize', { method: 'POST', body: JSON.stringify(input) }, ''),
+  listServicePrincipals: (workspaceId: string) => request<ServicePrincipal[]>(`/workspaces/${encodeURIComponent(workspaceId)}/service-principals`),
+  getServicePrincipal: (workspaceId: string, principalId: string) => request<ServicePrincipalDetail>(`/workspaces/${encodeURIComponent(workspaceId)}/service-principals/${encodeURIComponent(principalId)}`),
+  createServicePrincipal: (workspaceId: string, input: ServicePrincipalCreate) => request<CredentialIssue>(`/workspaces/${encodeURIComponent(workspaceId)}/service-principals`, { method: 'POST', body: JSON.stringify(input) }),
+  rotateServiceCredential: (workspaceId: string, principalId: string, credentialId: string, input: CredentialRotate) => request<CredentialIssue>(`/workspaces/${encodeURIComponent(workspaceId)}/service-principals/${encodeURIComponent(principalId)}/credentials/${encodeURIComponent(credentialId)}/rotate`, { method: 'POST', body: JSON.stringify(input) }),
+  revokeServiceCredential: (workspaceId: string, principalId: string, credentialId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/service-principals/${encodeURIComponent(principalId)}/credentials/${encodeURIComponent(credentialId)}`, { method: 'DELETE' }),
+  revokeServicePrincipal: (workspaceId: string, principalId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/service-principals/${encodeURIComponent(principalId)}`, { method: 'DELETE' }),
+  listConnectedOAuthGrants: () => request<ConnectedGrant[]>('/oauth/grants'),
+  revokeConnectedOAuthGrant: (grantId: string) => request(`/oauth/grants/${encodeURIComponent(grantId)}`, { method: 'DELETE' }),
 }

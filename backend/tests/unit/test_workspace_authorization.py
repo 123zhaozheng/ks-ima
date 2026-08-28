@@ -112,3 +112,12 @@ def test_policy_predicate_requires_all_dependencies_for_the_same_subject() -> No
     assert "required_actions" in sql
     assert "required_entry.subject_type=e.subject_type" in sql
     assert "required_entry.subject_id=e.subject_id" in sql
+
+
+def test_oauth_boundaries_use_closure_not_a_nonexistent_materialized_path() -> None:
+    source = (
+        Path(__file__).parents[2] / "src" / "ima" / "application" / "authorization.py"
+    ).read_text()
+    assert "FROM ima.folder_closure" in source
+    assert "SELECT id,path FROM ima.folders" not in source
+    assert "SELECT id,path,lifecycle FROM ima.folders" not in source

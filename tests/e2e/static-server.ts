@@ -1,4 +1,5 @@
 import { resolve, sep } from 'node:path'
+import { apiOrigin } from './environment'
 
 const [rootArgument, portArgument] = Bun.argv.slice(2)
 if (!rootArgument || !portArgument) throw new Error('Usage: static-server.ts <root> <port>')
@@ -11,10 +12,16 @@ Bun.serve({
   port,
   async fetch(request) {
     const url = new URL(request.url)
-    if (url.pathname.startsWith('/api/')) {
+    const oauthProtocolRoute = new Set([
+      '/oauth/authorize',
+      '/oauth/authorize/decision',
+      '/oauth/token',
+      '/oauth/revoke',
+    ]).has(url.pathname)
+    if (url.pathname.startsWith('/api/') || oauthProtocolRoute) {
       const headers = new Headers(request.headers)
       headers.delete('host')
-      return fetch(`http://127.0.0.1:8787${url.pathname}${url.search}`, {
+      return fetch(`${apiOrigin}${url.pathname}${url.search}`, {
         method: request.method,
         headers,
         body: ['GET', 'HEAD'].includes(request.method) ? undefined : await request.arrayBuffer(),

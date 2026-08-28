@@ -55,14 +55,21 @@ async def _wait_for_heartbeat(engine: object, worker_name: str) -> datetime:
 @pytest.mark.asyncio
 async def test_idempotency_retry_and_worker_restart() -> None:
     assert DATABASE_URL is not None
+    run_id = uuid4().hex[:12]
+    # PostgreSQL NOTIFY channels are limited to 63 bytes; Procrastinate adds
+    # its own prefix to queue names.
+    integration_queue = f"di-{run_id}"
+    integration_worker_name = f"diagnostic-integration-{run_id}"
+    normal_queue = f"dn-{run_id}"
+    normal_worker_name = f"diagnostic-normal-{run_id}"
     settings = Settings(
         environment="test",
         database_url=DATABASE_URL,
         task_database_url=DATABASE_URL,
         diagnostic_jobs_enabled=True,
         worker_lag_warning_seconds=10,
-        diagnostic_queue="diagnostic-integration",
-        worker_name="diagnostic-integration-worker",
+        diagnostic_queue=integration_queue,
+        worker_name=integration_worker_name,
     )
     engine = create_engine(settings)
     service = JobService(settings, engine)
@@ -77,8 +84,8 @@ async def test_idempotency_retry_and_worker_restart() -> None:
         **os.environ,
         "IMA_DATABASE_URL": DATABASE_URL,
         "IMA_LOG_LEVEL": "DEBUG",
-        "IMA_DIAGNOSTIC_QUEUE": "diagnostic",
-        "IMA_WORKER_NAME": "diagnostic-worker",
+        "IMA_DIAGNOSTIC_QUEUE": normal_queue,
+        "IMA_WORKER_NAME": normal_worker_name,
     }
     normal_worker = None
     integration_worker = None
@@ -99,7 +106,7 @@ async def test_idempotency_retry_and_worker_restart() -> None:
             cwd=Path(__file__).parents[2],
             env=normal_worker_env,
         )
-        await _wait_for_heartbeat(engine, "diagnostic-worker")
+        await _wait_for_heartbeat(engine, normal_worker_name)
 
         # A normal worker must not claim work from the integration queue.
         async with engine.connect() as connection:
@@ -142,7 +149,15 @@ async def test_idempotency_retry_and_worker_restart() -> None:
         for worker in (integration_worker, normal_worker):
             if worker is None:
                 continue
-            worker.terminate()
+            if os.name == "nt" and worker.pid:
+                await asyncio.to_thread(
+                    subprocess.run,
+                    ["taskkill", "/T", "/F", "/PID", str(worker.pid)],
+                    check=False,
+                    capture_output=True,
+                )
+            else:
+                worker.terminate()
             try:
                 worker.wait(timeout=10)
             except subprocess.TimeoutExpired:

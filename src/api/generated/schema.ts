@@ -4,6 +4,57 @@
  */
 
 export interface paths {
+    "/.well-known/oauth-authorization-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Authorization Server Metadata */
+        get: operations["oauthAuthorizationServerMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/oauth-protected-resource": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Protected Resource Metadata */
+        get: operations["oauthProtectedResourceMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/oauth-protected-resource/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Protected Resource Metadata */
+        get: operations["oauthProtectedResourceMetadataMcp"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/account/password/change": {
         parameters: {
             query?: never;
@@ -1329,6 +1380,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/oauth/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Connected Grants */
+        get: operations["listConnectedOAuthGrants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/oauth/grants/{grant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Connected Grant */
+        delete: operations["revokeConnectedOAuthGrant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/info": {
         parameters: {
             query?: never;
@@ -1936,6 +2021,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/service-principals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Service Principals */
+        get: operations["listServicePrincipals"];
+        put?: never;
+        /** Create Service Principal */
+        post: operations["createServicePrincipal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/service-principals/{principal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Service Principal */
+        get: operations["getServicePrincipal"];
+        put?: never;
+        post?: never;
+        /** Revoke Service Principal */
+        delete: operations["revokeServicePrincipal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/service-principals/{principal_id}/credentials/{credential_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Service Credential */
+        delete: operations["revokeServiceCredential"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/service-principals/{principal_id}/credentials/{credential_id}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate Service Credential */
+        post: operations["rotateServiceCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/tags": {
         parameters: {
             query?: never;
@@ -2000,6 +2155,58 @@ export interface paths {
         get: operations["listKnowledgeTrash"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Authorize Preview */
+        get: operations["oauthAuthorizePreview"];
+        put?: never;
+        /** Authorize Submit */
+        post: operations["oauthAuthorizeSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke */
+        post: operations["oauthRevoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Token */
+        post: operations["oauthToken"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2208,6 +2415,42 @@ export interface components {
             /** Items */
             items: components["schemas"]["AuditEvent"][];
         };
+        /**
+         * AuthorizationServerMetadata
+         * @description RFC 8414 authorization-server metadata for the OAuth endpoints.
+         */
+        AuthorizationServerMetadata: {
+            /** Authorization Endpoint */
+            authorization_endpoint: string;
+            /**
+             * Authorization Response Iss Parameter Supported
+             * @default true
+             */
+            authorization_response_iss_parameter_supported: boolean;
+            /** Code Challenge Methods Supported */
+            code_challenge_methods_supported: string[];
+            /** Grant Types Supported */
+            grant_types_supported: string[];
+            /** Issuer */
+            issuer: string;
+            /** Response Types Supported */
+            response_types_supported: string[];
+            /** Revocation Endpoint */
+            revocation_endpoint: string;
+            /**
+             * Revocation Endpoint Auth Methods Supported
+             * @default [
+             *       "none"
+             *     ]
+             */
+            revocation_endpoint_auth_methods_supported: string[];
+            /** Scopes Supported */
+            scopes_supported: string[];
+            /** Token Endpoint */
+            token_endpoint: string;
+            /** Token Endpoint Auth Methods Supported */
+            token_endpoint_auth_methods_supported: string[];
+        };
         /** BuildInfo */
         BuildInfo: {
             /**
@@ -2322,6 +2565,89 @@ export interface components {
             rank: number;
             /** Score */
             score: number;
+        };
+        /** ConnectedGrantResponse */
+        ConnectedGrantResponse: {
+            /** Clientname */
+            clientName: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Folderrootid */
+            folderRootId: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Scopes */
+            scopes: string[];
+            /** Workspaceid */
+            workspaceId: string;
+        };
+        /** ConsentSubmit */
+        ConsentSubmit: {
+            /** Approved */
+            approved: boolean;
+            /** Clientid */
+            clientId: string;
+            /** Codechallenge */
+            codeChallenge: string;
+            /**
+             * Codechallengemethod
+             * @constant
+             */
+            codeChallengeMethod: "S256";
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Folderrootid */
+            folderRootId?: string | null;
+            /** Redirecturi */
+            redirectUri: string;
+            /** Resource */
+            resource: string;
+            /** Scope */
+            scope: string;
+            /** State */
+            state: string;
+            /** Workspaceid */
+            workspaceId: string;
+        };
+        /** ConsentView */
+        ConsentView: {
+            /** Clientid */
+            clientId: string;
+            /** Clientname */
+            clientName: string;
+            /** Consentrequired */
+            consentRequired: boolean;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Folderrootid */
+            folderRootId?: string | null;
+            /** Redirecturi */
+            redirectUri: string;
+            /**
+             * Refreshenabled
+             * @default true
+             */
+            refreshEnabled: boolean;
+            /** Resource */
+            resource: string;
+            /** Scopes */
+            scopes: string[];
+            /** Workspaceid */
+            workspaceId: string;
+            /** Writeaccess */
+            writeAccess: boolean;
         };
         /** ContentPage */
         ContentPage: {
@@ -2459,6 +2785,54 @@ export interface components {
             sendInvite: boolean;
             /** Temporarypassword */
             temporaryPassword?: string | null;
+        };
+        /** CredentialIssueResponse */
+        CredentialIssueResponse: {
+            credential: components["schemas"]["CredentialViewResponse"];
+            principal: components["schemas"]["ServicePrincipalResponse"];
+            /** Secret */
+            secret: string;
+        };
+        /** CredentialRotate */
+        CredentialRotate: {
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Overlapexpiresat */
+            overlapExpiresAt?: string | null;
+        };
+        /** CredentialViewResponse */
+        CredentialViewResponse: {
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Credentialid */
+            credentialId: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Lastusedat */
+            lastUsedAt: string | null;
+            /**
+             * Principalid
+             * Format: uuid
+             */
+            principalId: string;
+            /** Revokedat */
+            revokedAt: string | null;
+            /** Secretprefix */
+            secretPrefix: string;
         };
         /** DiagnosticJob */
         DiagnosticJob: {
@@ -3007,6 +3381,14 @@ export interface components {
             /** Expectedversion */
             expectedVersion: number;
         };
+        /** LifecycleResult */
+        LifecycleResult: {
+            /**
+             * Revoked
+             * @default true
+             */
+            revoked: boolean;
+        };
         /** MemberAddRequest */
         MemberAddRequest: {
             /**
@@ -3296,6 +3678,25 @@ export interface components {
             /** Items */
             items: components["schemas"]["CapabilityProfileVersion"][];
         };
+        /**
+         * ProtectedResourceMetadata
+         * @description RFC 9728 protected-resource metadata for the canonical `/mcp` resource.
+         */
+        ProtectedResourceMetadata: {
+            /** Authorization Servers */
+            authorization_servers: string[];
+            /**
+             * Bearer Methods Supported
+             * @default [
+             *       "header"
+             *     ]
+             */
+            bearer_methods_supported: "header"[];
+            /** Resource */
+            resource: string;
+            /** Scopes Supported */
+            scopes_supported: string[];
+        };
         /** RecoveryVerifyRequest */
         RecoveryVerifyRequest: {
             /** Challenge */
@@ -3372,6 +3773,110 @@ export interface components {
             /** Secret */
             secret: string;
         };
+        /** ServicePrincipalCreate */
+        ServicePrincipalCreate: {
+            /**
+             * Cidrallowlist
+             * @default []
+             */
+            cidrAllowlist: string[];
+            /**
+             * Concurrencylimit
+             * @default 10
+             */
+            concurrencyLimit: number;
+            /** Displayname */
+            displayName: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Folderrootid */
+            folderRootId?: string | null;
+            /** Owneruserid */
+            ownerUserId: string;
+            /** Purpose */
+            purpose: string;
+            /**
+             * Ratelimit
+             * @default 300
+             */
+            rateLimit: number;
+            /** Scopes */
+            scopes: string[];
+        };
+        /** ServicePrincipalDetailResponse */
+        ServicePrincipalDetailResponse: {
+            /** Cidrallowlist */
+            cidrAllowlist: string[];
+            /** Concurrencylimit */
+            concurrencyLimit: number;
+            /**
+             * Credentials
+             * @default []
+             */
+            credentials: components["schemas"]["CredentialViewResponse"][];
+            /** Displayname */
+            displayName: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Folderrootid */
+            folderRootId: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Owneruserid */
+            ownerUserId: string;
+            /** Purpose */
+            purpose: string;
+            /** Ratelimit */
+            rateLimit: number;
+            /** Scopes */
+            scopes: string[];
+            /** State */
+            state: string;
+            /** Workspaceid */
+            workspaceId: string;
+        };
+        /** ServicePrincipalResponse */
+        ServicePrincipalResponse: {
+            /** Cidrallowlist */
+            cidrAllowlist: string[];
+            /** Concurrencylimit */
+            concurrencyLimit: number;
+            /** Displayname */
+            displayName: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Folderrootid */
+            folderRootId: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Owneruserid */
+            ownerUserId: string;
+            /** Purpose */
+            purpose: string;
+            /** Ratelimit */
+            rateLimit: number;
+            /** Scopes */
+            scopes: string[];
+            /** State */
+            state: string;
+            /** Workspaceid */
+            workspaceId: string;
+        };
         /** SessionInfo */
         SessionInfo: {
             /**
@@ -3433,6 +3938,8 @@ export interface components {
         };
         /** TagAssignmentRequest */
         TagAssignmentRequest: {
+            /** Expectedversion */
+            expectedVersion: number;
             /** Tagids */
             tagIds: string[];
         };
@@ -3742,6 +4249,66 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    oauthAuthorizationServerMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizationServerMetadata"];
+                };
+            };
+        };
+    };
+    oauthProtectedResourceMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProtectedResourceMetadata"];
+                };
+            };
+        };
+    };
+    oauthProtectedResourceMetadataMcp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProtectedResourceMetadata"];
+                };
+            };
+        };
+    };
     password_change_api_v1_account_password_change_post: {
         parameters: {
             query?: never;
@@ -6695,6 +7262,57 @@ export interface operations {
             };
         };
     };
+    listConnectedOAuthGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectedGrantResponse"][];
+                };
+            };
+        };
+    };
+    revokeConnectedOAuthGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LifecycleResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     getSystemInfo: {
         parameters: {
             query?: never;
@@ -8269,6 +8887,206 @@ export interface operations {
             };
         };
     };
+    listServicePrincipals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServicePrincipalResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createServicePrincipal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServicePrincipalCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialIssueResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getServicePrincipal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServicePrincipalDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revokeServicePrincipal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LifecycleResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revokeServiceCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                principal_id: string;
+                credential_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LifecycleResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotateServiceCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                principal_id: string;
+                credential_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialRotate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialIssueResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listKnowledgeTags: {
         parameters: {
             query?: never;
@@ -8469,6 +9287,145 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauthAuthorizePreview: {
+        parameters: {
+            query?: {
+                response_type?: string | null;
+                client_id?: string | null;
+                redirect_uri?: string | null;
+                resource?: string | null;
+                workspace_id?: string | null;
+                folder_root_id?: string | null;
+                scope?: string | null;
+                state?: string | null;
+                code_challenge?: string | null;
+                code_challenge_method?: string | null;
+                expires_at?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauthAuthorizeSubmit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentSubmit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauthRevoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    client_id: string;
+                    token: string;
+                    token_type_hint?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    oauthToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    client_id?: string;
+                    code?: string;
+                    code_verifier?: string;
+                    credential?: string;
+                    credential_id?: string;
+                    grant_type: string;
+                    /** Format: uri */
+                    redirect_uri?: string;
+                    refresh_token?: string;
+                    /** Format: uri */
+                    resource?: string;
+                    scope?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

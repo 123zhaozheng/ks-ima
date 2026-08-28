@@ -23,6 +23,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Identity And Platform Contracts](./identity-platform-contracts.md) | Local identity, roles, migration, bridge, and security invariants | Active |
 | [Workspace Authorization Contracts](./workspace-authorization-contracts.md) | Membership, groups, folders, ACL SQL, migration, and Bun coexistence | Active |
 | [Model Governance Contracts](./model-governance-contracts.md) | Central gateways, encrypted secrets, profiles, assignments, egress, and resolver | Active |
+| [OAuth and MCP Service Principal Contracts](./oauth-mcp-contracts.md) | OAuth error forms, revocation epochs, delegated-policy propagation, MCP timeout hierarchy | Active |
 
 ---
 

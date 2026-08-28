@@ -13,6 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from ima.application.authorization import WorkspaceError, WorkspaceService
+from ima.application.mcp_contracts import McpActor
 from ima.domain.authorization import AclAction
 from ima.domain.knowledge import (
     ListingCursor,
@@ -80,12 +81,24 @@ class KnowledgeService:
     async def _authorize_folder(
         self,
         conn: AsyncConnection,
-        actor: str,
+        actor: str | McpActor,
         folder: dict[str, Any],
         action: AclAction,
         *,
         include_trashed: bool = False,
     ) -> Any:
+        if isinstance(actor, McpActor):
+            try:
+                await self.workspace._require_delegated_action(
+                    conn,
+                    actor,
+                    str(folder["workspace_id"]),
+                    str(folder["id"]),
+                    action,
+                )
+            except WorkspaceError as exc:
+                raise KnowledgeError(exc.status_code, exc.code, exc.detail) from exc
+            return None
         info = await self.workspace._require_member(conn, actor, str(folder["workspace_id"]))
         try:
             await self.workspace._require_folder_action(
@@ -108,7 +121,7 @@ class KnowledgeService:
 
     async def list_contents(
         self,
-        actor: str,
+        actor: str | McpActor,
         folder_id: str,
         cursor: str | None,
         limit: int,
@@ -130,7 +143,13 @@ class KnowledgeService:
                     raise KnowledgeError(
                         409, "LISTING_CHANGED", "Folder contents changed; restart pagination"
                     )
-            visible_folders = await accessible_folder_ids(conn, subject, AclAction.VIEW_METADATA)
+            visible_folders = (
+                await self.workspace.delegated_folder_ids(
+                    conn, actor, str(folder["workspace_id"]), AclAction.VIEW_METADATA
+                )
+                if isinstance(actor, McpActor)
+                else await accessible_folder_ids(conn, subject, AclAction.VIEW_METADATA)
+            )
             params: dict[str, Any] = {
                 "workspace": folder["workspace_id"],
                 "folder": folder_id,
@@ -207,7 +226,7 @@ class KnowledgeService:
                 "childrenVersion": current_version,
             }
 
-    async def get_document(self, actor: str, document_id: UUID) -> dict[str, Any]:
+    async def get_document(self, actor: str | McpActor, document_id: UUID) -> dict[str, Any]:
         async with self.engine.connect() as conn:
             row = await self._document(conn, document_id)
             if row["lifecycle"] != "active":
@@ -450,12 +469,17 @@ class KnowledgeService:
             expected_content_version=old["current_version"],
         )
 
-    async def list_tags(self, actor: str, workspace_id: str) -> list[dict[str, Any]]:
+    async def list_tags(self, actor: str | McpActor, workspace_id: str) -> list[dict[str, Any]]:
         async with self.engine.connect() as conn:
-            info = await self.workspace._require_member(conn, actor, workspace_id)
-            visible_folders = await accessible_folder_ids(
-                conn, info["subject"], AclAction.VIEW_METADATA
-            )
+            if isinstance(actor, McpActor):
+                visible_folders = await self.workspace.delegated_folder_ids(
+                    conn, actor, workspace_id, AclAction.VIEW_METADATA
+                )
+            else:
+                info = await self.workspace._require_member(conn, actor, workspace_id)
+                visible_folders = await accessible_folder_ids(
+                    conn, info["subject"], AclAction.VIEW_METADATA
+                )
             rows = (
                 (
                     await conn.execute(
@@ -662,11 +686,19 @@ class KnowledgeService:
                 metadata={"targetTagId": str(target_tag_id)},
             )
 
-    async def assign_tags(self, actor: str, document_id: UUID, tag_ids: tuple[UUID, ...]) -> None:
+    async def assign_tags(
+        self,
+        actor: str,
+        document_id: UUID,
+        tag_ids: tuple[UUID, ...],
+        expected_version: int,
+    ) -> None:
         async with self.engine.begin() as conn:
-            row = await self._document(conn, document_id)
+            row = await self._document(conn, document_id, for_update=True)
             folder = await self._folder(conn, str(row["folder_id"]))
             await self._authorize_folder(conn, actor, folder, AclAction.EDIT)
+            if int(row["version"]) != expected_version:
+                raise KnowledgeError(409, "VERSION_CONFLICT", "Document has changed")
             valid = await conn.scalar(
                 text(
                     "SELECT count(*) FROM ima.tags WHERE workspace_id=:workspace AND id=ANY(:ids) AND lifecycle='active'"
@@ -685,6 +717,27 @@ class KnowledgeService:
                     ),
                     {"id": document_id, "tag": tag_id, "actor": actor, "now": now()},
                 )
+            await conn.execute(
+                text(
+                    "UPDATE ima.documents SET version=version+1,updated_by=:actor,updated_at=:now "
+                    "WHERE id=:id AND version=:expected"
+                ),
+                {
+                    "id": document_id,
+                    "expected": expected_version,
+                    "actor": actor,
+                    "now": now(),
+                },
+            )
+            await self.workspace._audit(
+                conn,
+                actor,
+                "knowledge.document.tags_replaced",
+                "success",
+                workspace=str(row["workspace_id"]),
+                target=str(document_id),
+                metadata={"tagCount": len(set(tag_ids))},
+            )
 
     async def list_trash(
         self, actor: str, workspace_id: str, cursor: str | None, limit: int

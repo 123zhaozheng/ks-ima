@@ -13,7 +13,9 @@ Internet features from upstream Nya AI are removed (web search, GitHub plugin, p
 
 ## Connectors
 
-Workspace owners/admins create API keys at `/workspace/connectors`. Other agents connect with:
+The preferred protected resource is `https://your-host/mcp`. Interactive clients discover OAuth from that URL; service credentials exchange at `/oauth/token` for a short-lived access token before calling it.
+
+During the temporary coexistence window only, existing connector keys keep their original Bun endpoint and semantics:
 
 ```json
 {

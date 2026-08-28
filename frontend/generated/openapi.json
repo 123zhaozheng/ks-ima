@@ -561,6 +561,91 @@
         "title": "AuditEventList",
         "type": "object"
       },
+      "AuthorizationServerMetadata": {
+        "additionalProperties": false,
+        "description": "RFC 8414 authorization-server metadata for the OAuth endpoints.",
+        "properties": {
+          "authorization_endpoint": {
+            "title": "Authorization Endpoint",
+            "type": "string"
+          },
+          "authorization_response_iss_parameter_supported": {
+            "default": true,
+            "title": "Authorization Response Iss Parameter Supported",
+            "type": "boolean"
+          },
+          "code_challenge_methods_supported": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Code Challenge Methods Supported",
+            "type": "array"
+          },
+          "grant_types_supported": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Grant Types Supported",
+            "type": "array"
+          },
+          "issuer": {
+            "title": "Issuer",
+            "type": "string"
+          },
+          "response_types_supported": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Response Types Supported",
+            "type": "array"
+          },
+          "revocation_endpoint": {
+            "title": "Revocation Endpoint",
+            "type": "string"
+          },
+          "revocation_endpoint_auth_methods_supported": {
+            "default": [
+              "none"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "title": "Revocation Endpoint Auth Methods Supported",
+            "type": "array"
+          },
+          "scopes_supported": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes Supported",
+            "type": "array"
+          },
+          "token_endpoint": {
+            "title": "Token Endpoint",
+            "type": "string"
+          },
+          "token_endpoint_auth_methods_supported": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Token Endpoint Auth Methods Supported",
+            "type": "array"
+          }
+        },
+        "required": [
+          "issuer",
+          "authorization_endpoint",
+          "token_endpoint",
+          "revocation_endpoint",
+          "response_types_supported",
+          "grant_types_supported",
+          "code_challenge_methods_supported",
+          "token_endpoint_auth_methods_supported",
+          "scopes_supported"
+        ],
+        "title": "AuthorizationServerMetadata",
+        "type": "object"
+      },
       "BuildInfo": {
         "additionalProperties": false,
         "properties": {
@@ -825,6 +910,215 @@
           "score"
         ],
         "title": "CitationResponse",
+        "type": "object"
+      },
+      "ConnectedGrantResponse": {
+        "properties": {
+          "clientName": {
+            "title": "Clientname",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "folderRootId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folderrootid"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "workspaceId": {
+            "title": "Workspaceid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "clientName",
+          "workspaceId",
+          "folderRootId",
+          "scopes",
+          "expiresAt"
+        ],
+        "title": "ConnectedGrantResponse",
+        "type": "object"
+      },
+      "ConsentSubmit": {
+        "additionalProperties": false,
+        "properties": {
+          "approved": {
+            "title": "Approved",
+            "type": "boolean"
+          },
+          "clientId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Clientid",
+            "type": "string"
+          },
+          "codeChallenge": {
+            "maxLength": 43,
+            "minLength": 43,
+            "title": "Codechallenge",
+            "type": "string"
+          },
+          "codeChallengeMethod": {
+            "const": "S256",
+            "title": "Codechallengemethod",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "folderRootId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folderrootid"
+          },
+          "redirectUri": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Redirecturi",
+            "type": "string"
+          },
+          "resource": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Resource",
+            "type": "string"
+          },
+          "scope": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Scope",
+            "type": "string"
+          },
+          "state": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "State",
+            "type": "string"
+          },
+          "workspaceId": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Workspaceid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approved",
+          "clientId",
+          "redirectUri",
+          "resource",
+          "workspaceId",
+          "scope",
+          "state",
+          "codeChallenge",
+          "codeChallengeMethod",
+          "expiresAt"
+        ],
+        "title": "ConsentSubmit",
+        "type": "object"
+      },
+      "ConsentView": {
+        "properties": {
+          "clientId": {
+            "title": "Clientid",
+            "type": "string"
+          },
+          "clientName": {
+            "title": "Clientname",
+            "type": "string"
+          },
+          "consentRequired": {
+            "title": "Consentrequired",
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "folderRootId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folderrootid"
+          },
+          "redirectUri": {
+            "title": "Redirecturi",
+            "type": "string"
+          },
+          "refreshEnabled": {
+            "default": true,
+            "title": "Refreshenabled",
+            "type": "boolean"
+          },
+          "resource": {
+            "title": "Resource",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "workspaceId": {
+            "title": "Workspaceid",
+            "type": "string"
+          },
+          "writeAccess": {
+            "title": "Writeaccess",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "clientId",
+          "clientName",
+          "redirectUri",
+          "resource",
+          "workspaceId",
+          "scopes",
+          "writeAccess",
+          "expiresAt",
+          "consentRequired"
+        ],
+        "title": "ConsentView",
         "type": "object"
       },
       "ContentPage": {
@@ -1161,6 +1455,122 @@
           "displayName"
         ],
         "title": "CreateUserRequest",
+        "type": "object"
+      },
+      "CredentialIssueResponse": {
+        "properties": {
+          "credential": {
+            "$ref": "#/components/schemas/CredentialViewResponse"
+          },
+          "principal": {
+            "$ref": "#/components/schemas/ServicePrincipalResponse"
+          },
+          "secret": {
+            "title": "Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret",
+          "credential",
+          "principal"
+        ],
+        "title": "CredentialIssueResponse",
+        "type": "object"
+      },
+      "CredentialRotate": {
+        "additionalProperties": false,
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "overlapExpiresAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlapexpiresat"
+          }
+        },
+        "required": [
+          "expiresAt"
+        ],
+        "title": "CredentialRotate",
+        "type": "object"
+      },
+      "CredentialViewResponse": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "credentialId": {
+            "title": "Credentialid",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastusedat"
+          },
+          "principalId": {
+            "format": "uuid",
+            "title": "Principalid",
+            "type": "string"
+          },
+          "revokedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revokedat"
+          },
+          "secretPrefix": {
+            "title": "Secretprefix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "principalId",
+          "credentialId",
+          "secretPrefix",
+          "expiresAt",
+          "createdAt",
+          "revokedAt",
+          "lastUsedAt"
+        ],
+        "title": "CredentialViewResponse",
         "type": "object"
       },
       "DiagnosticJob": {
@@ -2836,6 +3246,17 @@
         "title": "LifecycleRequest",
         "type": "object"
       },
+      "LifecycleResult": {
+        "properties": {
+          "revoked": {
+            "default": true,
+            "title": "Revoked",
+            "type": "boolean"
+          }
+        },
+        "title": "LifecycleResult",
+        "type": "object"
+      },
       "MemberAddRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3640,6 +4061,48 @@
         "title": "ProfileVersionList",
         "type": "object"
       },
+      "ProtectedResourceMetadata": {
+        "additionalProperties": false,
+        "description": "RFC 9728 protected-resource metadata for the canonical `/mcp` resource.",
+        "properties": {
+          "authorization_servers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Authorization Servers",
+            "type": "array"
+          },
+          "bearer_methods_supported": {
+            "default": [
+              "header"
+            ],
+            "items": {
+              "const": "header",
+              "type": "string"
+            },
+            "title": "Bearer Methods Supported",
+            "type": "array"
+          },
+          "resource": {
+            "title": "Resource",
+            "type": "string"
+          },
+          "scopes_supported": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes Supported",
+            "type": "array"
+          }
+        },
+        "required": [
+          "resource",
+          "authorization_servers",
+          "scopes_supported"
+        ],
+        "title": "ProtectedResourceMetadata",
+        "type": "object"
+      },
       "RecoveryVerifyRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3869,6 +4332,263 @@
         "title": "SecretRotateRequest",
         "type": "object"
       },
+      "ServicePrincipalCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "cidrAllowlist": {
+            "default": [],
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Cidrallowlist",
+            "type": "array"
+          },
+          "concurrencyLimit": {
+            "default": 10,
+            "minimum": 1.0,
+            "title": "Concurrencylimit",
+            "type": "integer"
+          },
+          "displayName": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Displayname",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "folderRootId": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folderrootid"
+          },
+          "ownerUserId": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Owneruserid",
+            "type": "string"
+          },
+          "purpose": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Purpose",
+            "type": "string"
+          },
+          "rateLimit": {
+            "default": 300,
+            "minimum": 1.0,
+            "title": "Ratelimit",
+            "type": "integer"
+          },
+          "scopes": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "displayName",
+          "purpose",
+          "ownerUserId",
+          "scopes",
+          "expiresAt"
+        ],
+        "title": "ServicePrincipalCreate",
+        "type": "object"
+      },
+      "ServicePrincipalDetailResponse": {
+        "properties": {
+          "cidrAllowlist": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cidrallowlist",
+            "type": "array"
+          },
+          "concurrencyLimit": {
+            "title": "Concurrencylimit",
+            "type": "integer"
+          },
+          "credentials": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CredentialViewResponse"
+            },
+            "title": "Credentials",
+            "type": "array"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "folderRootId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folderrootid"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "ownerUserId": {
+            "title": "Owneruserid",
+            "type": "string"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "rateLimit": {
+            "title": "Ratelimit",
+            "type": "integer"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "workspaceId": {
+            "title": "Workspaceid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspaceId",
+          "folderRootId",
+          "displayName",
+          "purpose",
+          "ownerUserId",
+          "scopes",
+          "state",
+          "expiresAt",
+          "rateLimit",
+          "concurrencyLimit",
+          "cidrAllowlist"
+        ],
+        "title": "ServicePrincipalDetailResponse",
+        "type": "object"
+      },
+      "ServicePrincipalResponse": {
+        "properties": {
+          "cidrAllowlist": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cidrallowlist",
+            "type": "array"
+          },
+          "concurrencyLimit": {
+            "title": "Concurrencylimit",
+            "type": "integer"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "folderRootId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folderrootid"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "ownerUserId": {
+            "title": "Owneruserid",
+            "type": "string"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "rateLimit": {
+            "title": "Ratelimit",
+            "type": "integer"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "workspaceId": {
+            "title": "Workspaceid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspaceId",
+          "folderRootId",
+          "displayName",
+          "purpose",
+          "ownerUserId",
+          "scopes",
+          "state",
+          "expiresAt",
+          "rateLimit",
+          "concurrencyLimit",
+          "cidrAllowlist"
+        ],
+        "title": "ServicePrincipalResponse",
+        "type": "object"
+      },
       "SessionInfo": {
         "additionalProperties": false,
         "properties": {
@@ -4039,6 +4759,11 @@
       "TagAssignmentRequest": {
         "additionalProperties": false,
         "properties": {
+          "expectedVersion": {
+            "exclusiveMinimum": 0.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
           "tagIds": {
             "items": {
               "format": "uuid",
@@ -4049,7 +4774,8 @@
           }
         },
         "required": [
-          "tagIds"
+          "tagIds",
+          "expectedVersion"
         ],
         "title": "TagAssignmentRequest",
         "type": "object"
@@ -4882,6 +5608,69 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/.well-known/oauth-authorization-server": {
+      "get": {
+        "operationId": "oauthAuthorizationServerMetadata",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizationServerMetadata"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Authorization Server Metadata",
+        "tags": [
+          "oauth"
+        ]
+      }
+    },
+    "/.well-known/oauth-protected-resource": {
+      "get": {
+        "operationId": "oauthProtectedResourceMetadata",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtectedResourceMetadata"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Protected Resource Metadata",
+        "tags": [
+          "oauth"
+        ]
+      }
+    },
+    "/.well-known/oauth-protected-resource/mcp": {
+      "get": {
+        "operationId": "oauthProtectedResourceMetadataMcp",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtectedResourceMetadata"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Protected Resource Metadata",
+        "tags": [
+          "oauth"
+        ]
+      }
+    },
     "/api/v1/account/password/change": {
       "post": {
         "operationId": "password_change_api_v1_account_password_change_post",
@@ -9116,6 +9905,74 @@
         ]
       }
     },
+    "/api/v1/oauth/grants": {
+      "get": {
+        "operationId": "listConnectedOAuthGrants",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectedGrantResponse"
+                  },
+                  "title": "Response Listconnectedoauthgrants",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Connected Grants",
+        "tags": [
+          "service-access"
+        ]
+      }
+    },
+    "/api/v1/oauth/grants/{grant_id}": {
+      "delete": {
+        "operationId": "revokeConnectedOAuthGrant",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "grant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Grant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Connected Grant",
+        "tags": [
+          "service-access"
+        ]
+      }
+    },
     "/api/v1/system/info": {
       "get": {
         "operationId": "getSystemInfo",
@@ -11646,6 +12503,336 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/service-principals": {
+      "get": {
+        "operationId": "listServicePrincipals",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ServicePrincipalResponse"
+                  },
+                  "title": "Response Listserviceprincipals",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Service Principals",
+        "tags": [
+          "service-access"
+        ]
+      },
+      "post": {
+        "operationId": "createServicePrincipal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServicePrincipalCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialIssueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Service Principal",
+        "tags": [
+          "service-access"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/service-principals/{principal_id}": {
+      "delete": {
+        "operationId": "revokeServicePrincipal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "principal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Principal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Service Principal",
+        "tags": [
+          "service-access"
+        ]
+      },
+      "get": {
+        "operationId": "getServicePrincipal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "principal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Principal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServicePrincipalDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Service Principal",
+        "tags": [
+          "service-access"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/service-principals/{principal_id}/credentials/{credential_id}": {
+      "delete": {
+        "operationId": "revokeServiceCredential",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "principal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Principal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "credential_id",
+            "required": true,
+            "schema": {
+              "title": "Credential Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Service Credential",
+        "tags": [
+          "service-access"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/service-principals/{principal_id}/credentials/{credential_id}/rotate": {
+      "post": {
+        "operationId": "rotateServiceCredential",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "principal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Principal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "credential_id",
+            "required": true,
+            "schema": {
+              "title": "Credential Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialRotate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialIssueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rotate Service Credential",
+        "tags": [
+          "service-access"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/tags": {
       "get": {
         "operationId": "listKnowledgeTags",
@@ -11979,6 +13166,368 @@
         "summary": "Trash",
         "tags": [
           "knowledge"
+        ]
+      }
+    },
+    "/oauth/authorize": {
+      "get": {
+        "operationId": "oauthAuthorizePreview",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "response_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Response Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "client_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Client Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "redirect_uri",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Redirect Uri"
+            }
+          },
+          {
+            "in": "query",
+            "name": "resource",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resource"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "folder_root_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Folder Root Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "code_challenge",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code Challenge"
+            }
+          },
+          {
+            "in": "query",
+            "name": "code_challenge_method",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code Challenge Method"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expires_at",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expires At"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Authorize Preview",
+        "tags": [
+          "oauth"
+        ]
+      },
+      "post": {
+        "operationId": "oauthAuthorizeSubmit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsentSubmit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Authorize Submit",
+        "tags": [
+          "oauth"
+        ]
+      }
+    },
+    "/oauth/revoke": {
+      "post": {
+        "operationId": "oauthRevoke",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "properties": {
+                  "client_id": {
+                    "type": "string"
+                  },
+                  "token": {
+                    "type": "string",
+                    "writeOnly": true
+                  },
+                  "token_type_hint": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "token",
+                  "client_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Revoke",
+        "tags": [
+          "oauth"
+        ]
+      }
+    },
+    "/oauth/token": {
+      "post": {
+        "operationId": "oauthToken",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "properties": {
+                  "client_id": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string",
+                    "writeOnly": true
+                  },
+                  "code_verifier": {
+                    "type": "string",
+                    "writeOnly": true
+                  },
+                  "credential": {
+                    "type": "string",
+                    "writeOnly": true
+                  },
+                  "credential_id": {
+                    "type": "string"
+                  },
+                  "grant_type": {
+                    "type": "string"
+                  },
+                  "redirect_uri": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "refresh_token": {
+                    "type": "string",
+                    "writeOnly": true
+                  },
+                  "resource": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "scope": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "grant_type"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Token",
+        "tags": [
+          "oauth"
         ]
       }
     }

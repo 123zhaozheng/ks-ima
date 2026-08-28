@@ -17,6 +17,7 @@ import WorkspaceModels from 'src/pages/WorkspaceModels.vue'
 import WorkspaceTags from 'src/pages/WorkspaceTags.vue'
 import KnowledgeDocumentPage from 'src/pages/KnowledgeDocumentPage.vue'
 import GroundedAskPage from 'src/pages/GroundedAskPage.vue'
+import OAuthConsentPage from 'src/pages/OAuthConsentPage.vue'
 import { t } from 'src/utils/i18n'
 
 const routes: RouteRecordRaw[] = [
@@ -58,7 +59,7 @@ const routes: RouteRecordRaw[] = [
             path: 'connectors',
             component: WorkspaceConnectors,
             meta: {
-              title: t('Connectors'),
+              title: t('Agent access'),
             },
           },
           {
@@ -110,6 +111,7 @@ const routes: RouteRecordRaw[] = [
         meta: { title: t('Account Security') },
       },
       authRoute,
+      { path: '/oauth/consent', component: OAuthConsentPage, meta: { title: t('Connect agent') } },
       // Always leave this as last one,
       // but you can also remove it
       {

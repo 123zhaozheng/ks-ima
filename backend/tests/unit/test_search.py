@@ -1,6 +1,95 @@
+import asyncio
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
+from unittest.mock import AsyncMock
+from uuid import uuid4
 
-from ima.application.search import fuse_scores
+import pytest
+
+from ima.application.search import SearchError, SearchService, fuse_scores
+from ima.domain.authorization import AclAction
+
+
+class _Context:
+    def __init__(self, value: object) -> None:
+        self.value = value
+
+    async def __aenter__(self) -> object:
+        return self.value
+
+    async def __aexit__(self, *_: object) -> None:
+        return None
+
+
+class _Connection:
+    execute = AsyncMock()
+    scalar = AsyncMock(return_value=1)
+
+
+class _Engine:
+    def __init__(self) -> None:
+        self.connection = _Connection()
+
+    def begin(self) -> _Context:
+        return _Context(self.connection)
+
+    def connect(self) -> _Context:
+        return _Context(self.connection)
+
+
+class _BoundedSearch(SearchService):
+    def __init__(self) -> None:
+        self.engine = cast(Any, _Engine())
+        self.workspace = cast(Any, SimpleNamespace())
+        self.models = SimpleNamespace(
+            managed_chat=AsyncMock(
+                return_value={"choices": [{"message": {"content": "Grounded answer"}}]}
+            )
+        )
+        self.citation = {
+            "documentId": uuid4(),
+            "documentVersion": 1,
+            "fileGeneration": 1,
+            "chunkOrdinal": 0,
+            "chunkDigest": "digest",
+            "title": "Source",
+            "quote": "Evidence",
+            "score": 1.0,
+            "rank": 1,
+        }
+        self.persisted = AsyncMock()
+        self.statuses: list[tuple[str, str]] = []
+
+    async def _folders(self, *_: object, **__: object) -> set[str]:
+        return {"folder-1"}
+
+    async def _owned_conversation(self, *_: object, **__: object) -> dict[str, object]:
+        return {
+            "id": uuid4(),
+            "workspace_id": "workspace-1",
+            "owner_user_id": "user-1",
+            "title": "Existing",
+            "lifecycle": "active",
+            "version": 1,
+            "created_at": None,
+            "updated_at": None,
+        }
+
+    async def _profile(self, *_: object, **__: object) -> object:
+        return SimpleNamespace(retrieval_mode="keyword", top_k=8)
+
+    async def search(self, *_: object, **__: object) -> dict[str, object]:
+        return {"items": [self.citation]}
+
+    async def _persist_citations(self, message_id: object, citations: object) -> None:
+        await self.persisted(message_id, citations)
+
+    async def _status(self, message_id: object, status: str) -> None:
+        self.statuses.append((str(message_id), status))
+
+    async def _complete(self, message_id: object, status: str, content: str) -> None:
+        self.statuses.append((status, content))
 
 
 def test_search_sql_keeps_workspace_inside_fts_and_vector_predicates() -> None:
@@ -64,3 +153,80 @@ def test_grounded_sse_framing_has_event_id_and_compact_payload() -> None:
 
     frame = sse("citations", 3, {"messageId": "message", "citations": []}).decode()
     assert frame == 'id: 3\nevent: citations\ndata: {"messageId":"message","citations":[]}\n\n'
+
+
+def test_ask_bounded_does_not_consume_browser_sse_or_legacy_model_paths() -> None:
+    source = Path("src/ima/application/search.py").read_text(encoding="utf-8")
+    bounded = source.split("async def ask_bounded", 1)[1].split("async def ask(", 1)[0]
+    assert "managed_chat_stream" not in bounded
+    assert "self.ask(" not in bounded
+    assert "_legacy_model" not in bounded
+    assert "managed_chat(" in bounded
+
+
+@pytest.mark.asyncio
+async def test_ask_bounded_uses_non_streaming_gateway_and_persists_citations() -> None:
+    service = _BoundedSearch()
+    search = AsyncMock(return_value={"items": [service.citation]})
+    cast(Any, service).search = search
+    result = await service.ask_bounded(
+        "user-1", "workspace-1", "Question?", uuid4(), max_answer_chars=100
+    )
+    assert result.status == "completed"
+    assert result.answer == "Grounded answer"
+    assert result.citations == (service.citation,)
+    service.persisted.assert_awaited_once()
+    service.models.managed_chat.assert_awaited_once()
+    messages = service.models.managed_chat.await_args.args[2]
+    assert "Evidence" in messages[0]["content"]
+    assert service.statuses[-1] == ("completed", "Grounded answer")
+    assert search.await_count == 3
+    assert all(call.kwargs["action"] is AclAction.ASK for call in search.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_ask_bounded_rejects_oversized_model_answer_and_marks_failed() -> None:
+    service = _BoundedSearch()
+    service.models.managed_chat.return_value = {"choices": [{"message": {"content": "x" * 101}}]}
+    with pytest.raises(SearchError) as exc:
+        await service.ask_bounded(
+            "user-1", "workspace-1", "Question?", uuid4(), max_answer_chars=100
+        )
+    assert exc.value.code == "INVALID_MODEL_RESPONSE"
+    assert service.statuses[-1] == ("failed", "")
+
+
+@pytest.mark.asyncio
+async def test_ask_bounded_empty_retrieval_never_calls_model() -> None:
+    service = _BoundedSearch()
+    cast(Any, service).search = AsyncMock(return_value={"items": []})
+    result = await service.ask_bounded("user-1", "workspace-1", "Question?", uuid4())
+    assert result.status == "knowledge_gap"
+    assert result.citations == ()
+    service.models.managed_chat.assert_not_awaited()
+    service.persisted.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ask_bounded_final_recheck_cancels_revoked_sources() -> None:
+    service = _BoundedSearch()
+    cast(Any, service).search = AsyncMock(
+        side_effect=(
+            {"items": [service.citation]},
+            {"items": [service.citation]},
+            {"items": []},
+        )
+    )
+    with pytest.raises(SearchError) as exc:
+        await service.ask_bounded("user-1", "workspace-1", "Question?", uuid4())
+    assert exc.value.code == "ACCESS_REVOKED"
+    assert service.statuses[-1] == ("cancelled", "")
+
+
+@pytest.mark.asyncio
+async def test_ask_bounded_cancellation_persists_cancelled_state() -> None:
+    service = _BoundedSearch()
+    service.models.managed_chat.side_effect = asyncio.CancelledError()
+    with pytest.raises(asyncio.CancelledError):
+        await service.ask_bounded("user-1", "workspace-1", "Question?", uuid4())
+    assert service.statuses[-1] == ("cancelled", "")

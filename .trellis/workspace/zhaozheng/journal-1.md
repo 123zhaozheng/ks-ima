@@ -271,3 +271,24 @@ Deep review of the uncommitted working tree against prd.md, design.md, implement
 ### Status
 
 [OK] **Check complete: 2 issues fixed, all verification green, awaiting commit**
+
+
+## Session 10: Legacy migration verification, freeze, and cutover tooling
+
+**Date**: 2026-08-29
+**Task**: Legacy migration verification, freeze, and cutover tooling
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Delivered the cutover task: G1 checksum normalization, reconciliation/delta reports with exit-code gating, blob verification, bounded resumable re-ingestion, counts-only conversation archive, maintenance write freeze with audit, caddy drill cutover/rollback phases, runbook with contract pin, and an end-to-end rehearsal gate. Check session fixed trash-restoration anchors in deletion propagation and stale-checkpoint rerun convergence. All gates green (ruff/mypy/pytest/forced postgres 48/48, drill phases ok, frontend lint/unit). Captured legacy-migration-cutover-contracts spec.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c6eb2fe` | (see git log) |
+
+### Status
+
+[OK] **Completed**

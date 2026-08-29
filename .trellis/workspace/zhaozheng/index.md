@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 9
-- **Last Active**: 2026-08-28
+- **Total Sessions**: 10
+- **Last Active**: 2026-08-29
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~273 | Active |
+| `journal-1.md` | ~294 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 10 | 2026-08-29 | Legacy migration verification, freeze, and cutover tooling | `c6eb2fe` | `feat/intranet-ima` |
 | 8 | 2026-08-28 | OAuth service principals and MCP delivered | `22950e0` | `feat/intranet-ima` |
 | 7 | 2026-08-26 | Search conversations and grounded Ask | `d1e5813` | `feat/intranet-ima` |
 | 6 | 2026-08-26 | Object storage and durable ingestion | `8886ed4` | `feat/intranet-ima` |

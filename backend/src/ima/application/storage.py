@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from ima.application.authorization import WorkspaceError, WorkspaceService
 from ima.application.ingestion import ParseError, validate_upload_type
 from ima.application.knowledge import KnowledgeError, now
+from ima.application.maintenance import assert_mutation_allowed
 from ima.application.mcp_contracts import McpActor
 from ima.config import Settings
 from ima.domain.authorization import AclAction
@@ -439,6 +440,7 @@ class StorageService:
     async def _authorize(
         self, conn: Any, actor: str | McpActor, folder: dict[str, Any], action: AclAction
     ) -> None:
+        await assert_mutation_allowed(conn, action)
         if isinstance(actor, McpActor):
             try:
                 await self.workspace._require_delegated_action(

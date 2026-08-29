@@ -13,6 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from ima.application.authorization import WorkspaceError, WorkspaceService
+from ima.application.maintenance import assert_mutation_allowed, assert_writes_allowed
 from ima.application.mcp_contracts import McpActor
 from ima.domain.authorization import AclAction
 from ima.domain.knowledge import (
@@ -87,6 +88,7 @@ class KnowledgeService:
         *,
         include_trashed: bool = False,
     ) -> Any:
+        await assert_mutation_allowed(conn, action)
         if isinstance(actor, McpActor):
             try:
                 await self.workspace._require_delegated_action(
@@ -501,6 +503,7 @@ class KnowledgeService:
     async def create_tag(self, actor: str, workspace_id: str, name: str) -> dict[str, Any]:
         display, normalized = normalize_name(name, limit=120)
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self.workspace._require_member(conn, actor, workspace_id)
             if info["role"] not in {"workspace_admin", "knowledge_manager"}:
                 raise KnowledgeError(403, "TAG_FORBIDDEN", "Tag administration is required")
@@ -530,6 +533,7 @@ class KnowledgeService:
     ) -> dict[str, Any]:
         display, normalized = normalize_name(name, limit=120)
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self.workspace._require_member(conn, actor, workspace_id)
             if info["role"] not in {"workspace_admin", "knowledge_manager"}:
                 raise KnowledgeError(403, "TAG_FORBIDDEN", "Tag administration is required")
@@ -554,6 +558,7 @@ class KnowledgeService:
     async def _manage_tag(
         self, conn: AsyncConnection, actor: str, workspace_id: str, tag_id: UUID
     ) -> dict[str, Any]:
+        await assert_writes_allowed(conn)
         info = await self.workspace._require_member(conn, actor, workspace_id)
         if info["role"] not in {"workspace_admin", "knowledge_manager"}:
             raise KnowledgeError(403, "TAG_FORBIDDEN", "Tag administration is required")
@@ -626,6 +631,7 @@ class KnowledgeService:
         if source_tag_id == target_tag_id:
             raise KnowledgeError(400, "INVALID_TAG_MERGE", "Tags must be different")
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self.workspace._require_member(conn, actor, workspace_id)
             if info["role"] not in {"workspace_admin", "knowledge_manager"}:
                 raise KnowledgeError(403, "TAG_FORBIDDEN", "Tag administration is required")

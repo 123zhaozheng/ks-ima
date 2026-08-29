@@ -3,7 +3,7 @@
   "name": "legacy-migration-cutover",
   "title": "Legacy migration and final cutover",
   "description": "Implement resumable legacy ETL, schema/content/auth/ACL/blob verification, write freeze, routing cutover, and rollback runbook.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

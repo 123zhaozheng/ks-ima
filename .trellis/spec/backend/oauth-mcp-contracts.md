@@ -1,6 +1,6 @@
 # OAuth and MCP Service Principal Contracts
 
-> Executable contracts for the OAuth 2.1 authorization server, service principals, and the Python MCP tool surface. Source modules: `ima/domain/oauth.py`, `ima/application/oauth.py`, `ima/application/mcp.py`, `ima/infrastructure/oauth.py`, `ima/api/oauth.py`.
+> Executable contracts for the OAuth 2.1 authorization server, service principals, and the Python MCP tool surface. Source modules: `ima/domain/oauth.py`, `ima/application/oauth.py`, `ima/application/mcp.py`, `ima/infrastructure/oauth.py`, `ima/api/oauth.py`. See also [Legacy Migration and Cutover Contracts](./legacy-migration-cutover-contracts.md).
 
 Captured from task `08-24-oauth-service-principals-mcp` implementation and check sessions.
 

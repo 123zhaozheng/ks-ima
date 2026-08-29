@@ -18,6 +18,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from ima.application.identity import new_legacy_id
+from ima.application.maintenance import assert_writes_allowed
 from ima.application.mcp_contracts import McpActor
 from ima.config import Settings
 from ima.domain.authorization import (
@@ -576,6 +577,7 @@ class WorkspaceService:
         workspace_id = new_legacy_id()
         selected = admin_user_id
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             if not await self._platform(conn, actor_id, "platform_admin"):
                 raise WorkspaceError(
                     403, "PLATFORM_FORBIDDEN", "Platform administration is required"
@@ -762,6 +764,7 @@ class WorkspaceService:
         self, actor_id: str, workspace_id: str, user_id: str, role: WorkspaceRole
     ) -> dict[str, Any]:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id)
             if info["role"] != WorkspaceRole.WORKSPACE_ADMIN.value:
                 raise WorkspaceError(
@@ -820,6 +823,7 @@ class WorkspaceService:
         expires = now() + timedelta(days=7)
         recipient_email: str | None = None
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id)
             if info["role"] != WorkspaceRole.WORKSPACE_ADMIN.value:
                 raise WorkspaceError(
@@ -951,6 +955,7 @@ class WorkspaceService:
 
     async def revoke_invitation(self, actor_id: str, workspace_id: str, invitation_id: str) -> None:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id)
             if info["role"] != WorkspaceRole.WORKSPACE_ADMIN.value:
                 raise WorkspaceError(
@@ -982,6 +987,7 @@ class WorkspaceService:
     async def accept_invitation(self, actor_id: str, token: str) -> dict[str, Any]:
         token_hash = digest(token, self.settings.token_pepper.get_secret_value())
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             row = (
                 (
                     await conn.execute(
@@ -1049,6 +1055,7 @@ class WorkspaceService:
         expected_version: int | None = None,
     ) -> dict[str, Any]:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id)
             if info["role"] != WorkspaceRole.WORKSPACE_ADMIN.value:
                 raise WorkspaceError(
@@ -1126,6 +1133,7 @@ class WorkspaceService:
         self, actor_id: str, workspace_id: str, user_id: str, expected_version: int | None = None
     ) -> None:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id)
             if info["role"] != WorkspaceRole.WORKSPACE_ADMIN.value:
                 raise WorkspaceError(
@@ -1200,6 +1208,7 @@ class WorkspaceService:
 
     async def create_group(self, actor_id: str, workspace_id: str, name: str) -> dict[str, Any]:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id)
             if info["role"] != WorkspaceRole.WORKSPACE_ADMIN.value:
                 raise WorkspaceError(
@@ -1271,6 +1280,7 @@ class WorkspaceService:
         self, actor_id: str, workspace_id: str, group_id: str, expected_version: int | None = None
     ) -> dict[str, int]:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id)
             if info["role"] != WorkspaceRole.WORKSPACE_ADMIN.value:
                 raise WorkspaceError(
@@ -1325,6 +1335,7 @@ class WorkspaceService:
         self, actor_id: str, workspace_id: str, group_id: str, user_id: str, add: bool
     ) -> None:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id)
             if info["role"] != WorkspaceRole.WORKSPACE_ADMIN.value:
                 raise WorkspaceError(
@@ -1418,6 +1429,7 @@ class WorkspaceService:
         self, actor_id: str, workspace_id: str, parent_id: str, name: str
     ) -> dict[str, Any]:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             if not name.strip():
                 raise WorkspaceError(400, "INVALID_FOLDER_NAME", "Folder name cannot be blank")
             info = await self._require_member(
@@ -1529,6 +1541,7 @@ class WorkspaceService:
         self, actor_id: str, workspace_id: str, folder_id: str, name: str, expected_version: int
     ) -> dict[str, Any]:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             if not name.strip():
                 raise WorkspaceError(400, "INVALID_FOLDER_NAME", "Folder name cannot be blank")
             info = await self._require_member(conn, actor_id, workspace_id, AclAction.EDIT)
@@ -1610,6 +1623,7 @@ class WorkspaceService:
         expected_version: int,
     ) -> dict[str, Any]:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id, AclAction.MOVE)
             source = (
                 (
@@ -1757,6 +1771,7 @@ class WorkspaceService:
     ) -> dict[str, Any]:
         """Move a folder among active siblings while preserving dense order."""
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id, AclAction.EDIT)
             row = (
                 (
@@ -1851,6 +1866,7 @@ class WorkspaceService:
         self, actor_id: str, workspace_id: str, folder_id: str, expected_version: int
     ) -> None:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id, AclAction.DELETE)
             row = (
                 (
@@ -1909,6 +1925,7 @@ class WorkspaceService:
         self, actor_id: str, workspace_id: str, folder_id: str, expected_version: int
     ) -> None:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id, AclAction.EDIT)
             row = (
                 (
@@ -1997,6 +2014,7 @@ class WorkspaceService:
         self, actor_id: str, workspace_id: str, folder_id: str, expected_version: int
     ) -> None:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id, AclAction.DELETE)
             row = (
                 (
@@ -2060,6 +2078,7 @@ class WorkspaceService:
         expected_version: int | None = None,
     ) -> dict[str, Any]:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             info = await self._require_member(conn, actor_id, workspace_id, AclAction.MANAGE_ACL)
             folder = (
                 (
@@ -2341,6 +2360,7 @@ class WorkspaceService:
 
     async def repair_admin(self, actor_id: str, workspace_id: str, user_id: str) -> dict[str, Any]:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             if not await self._platform(conn, actor_id, "platform_admin"):
                 raise WorkspaceError(
                     403, "PLATFORM_FORBIDDEN", "Platform administration is required"
@@ -2383,6 +2403,7 @@ class WorkspaceService:
 
     async def archive_workspace(self, actor_id: str, workspace_id: str) -> None:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             if not await self._platform(conn, actor_id, "platform_admin"):
                 raise WorkspaceError(
                     403, "PLATFORM_FORBIDDEN", "Platform administration is required"
@@ -2406,6 +2427,7 @@ class WorkspaceService:
 
     async def restore_workspace(self, actor_id: str, workspace_id: str) -> None:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             if not await self._platform(conn, actor_id, "platform_admin"):
                 raise WorkspaceError(
                     403, "PLATFORM_FORBIDDEN", "Platform administration is required"
@@ -2429,6 +2451,7 @@ class WorkspaceService:
 
     async def delete_archived_workspace(self, actor_id: str, workspace_id: str) -> None:
         async with self.engine.begin() as conn:
+            await assert_writes_allowed(conn)
             if not await self._platform(conn, actor_id, "platform_admin"):
                 raise WorkspaceError(
                     403, "PLATFORM_FORBIDDEN", "Platform administration is required"

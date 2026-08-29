@@ -155,6 +155,23 @@ class ObjectStorageClient:
         except (BotoCoreError, ClientError) as exc:
             raise StorageClientError("STORAGE_UNAVAILABLE") from exc
 
+    def list_keys(self, prefix: str, *, max_keys: int = 10000) -> list[str]:
+        """List object keys under a prefix, bounded for verification reports."""
+        client = self._require_client()
+        keys: list[str] = []
+        try:
+            paginator = client.get_paginator("list_objects_v2")
+            pages = paginator.paginate(
+                Bucket=self.settings.storage_bucket,
+                Prefix=prefix,
+                PaginationConfig={"PageSize": 1000, "MaxItems": max_keys},
+            )
+            for page in pages:
+                keys.extend(str(item["Key"]) for item in page.get("Contents", []))
+        except (BotoCoreError, ClientError) as exc:
+            raise StorageClientError("STORAGE_UNAVAILABLE") from exc
+        return keys
+
     def bounded_digest(self, body: BinaryIO) -> tuple[str, int]:
         digest = sha256()
         total = 0

@@ -54,6 +54,47 @@ def test_oauth_mcp_runbook_preserves_rollback_order_and_snapshot_boundary() -> N
     assert "imageDigest" in drill and "caddyfileSha256" in drill
 
 
+def test_legacy_cutover_runbook_pins_freeze_cutover_rollback_and_recovery_phases() -> None:
+    root = Path(__file__).parents[3]
+    runbook = (root / "docs/legacy-cutover-runbook.md").read_text(encoding="utf-8")
+    for section in (
+        "## Pre-Flight Gates",
+        "## Write Freeze",
+        "## Cutover Steps",
+        "## Pre-Deletion Rollback",
+        "## Post-Deletion Recovery",
+        "## Evidence Checklist",
+    ):
+        assert section in runbook
+    assert runbook.index("## Pre-Flight Gates") < runbook.index("## Write Freeze")
+    assert runbook.index("## Write Freeze") < runbook.index("## Cutover Steps")
+    assert runbook.index("## Cutover Steps") < runbook.index("## Pre-Deletion Rollback")
+    assert runbook.index("## Pre-Deletion Rollback") < runbook.index("## Post-Deletion Recovery")
+    # Freeze entry must precede any routing change, and exit must be part of
+    # the pre-deletion rollback path.
+    assert runbook.index("maintenance freeze enter") < runbook.index("Load the cutover JSON")
+    assert runbook.index("maintenance freeze exit") < runbook.index("## Post-Deletion Recovery")
+    for command in (
+        "migrate-legacy report-all",
+        "migrate-legacy blob-verify",
+        "reconcile-report",
+        "reingest enqueue",
+        "reingest report",
+        "conversations-archive",
+        "bun run test:caddy-routing",
+    ):
+        assert command in runbook
+    assert "counts_only_archive" in runbook
+    assert "`cutover.json`" in runbook and "`rollback.json`" in runbook
+    assert "never restore legacy sessions without Python" in runbook
+    assert "code is not supported" in runbook
+    assert "does not deploy a rollback" in runbook
+    drill = (root / "scripts/caddy-routing-drill.ts").read_text(encoding="utf-8")
+    assert "buildCutoverConfig" in drill and "buildRollbackConfig" in drill
+    assert "'cutover'" in drill and "'pre_sunset_rollback'" in drill
+    assert "410" in drill and "terminal" in drill
+
+
 def test_new_oauth_implementation_never_mutates_legacy_connector() -> None:
     root = Path(__file__).parents[3]
     protected_sources = [

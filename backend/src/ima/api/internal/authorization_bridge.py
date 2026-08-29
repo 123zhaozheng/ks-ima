@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import bindparam, text
 
 from ima.application.authorization import WorkspaceError, WorkspaceService
+from ima.application.maintenance import MUTATING_ACTIONS, freeze_active
 from ima.domain.authorization import AclAction
 
 router = APIRouter(prefix="/internal/authorization", tags=["internal"], include_in_schema=False)
@@ -77,6 +78,11 @@ async def decide(
     if not x_ima_bridge_token or not hmac.compare_digest(x_ima_bridge_token, expected):
         return {"allowed": False, "reason": "bridge_unauthorized"}
     service = WorkspaceService(request.app.state.db_engine, request.app.state.settings)
+    action = AclAction(payload.action)
+    if action in MUTATING_ACTIONS:
+        async with service.engine.connect() as conn:
+            if await freeze_active(conn):
+                return {"allowed": False, "reason": "maintenance_freeze", "source": "target"}
     try:
         return await _target_decision(service, payload)
     except (WorkspaceError, ValueError):
@@ -93,6 +99,20 @@ async def batch_decide(
     if not x_ima_bridge_token or not hmac.compare_digest(x_ima_bridge_token, expected):
         return {"items": []}
     service = WorkspaceService(request.app.state.db_engine, request.app.state.settings)
+    if AclAction(payload.action) in MUTATING_ACTIONS:
+        async with service.engine.connect() as conn:
+            if await freeze_active(conn):
+                return {
+                    "items": [
+                        {
+                            "folderId": folder_id,
+                            "allowed": False,
+                            "reason": "maintenance_freeze",
+                            "source": "target",
+                        }
+                        for folder_id in payload.folder_ids
+                    ]
+                }
     try:
         from ima.infrastructure.db.authorization import accessible_folder_ids, load_subject
 

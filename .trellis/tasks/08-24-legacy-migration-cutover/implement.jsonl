@@ -1,1 +1,7 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/08-24-legacy-migration-cutover/research/legacy-data-inventory.md", "reason": "Legacy table->ima.* mapping, blob/checksum formats, checkpoint tables, volume"}
+{"file": ".trellis/tasks/08-24-legacy-migration-cutover/research/legacy-code-inventory.md", "reason": "Bun server paths, Caddy routing state, compose/env wiring, legacy tests"}
+{"file": ".trellis/tasks/08-24-legacy-migration-cutover/research/coexistence-rollback-precedents.md", "reason": "OAuth/MCP runbook + caddy-routing-drill patterns for freeze/cutover/rollback"}
+{"file": ".trellis/tasks/08-24-legacy-migration-cutover/research/migration-tooling-state.md", "reason": "Existing ima CLI commands, resumability patterns, Alembic state"}
+{"file": ".trellis/tasks/08-24-legacy-migration-cutover/research/cutover-gaps.md", "reason": "Gaps blocking complete cutover (checksums, re-ingestion, delta, freeze, chat)"}
+{"file": ".trellis/tasks/08-24-legacy-migration-cutover/research/standards-from-sibling-tasks.md", "reason": "Sibling-task standards constraining migration (digests, peppers, blob layout)"}
+{"file": ".trellis/tasks/08-24-legacy-migration-cutover/research/migration-design-input.md", "reason": "Synthesis: ETL phases, gates, freeze, cutover/rollback design input"}

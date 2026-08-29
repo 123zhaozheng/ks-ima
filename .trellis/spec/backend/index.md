@@ -24,6 +24,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Workspace Authorization Contracts](./workspace-authorization-contracts.md) | Membership, groups, folders, ACL SQL, migration, and Bun coexistence | Active |
 | [Model Governance Contracts](./model-governance-contracts.md) | Central gateways, encrypted secrets, profiles, assignments, egress, and resolver | Active |
 | [OAuth and MCP Service Principal Contracts](./oauth-mcp-contracts.md) | OAuth error forms, revocation epochs, delegated-policy propagation, MCP timeout hierarchy | Active |
+| [Legacy Migration and Cutover Contracts](./legacy-migration-cutover-contracts.md) | Read-only ETL, checksum normalization, trash anchors, rerun convergence, write freeze, report gating | Active |
 
 ---
 

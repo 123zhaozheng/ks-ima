@@ -45,6 +45,7 @@ from ima.api.v1.workspaces import router as workspace_router
 from ima.application.authorization import WorkspaceError, WorkspaceService
 from ima.application.identity import IdentityError, IdentityService
 from ima.application.knowledge import KnowledgeError, KnowledgeService
+from ima.application.maintenance import MaintenanceFreezeError
 from ima.application.mcp import McpRuntime, McpTransport
 from ima.application.model_governance import ModelGovernanceError, ModelGovernanceService
 from ima.application.oauth import McpAuthorizationError, McpAuthorizationService
@@ -175,6 +176,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.add_exception_handler(KnowledgeError, knowledge_exception_handler)  # type: ignore[arg-type]
+
+    async def maintenance_freeze_handler(
+        request: Request, exc: MaintenanceFreezeError
+    ) -> JSONResponse:
+        from ima.api.errors import make_problem
+
+        return make_problem(
+            request,
+            status=exc.status_code,
+            title="Write freeze active",
+            detail=exc.detail,
+            code=exc.code,
+        )
+
+    app.add_exception_handler(MaintenanceFreezeError, maintenance_freeze_handler)  # type: ignore[arg-type]
 
     async def search_exception_handler(request: Request, exc: SearchError) -> JSONResponse:
         from ima.api.errors import make_problem

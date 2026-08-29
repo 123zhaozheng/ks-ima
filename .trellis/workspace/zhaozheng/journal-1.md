@@ -239,3 +239,35 @@ Audited and verified all 7 phases of the OAuth/MCP plan: OAuth 2.1 authorization
 ### Status
 
 [OK] **Completed**
+
+
+## Session 10: Trellis check — legacy migration and cutover
+
+**Date**: 2026-08-28
+**Task**: Legacy migration and final cutover
+**Branch**: `feat/intranet-ima`
+
+### Review scope
+
+Deep review of the uncommitted working tree against prd.md, design.md, implement.md, research evidence (cutover-gaps G1–G12, sibling-task standards), and backend specs: no public.* writes in new migration code, no connector-secret reconstruction/logging, redacted audit payloads, G1 read-time-only checksum normalization with the hex comparison contract intact, freeze guard (super-admin only, audit rows, RFC 9457 503 bridge refusal, migration writes pass), reconcile exit-code gating vs sibling report commands, reingest boundedness/resumability vs ingestion_jobs idempotency keys, fail-closed cutover/rollback drill derivation, and runbook contract pin.
+
+### Issues found and fixed
+
+1. `backend/src/ima/cli.py` `_propagate_legacy_deletions` — trashing target rows for legacy-deleted sources dropped the restore-placement anchors required by the lifecycle contract; now sets `original_folder_id=COALESCE(original_folder_id,folder_id)` on documents and `original_parent_id=COALESCE(original_parent_id,parent_id)` on folders, matching the initial importer and the trash-move reconciliation.
+2. `backend/src/ima/cli.py` knowledge apply loop — a complete, fingerprint-equal checkpoint carrying `last_error='legacy_deleted'` was silently skipped, so a legacy row deleted and then recreated stayed trashed in the target forever; the skip branch now routes such checkpoints through `_reconcile_knowledge_delta`, restoring placement or recording review.
+
+### Re-run verification after fixes
+
+- ruff format/check: clean (cli.py reformatted); mypy src/ima: clean (73 files).
+- pytest: 230 passed, 48 skipped (default); forced postgres gate: 48 passed, 0 skipped (`IMA_REQUIRE_POSTGRES=1` against 127.0.0.1:55432).
+- Frontend/TS untouched by fixes; prior green `bun run test:caddy-routing`, `bun run lint`, `bun run test:unit`, `bun test` remain valid.
+
+### Residual risks (accepted)
+
+- Reingest readiness report aggregates ingestion jobs by version only (across generations); migrated versions are generation 1, so classification is correct for the cutover dataset.
+- Identity self-service mutations through the Python API are not freeze-gated by design; the freeze guards bridge-served mutations plus workspace/knowledge/storage service writes, and the identity importer's documented public.user/userData projection remains the sole sanctioned public.* write (pre-existing, spec-pinned).
+- Reconcile report can list two findings for the same knowledge source id (row-set drift + recorded review decision); deterministic and gate-safe, just verbose.
+
+### Status
+
+[OK] **Check complete: 2 issues fixed, all verification green, awaiting commit**

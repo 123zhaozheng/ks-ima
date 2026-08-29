@@ -32,7 +32,7 @@ export interface RouteEvidence {
 }
 
 export interface PhaseEvidence {
-  phase: 'current' | 'pre_sunset_rollback' | 'restored'
+  phase: 'current' | 'cutover' | 'pre_sunset_rollback' | 'restored'
   routes: RouteEvidence[]
 }
 
@@ -144,6 +144,74 @@ export function buildRollbackConfig(adapted: unknown): JsonObject {
   return adapted
 }
 
+export interface CutoverDials {
+  legacyDial: string
+  pythonDial: string
+}
+
+function withdrawLegacyDials(node: unknown, dials: CutoverDials): number {
+  if (Array.isArray(node)) {
+    return node.reduce((count, item) => count + withdrawLegacyDials(item, dials), 0)
+  }
+  if (!isObject(node)) return 0
+  let withdrawn = 0
+  if (node.handler === 'reverse_proxy' && Array.isArray(node.upstreams)) {
+    node.upstreams = node.upstreams.map((upstream: unknown) => {
+      if (!isObject(upstream)) return upstream
+      const dial = upstream.dial
+      if (typeof dial === 'string') {
+        if (dial !== dials.legacyDial) return upstream
+        withdrawn += 1
+        return { ...upstream, dial: dials.pythonDial }
+      }
+      if (!Array.isArray(dial)) return upstream
+      let touched = false
+      const rewritten = dial.map((entry: unknown) => {
+        if (entry !== dials.legacyDial) return entry
+        withdrawn += 1
+        touched = true
+        return dials.pythonDial
+      })
+      return touched ? { ...upstream, dial: rewritten } : upstream
+    })
+  }
+  for (const value of Object.values(node)) withdrawn += withdrawLegacyDials(value, dials)
+  return withdrawn
+}
+
+export function buildCutoverConfig(adapted: unknown, dials: CutoverDials): JsonObject {
+  assert(isObject(adapted), 'Adapted Caddy configuration is not an object')
+  const apps = adapted.apps
+  assert(isObject(apps), 'Adapted Caddy configuration has no apps object')
+  const http = apps.http
+  assert(isObject(http), 'Adapted Caddy configuration has no HTTP app')
+  const servers = http.servers
+  assert(isObject(servers), 'Adapted Caddy configuration has no servers')
+
+  const changed: string[] = []
+  for (const [name, value] of Object.entries(servers)) {
+    if (!isObject(value) || !Array.isArray(value.listen) || !Array.isArray(value.routes)) continue
+    const listeners = value.listen.filter((item): item is string => typeof item === 'string')
+    if (!listeners.some(listener => listener.endsWith(':8080') || listener.endsWith(':8081'))) {
+      continue
+    }
+    const withdrawn = withdrawLegacyDials(value.routes, dials)
+    assert(withdrawn > 0, `Server ${name} has no legacy upstream to withdraw`)
+    value.routes.unshift({
+      match: [{ path: ['/api/mcp'] }],
+      handle: [{ handler: 'static_response', status_code: 410 }],
+      terminal: true,
+    })
+    changed.push(name)
+  }
+  assert(changed.length === 2, `Expected two public Caddy servers, changed ${changed.length}`)
+  assert(
+    !JSON.stringify(adapted).includes(dials.legacyDial),
+    'A legacy upstream dial survived the cutover rewrite',
+  )
+  return adapted
+}
+
 export function resolveImageDigest(value: unknown): string {
   assert(Array.isArray(value), 'Pinned Caddy image has no repository digests')
   const digests = value.filter(
@@ -240,6 +308,28 @@ async function validateRollback(container: string, markers: MarkerServer[]): Pro
   return { phase: 'pre_sunset_rollback', routes }
 }
 
+async function validateCutover(container: string, markers: MarkerServer[]): Promise<PhaseEvidence> {
+  const ports = {
+    8080: await mappedPort(container, 8080),
+    8081: await mappedPort(container, 8081),
+  }
+  await Promise.all([waitForCaddy(ports[8080]), waitForCaddy(ports[8081])])
+  const routes: RouteEvidence[] = []
+  for (const listener of [8080, 8081] as const) {
+    const hitsBeforeLegacy = totalHits(markers)
+    routes.push(await probe(ports[listener], listener, '/api/mcp', 410, 'none'))
+    assert(totalHits(markers) === hitsBeforeLegacy, `${listener}/api/mcp reached an upstream`)
+    for (const path of ['/api/legacy-check', ...PYTHON_PATHS]) {
+      routes.push(await probe(ports[listener], listener, path, 200, 'python'))
+    }
+    routes.push(await probe(ports[listener], listener, '/zero-cache/replica', 200, 'zero'))
+    const hitsBeforeInternal = totalHits(markers)
+    routes.push(await probe(ports[listener], listener, INTERNAL_PATH, 404, 'none'))
+    assert(totalHits(markers) === hitsBeforeInternal, `${listener}${INTERNAL_PATH} reached an upstream`)
+  }
+  return { phase: 'cutover', routes }
+}
+
 async function startCaddy(
   container: string,
   configPath: string,
@@ -280,7 +370,9 @@ async function adaptCaddyfile(
     '--env', `ZERO_CACHE_URL=${dockerHostUrl(marker.zero)}`,
     CADDY_IMAGE, 'caddy', 'adapt', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile',
   ])
-  return buildRollbackConfig(JSON.parse(stdout))
+  const adapted = JSON.parse(stdout)
+  assert(isObject(adapted), 'Adapted Caddy configuration is not an object')
+  return adapted
 }
 
 async function main(): Promise<void> {
@@ -289,6 +381,7 @@ async function main(): Promise<void> {
   const temporary = await mkdtemp(join(tmpdir(), 'ima-caddy-routing-'))
   const frontDir = join(temporary, 'front')
   const adminDir = join(temporary, 'admin')
+  const cutoverPath = join(temporary, 'cutover.json')
   const rollbackPath = join(temporary, 'rollback.json')
   const prefix = `ima-caddy-drill-${randomUUID()}`
   const containers = new Set<string>()
@@ -336,9 +429,25 @@ async function main(): Promise<void> {
 
     const adaptContainer = `${prefix}-adapt`
     containers.add(adaptContainer)
-    const rollback = await adaptCaddyfile(caddyfile, adaptContainer, markers)
+    const marker = Object.fromEntries(markers.map(item => [item.marker, item])) as Record<string, MarkerServer>
+    const dialOf = (server: MarkerServer) => dockerHostUrl(server).replace(/^https?:\/\//, '')
+    const adapted = await adaptCaddyfile(caddyfile, adaptContainer, markers)
     containers.delete(adaptContainer)
+    const cutover = buildCutoverConfig(structuredClone(adapted), {
+      legacyDial: dialOf(marker.bun),
+      pythonDial: dialOf(marker.python),
+    })
+    const rollback = buildRollbackConfig(structuredClone(adapted))
+    await writeFile(cutoverPath, `${JSON.stringify(cutover, null, 2)}\n`)
     await writeFile(rollbackPath, `${JSON.stringify(rollback, null, 2)}\n`)
+
+    const cutoverContainer = `${prefix}-cutover`
+    containers.add(cutoverContainer)
+    await startCaddy(cutoverContainer, cutoverPath, '/etc/caddy/cutover.json', frontDir, adminDir, markers)
+    const cutoverPhase = await validateCutover(cutoverContainer, markers)
+    await removeContainer(cutoverContainer)
+    containers.delete(cutoverContainer)
+
     const rollbackContainer = `${prefix}-rollback`
     containers.add(rollbackContainer)
     await startCaddy(rollbackContainer, rollbackPath, '/etc/caddy/rollback.json', frontDir, adminDir, markers)
@@ -356,7 +465,7 @@ async function main(): Promise<void> {
       image: CADDY_IMAGE,
       imageDigest,
       caddyfileSha256,
-      phases: [current, preSunsetRollback, restored],
+      phases: [current, cutoverPhase, preSunsetRollback, restored],
     }, null, 2))
   } finally {
     process.off('SIGINT', onSignal)

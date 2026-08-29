@@ -22,7 +22,12 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import psycopg
 
+from ima.application.conversation_archive import (
+    CONVERSATION_TABLES,
+    build_conversation_archive_report,
+)
 from ima.application.identity import new_legacy_id
+from ima.application.ingestion import SUPPORTED_MIME_TYPES
 from ima.application.legacy_identity import compatible_argon2id_phc, compatible_totp_secret
 from ima.application.legacy_knowledge import (
     LegacyKnowledgeIssue,
@@ -32,11 +37,36 @@ from ima.application.legacy_knowledge import (
     source_fingerprint,
 )
 from ima.application.legacy_mcp_inventory import LegacyConnector, safe_inventory
+from ima.application.maintenance import MaintenanceService
+from ima.application.migration_blob_verify import (
+    CORRUPT,
+    MISSING,
+    VERIFIED,
+    BlobVerifyRecord,
+    build_blob_verify_report,
+)
+from ima.application.migration_checksum import normalize_legacy_checksum
+from ima.application.migration_reconcile import (
+    DELETE_AND_REIMPORT_SUBTREE,
+    LEGACY_ABSENT_IN_TARGET,
+    OPERATOR_REVIEW,
+    PROPAGATE_TRASH,
+    RECONCILE_TRASH_PLACEMENT,
+    REIMPORT,
+    REPARENTED_FOLDER,
+    TRASH_MOVED,
+    ReconcileFinding,
+    classify_entity_delta,
+    compare_row_sets,
+)
+from ima.application.migration_reingest import classify_readiness, enqueue_budget, mime_supported
 from ima.config import get_settings
 from ima.domain.authorization import DEFAULT_ROLE_GRANTS, legacy_role
 from ima.infrastructure.auth.security import encrypt_secret
+from ima.infrastructure.db.engine import create_engine
 from ima.infrastructure.storage import ObjectStorageClient, StorageClientError
 from ima.infrastructure.tasks.app import create_task_app
+from ima.infrastructure.tasks.ingestion import register_ingestion_tasks
 
 
 def main() -> None:
@@ -56,6 +86,8 @@ def main() -> None:
             "migrate-legacy-knowledge",
             "inventory-legacy-mcp",
             "register-mcp-client",
+            "migrate-legacy",
+            "maintenance",
         ),
     )
     parser.add_argument(
@@ -100,7 +132,37 @@ def main() -> None:
         help="Exact redirect URI (can be specified multiple times)",
     )
     parser.add_argument(
-        "action", nargs="?", choices=("plan", "apply", "verify", "report"), default="report"
+        "action",
+        nargs="?",
+        choices=(
+            "plan",
+            "apply",
+            "verify",
+            "report",
+            "report-all",
+            "reconcile",
+            "reconcile-report",
+            "blob-verify",
+            "reingest",
+            "conversations-archive",
+            "freeze",
+        ),
+        default="report",
+    )
+    parser.add_argument(
+        "subaction",
+        nargs="?",
+        choices=(
+            "enter",
+            "exit",
+            "status",
+            "enqueue",
+            "report",
+            "identity",
+            "authorization",
+            "knowledge",
+            "all",
+        ),
     )
     parser.add_argument(
         "--mapping-file",
@@ -112,6 +174,25 @@ def main() -> None:
         "--operator-id",
         dest="operator_id",
         help="Authenticated super-admin user ID recorded for privileged inventory apply",
+    )
+    parser.add_argument(
+        "--reason",
+        dest="reason",
+        help="Operator reason recorded when entering the maintenance write freeze",
+    )
+    parser.add_argument(
+        "--reingest-limit",
+        dest="reingest_limit",
+        type=int,
+        default=50,
+        help="Maximum number of file versions to enqueue in one re-ingestion pass",
+    )
+    parser.add_argument(
+        "--reingest-max-active",
+        dest="reingest_max_active",
+        type=int,
+        default=8,
+        help="Worker capacity bound for active re-ingestion parse jobs",
     )
     args = parser.parse_args()
     if args.command == "check-config":
@@ -155,6 +236,12 @@ def main() -> None:
             redirect_uris=args.redirect_uris,
             operator_id=args.operator_id,
         )
+        return
+    if args.command == "migrate-legacy":
+        _migrate_legacy_command(args)
+        return
+    if args.command == "maintenance":
+        _maintenance_command(args)
         return
     asyncio.run(_run_worker())
 
@@ -645,6 +732,326 @@ def _legacy_model_governance_report(action: str, mapping_file: Path | None = Non
         print(summary)
 
 
+def _legacy_knowledge_source_scan(
+    connection: Any,
+) -> tuple[dict[str, dict[str, Any]], tuple[Any, ...], dict[str, int], dict[str, int]]:
+    """Read and classify legacy knowledge rows without writing anything.
+
+    Returns ``(source_info, flags, counts, warnings)`` so both the importer
+    and the reconciliation report share one fingerprint computation.
+    """
+    tables = connection.execute(
+        "SELECT to_regclass('public.\"entity\"'),to_regclass('public.\"item\"'),"
+        "to_regclass('public.\"page\"'),to_regclass('public.\"pagePatch\"'),"
+        "to_regclass('public.\"blob\"'),to_regclass('public.\"workspace\"')"
+    ).fetchone()
+    flags = tuple(tables) if tables else ()
+    source_available = bool(flags and flags[0])
+    entity_rows = (
+        connection.execute(
+            'SELECT id,"rootId","parentId",type,name,conf,"sortPriority",hidden '
+            "FROM public.\"entity\" WHERE type IN ('folder','item') ORDER BY id"
+        ).fetchall()
+        if source_available
+        else []
+    )
+    entities = [
+        {
+            "id": str(row[0]),
+            "root_id": str(row[1]),
+            "parent_id": str(row[2]) if row[2] else None,
+            "type": str(row[3]),
+            "name": row[4],
+            "conf": row[5],
+            "order_key": row[6],
+            "hidden": row[7],
+        }
+        for row in entity_rows
+    ]
+    by_id = {row["id"]: row for row in entities}
+    hierarchy = hierarchy_issues(entities)
+    page_rows: dict[str, str | None] = {}
+    if flags and flags[2]:
+        page_rows = {
+            str(row[0]): row[1]
+            for row in connection.execute('SELECT id,text FROM public."page"').fetchall()
+        }
+    patch_rows: dict[str, list[dict[str, Any]]] = {}
+    if flags and flags[3]:
+        for patch_id, entity_id, patch in connection.execute(
+            'SELECT id,"entityId",patch FROM public."pagePatch" ORDER BY id'
+        ).fetchall():
+            patch_rows.setdefault(str(entity_id), []).append({"id": str(patch_id), "patch": patch})
+    trash_roots: dict[str, str] = {}
+    has_trash_column = bool(
+        flags
+        and flags[5]
+        and connection.execute(
+            """SELECT 1 FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='workspace' AND column_name='trashId'"""
+        ).fetchone()
+    )
+    if has_trash_column:
+        trash_roots = {
+            str(root): str(trash)
+            for root, trash in connection.execute(
+                'SELECT id,"trashId" FROM public."workspace"'
+            ).fetchall()
+        }
+    page_count = (
+        connection.execute('SELECT count(*) FROM public."page"').fetchone()
+        if flags and flags[2]
+        else None
+    )
+    blob_count = (
+        connection.execute('SELECT count(*) FROM public."blob"').fetchone()
+        if flags and flags[4]
+        else None
+    )
+    counts = {
+        "folders": sum(row["type"] == "folder" for row in entities),
+        "items": sum(row["type"] == "item" for row in entities),
+        "pages": int(page_count[0]) if page_count else 0,
+        "blobMetadata": int(blob_count[0]) if blob_count else 0,
+    }
+    warnings: dict[str, int] = {}
+
+    def warning(reason: str) -> None:
+        warnings[reason] = warnings.get(reason, 0) + 1
+
+    source_info: dict[str, dict[str, Any]] = {}
+    source_title_keys: set[tuple[str, str, str, str]] = set()
+    for row in entities:
+        source_id, root_id = row["id"], row["root_id"]
+        patches = patch_rows.get(source_id, [])
+        patch_import = classify_page_patches(patches)
+        page_text = page_rows.get(source_id)
+        try:
+            conf = row["conf"] if isinstance(row["conf"], dict) else json.loads(row["conf"] or "{}")
+            if not isinstance(conf, dict):
+                raise LegacyKnowledgeIssue("malformed_conf")
+            tags = normalize_legacy_tags(conf.get("tags"))
+        except (TypeError, json.JSONDecodeError, LegacyKnowledgeIssue, AttributeError) as exc:
+            tags = ()
+            conf = {}
+            warning(getattr(exc, "reason", "malformed_conf"))
+            tag_reason = getattr(exc, "reason", "malformed_conf")
+        else:
+            tag_reason = None
+        target_kind = (
+            "folder" if row["type"] == "folder" else "note" if page_text is not None else "file"
+        )
+        title = str(row["name"] or source_id).strip()[:200] or source_id
+        key = (root_id, str(row["parent_id"] or root_id), target_kind, title.casefold())
+        reasons: list[str] = []
+        if source_id in hierarchy:
+            reasons.append(hierarchy[source_id])
+        if tag_reason:
+            reasons.append(tag_reason)
+        if patch_import.reason:
+            reasons.append(patch_import.reason)
+        if key in source_title_keys:
+            reasons.append("source_title_collision")
+        source_title_keys.add(key)
+        trash_id = trash_roots.get(root_id)
+        current = source_id
+        in_trash = False
+        while current in by_id:
+            parent = by_id[current].get("parent_id") or root_id
+            if trash_id and parent == trash_id:
+                in_trash = True
+                break
+            if parent == current:
+                break
+            current = str(parent)
+        original_parent = None
+        if in_trash:
+            try:
+                original_parent = (
+                    str(conf.get("originalParentId")) if conf.get("originalParentId") else None
+                )
+            except AttributeError:
+                original_parent = None
+            if not original_parent:
+                reasons.append("trash_original_parent_unprovable")
+        fingerprint = source_fingerprint(
+            {
+                "root": root_id,
+                "parent": row["parent_id"],
+                "type": row["type"],
+                "name": row["name"],
+                "conf": row["conf"],
+                "order": row["order_key"],
+                "hidden": row["hidden"],
+                "pageDigest": hashlib.sha256(str(page_text).encode()).hexdigest()
+                if page_text is not None
+                else None,
+                "patches": [
+                    hashlib.sha256(str(item["patch"]).encode()).hexdigest() for item in patches
+                ],
+            }
+        )
+        source_info[source_id] = {
+            "row": row,
+            "title": title,
+            "kind": target_kind,
+            "tags": tags,
+            "patches": patch_import,
+            "page_text": page_text,
+            "fingerprint": fingerprint,
+            "reasons": reasons,
+            "in_trash": in_trash,
+            "original_parent": original_parent,
+        }
+    return source_info, flags, counts, warnings
+
+
+def _conninfo_for(settings: Any) -> str:
+    url = str(settings.database_url.get_secret_value())
+    return url.replace("postgresql+asyncpg://", "postgresql://").replace(
+        "postgresql+psycopg://", "postgresql://"
+    )
+
+
+def _knowledge_target_state(
+    connection: Any, source_id: str, info: dict[str, Any], target_id: Any
+) -> tuple[str, str | None] | None:
+    """Load current target lifecycle/placement for a knowledge checkpoint."""
+    row = info["row"]
+    root_id = row["root_id"]
+    if info["kind"] == "folder":
+        target = connection.execute(
+            "SELECT lifecycle,parent_id FROM ima.folders WHERE id=%s AND workspace_id=%s",
+            (source_id, root_id),
+        ).fetchone()
+    else:
+        if not target_id:
+            return None
+        target = connection.execute(
+            "SELECT lifecycle,folder_id FROM ima.documents WHERE id=%s", (target_id,)
+        ).fetchone()
+    if not target:
+        return None
+    return str(target[0]), (str(target[1]) if target[1] else None)
+
+
+def _set_folder_placement(
+    connection: Any, folder_id: str, workspace_id: str, new_parent_id: str, in_trash: bool
+) -> None:
+    """Move a migrated folder's placement and rebuild its closure rows."""
+    connection.execute(
+        "UPDATE ima.folders SET parent_id=%s,lifecycle=%s,original_parent_id=%s,updated_at=now() WHERE id=%s AND workspace_id=%s",
+        (
+            new_parent_id,
+            "trashed" if in_trash else "active",
+            new_parent_id if in_trash else None,
+            folder_id,
+            workspace_id,
+        ),
+    )
+    connection.execute(
+        """DELETE FROM ima.folder_closure
+        WHERE descendant_id IN (SELECT descendant_id FROM ima.folder_closure WHERE ancestor_id=%s)
+          AND ancestor_id NOT IN (SELECT descendant_id FROM ima.folder_closure WHERE ancestor_id=%s)""",
+        (folder_id, folder_id),
+    )
+    connection.execute(
+        """INSERT INTO ima.folder_closure(workspace_id,ancestor_id,descendant_id,depth)
+        SELECT %s,a.ancestor_id,s.descendant_id,a.depth+s.depth+1
+        FROM ima.folder_closure a JOIN ima.folder_closure s ON s.ancestor_id=%s
+        WHERE a.descendant_id=%s ON CONFLICT DO NOTHING""",
+        (workspace_id, folder_id, new_parent_id),
+    )
+
+
+def _propagate_legacy_deletions(
+    connection: Any, source_info: dict[str, dict[str, Any]], counts: dict[str, int]
+) -> None:
+    """Trash target rows whose legacy source was deleted since the last pass."""
+    rows = connection.execute(
+        "SELECT source_id,target_kind,target_id,last_error FROM ima.legacy_knowledge_migration WHERE source_kind='entity' AND status='complete'"
+    ).fetchall()
+    for source_id, target_kind, target_id, last_error in rows:
+        if source_id in source_info or last_error == "legacy_deleted":
+            continue
+        if target_kind in {"file", "note"} and target_id:
+            connection.execute(
+                "UPDATE ima.documents SET lifecycle='trashed',original_folder_id=COALESCE(original_folder_id,folder_id),updated_at=now() WHERE id=%s AND lifecycle='active'",
+                (target_id,),
+            )
+        elif target_kind == "folder":
+            connection.execute(
+                "UPDATE ima.folders SET lifecycle='trashed',original_parent_id=COALESCE(original_parent_id,parent_id),updated_at=now() WHERE id=%s AND lifecycle='active'",
+                (source_id,),
+            )
+        else:
+            continue
+        connection.execute(
+            "UPDATE ima.legacy_knowledge_migration SET last_error='legacy_deleted',updated_at=now() WHERE source_kind='entity' AND source_id=%s",
+            (source_id,),
+        )
+        counts["legacyDeleted"] += 1
+
+
+def _reconcile_knowledge_delta(
+    connection: Any,
+    source_id: str,
+    info: dict[str, Any],
+    target_kind: Any,
+    target_id: Any,
+) -> str | None:
+    """Reconcile a completed checkpoint whose legacy fingerprint changed.
+
+    Returns ``None`` when the delta was reconciled in place (trash move), or
+    the review ``last_error`` to record otherwise.
+    """
+    del target_kind
+    row = info["row"]
+    root_id = row["root_id"]
+    current_parent = str(info["original_parent"] or row["parent_id"] or root_id)
+    state = _knowledge_target_state(connection, source_id, info, target_id)
+    if state is None:
+        return "source_changed"
+    target_lifecycle, target_parent = state
+    rule, decision = classify_entity_delta(
+        target_kind=info["kind"],
+        target_lifecycle=target_lifecycle,
+        in_trash=bool(info["in_trash"]),
+        original_parent_provable=bool(info["original_parent"]),
+        current_parent=current_parent,
+        target_parent=target_parent,
+    )
+    if rule == TRASH_MOVED and decision == RECONCILE_TRASH_PLACEMENT:
+        parent_exists = connection.execute(
+            "SELECT 1 FROM ima.folders WHERE id=%s AND workspace_id=%s",
+            (current_parent, root_id),
+        ).fetchone()
+        if not parent_exists:
+            return "source_changed"
+        if info["kind"] == "folder":
+            _set_folder_placement(
+                connection, source_id, root_id, current_parent, bool(info["in_trash"])
+            )
+        elif info["in_trash"]:
+            connection.execute(
+                "UPDATE ima.documents SET lifecycle='trashed',folder_id=%s,original_folder_id=COALESCE(original_folder_id,folder_id),updated_at=now() WHERE id=%s",
+                (current_parent, target_id),
+            )
+        else:
+            connection.execute(
+                "UPDATE ima.documents SET lifecycle='active',folder_id=%s,original_folder_id=NULL,updated_at=now() WHERE id=%s",
+                (current_parent, target_id),
+            )
+        connection.execute(
+            "UPDATE ima.legacy_knowledge_migration SET source_fingerprint=%s,last_error=NULL,updated_at=now() WHERE source_kind='entity' AND source_id=%s",
+            (info["fingerprint"], source_id),
+        )
+        return None
+    if rule == REPARENTED_FOLDER:
+        return "reparented_folder"
+    return "source_changed"
+
+
 def _legacy_knowledge_report(action: str = "report") -> None:
     """Inventory/import legacy metadata without selecting blob bytes.
 
@@ -658,179 +1065,23 @@ def _legacy_knowledge_report(action: str = "report") -> None:
         .replace("postgresql+psycopg://", "postgresql://")
     )
     with psycopg.connect(conninfo) as connection:
-        tables = connection.execute(
-            "SELECT to_regclass('public.\"entity\"'),to_regclass('public.\"item\"'),"
-            "to_regclass('public.\"page\"'),to_regclass('public.\"pagePatch\"'),"
-            "to_regclass('public.\"blob\"'),to_regclass('public.\"workspace\"')"
-        ).fetchone()
-        flags = tuple(tables) if tables else ()
+        source_info, flags, scan_counts, scan_warnings = _legacy_knowledge_source_scan(connection)
         source_available = bool(flags and flags[0])
-        entity_rows = (
-            connection.execute(
-                'SELECT id,"rootId","parentId",type,name,conf,"sortPriority",hidden '
-                "FROM public.\"entity\" WHERE type IN ('folder','item') ORDER BY id"
-            ).fetchall()
-            if source_available
-            else []
-        )
-        entities = [
-            {
-                "id": str(row[0]),
-                "root_id": str(row[1]),
-                "parent_id": str(row[2]) if row[2] else None,
-                "type": str(row[3]),
-                "name": row[4],
-                "conf": row[5],
-                "order_key": row[6],
-                "hidden": row[7],
-            }
-            for row in entity_rows
-        ]
-        by_id = {row["id"]: row for row in entities}
-        hierarchy = hierarchy_issues(entities)
-        page_rows: dict[str, str | None] = {}
-        if flags and flags[2]:
-            page_rows = {
-                str(row[0]): row[1]
-                for row in connection.execute('SELECT id,text FROM public."page"').fetchall()
-            }
-        patch_rows: dict[str, list[dict[str, Any]]] = {}
-        if flags and flags[3]:
-            for patch_id, entity_id, patch in connection.execute(
-                'SELECT id,"entityId",patch FROM public."pagePatch" ORDER BY id'
-            ).fetchall():
-                patch_rows.setdefault(str(entity_id), []).append(
-                    {"id": str(patch_id), "patch": patch}
-                )
-        trash_roots: dict[str, str] = {}
-        has_trash_column = bool(
-            flags
-            and flags[5]
-            and connection.execute(
-                """SELECT 1 FROM information_schema.columns
-                WHERE table_schema='public' AND table_name='workspace' AND column_name='trashId'"""
-            ).fetchone()
-        )
-        if has_trash_column:
-            trash_roots = {
-                str(root): str(trash)
-                for root, trash in connection.execute(
-                    'SELECT id,"trashId" FROM public."workspace"'
-                ).fetchall()
-            }
-        page_count = (
-            connection.execute('SELECT count(*) FROM public."page"').fetchone()
-            if flags and flags[2]
-            else None
-        )
-        blob_count = (
-            connection.execute('SELECT count(*) FROM public."blob"').fetchone()
-            if flags and flags[4]
-            else None
-        )
         summary: dict[str, Any] = {
             "action": action,
             "sourceAvailable": source_available,
-            "folders": sum(row["type"] == "folder" for row in entities),
-            "items": sum(row["type"] == "item" for row in entities),
-            "pages": int(page_count[0]) if page_count else 0,
-            "blobMetadata": int(blob_count[0]) if blob_count else 0,
+            "folders": scan_counts["folders"],
+            "items": scan_counts["items"],
+            "pages": scan_counts["pages"],
+            "blobMetadata": scan_counts["blobMetadata"],
             "bytesRead": False,
             "review": 0,
-            "warnings": {},
+            "warnings": dict(scan_warnings),
         }
 
         def warning(reason: str) -> None:
             summary["warnings"][reason] = summary["warnings"].get(reason, 0) + 1
 
-        source_info: dict[str, dict[str, Any]] = {}
-        source_title_keys: set[tuple[str, str, str, str]] = set()
-        for row in entities:
-            source_id, root_id = row["id"], row["root_id"]
-            patches = patch_rows.get(source_id, [])
-            patch_import = classify_page_patches(patches)
-            page_text = page_rows.get(source_id)
-            try:
-                conf = (
-                    row["conf"]
-                    if isinstance(row["conf"], dict)
-                    else json.loads(row["conf"] or "{}")
-                )
-                if not isinstance(conf, dict):
-                    raise LegacyKnowledgeIssue("malformed_conf")
-                tags = normalize_legacy_tags(conf.get("tags"))
-            except (TypeError, json.JSONDecodeError, LegacyKnowledgeIssue, AttributeError) as exc:
-                tags = ()
-                conf = {}
-                warning(getattr(exc, "reason", "malformed_conf"))
-                tag_reason = getattr(exc, "reason", "malformed_conf")
-            else:
-                tag_reason = None
-            target_kind = (
-                "folder" if row["type"] == "folder" else "note" if page_text is not None else "file"
-            )
-            title = str(row["name"] or source_id).strip()[:200] or source_id
-            key = (root_id, str(row["parent_id"] or root_id), target_kind, title.casefold())
-            reasons: list[str] = []
-            if source_id in hierarchy:
-                reasons.append(hierarchy[source_id])
-            if tag_reason:
-                reasons.append(tag_reason)
-            if patch_import.reason:
-                reasons.append(patch_import.reason)
-            if key in source_title_keys:
-                reasons.append("source_title_collision")
-            source_title_keys.add(key)
-            trash_id = trash_roots.get(root_id)
-            current = source_id
-            in_trash = False
-            while current in by_id:
-                parent = by_id[current].get("parent_id") or root_id
-                if trash_id and parent == trash_id:
-                    in_trash = True
-                    break
-                if parent == current:
-                    break
-                current = str(parent)
-            original_parent = None
-            if in_trash:
-                try:
-                    original_parent = (
-                        str(conf.get("originalParentId")) if conf.get("originalParentId") else None
-                    )
-                except AttributeError:
-                    original_parent = None
-                if not original_parent:
-                    reasons.append("trash_original_parent_unprovable")
-            fingerprint = source_fingerprint(
-                {
-                    "root": root_id,
-                    "parent": row["parent_id"],
-                    "type": row["type"],
-                    "name": row["name"],
-                    "conf": row["conf"],
-                    "order": row["order_key"],
-                    "hidden": row["hidden"],
-                    "pageDigest": hashlib.sha256(str(page_text).encode()).hexdigest()
-                    if page_text is not None
-                    else None,
-                    "patches": [
-                        hashlib.sha256(str(item["patch"]).encode()).hexdigest() for item in patches
-                    ],
-                }
-            )
-            source_info[source_id] = {
-                "row": row,
-                "title": title,
-                "kind": target_kind,
-                "tags": tags,
-                "patches": patch_import,
-                "page_text": page_text,
-                "fingerprint": fingerprint,
-                "reasons": reasons,
-                "in_trash": in_trash,
-                "original_parent": original_parent,
-            }
         summary["review"] = sum(bool(info["reasons"]) for info in source_info.values())
         if action in {"plan", "report"}:
             if action == "report":
@@ -843,13 +1094,40 @@ def _legacy_knowledge_report(action: str = "report") -> None:
             print(summary)
             return
         if action == "apply":
+            reconciled_counts = {"legacyDeleted": 0, "trashMoved": 0, "reparented": 0}
+            _propagate_legacy_deletions(connection, source_info, reconciled_counts)
             for source_id, info in source_info.items():
                 fingerprint = info["fingerprint"]
                 checkpoint = connection.execute(
-                    "SELECT status,source_fingerprint FROM ima.legacy_knowledge_migration WHERE source_kind='entity' AND source_id=%s",
+                    "SELECT status,source_fingerprint,target_kind,target_id,last_error FROM ima.legacy_knowledge_migration WHERE source_kind='entity' AND source_id=%s",
                     (source_id,),
                 ).fetchone()
-                if checkpoint and checkpoint[0] == "complete" and checkpoint[1] == fingerprint:
+                if (
+                    checkpoint
+                    and checkpoint[0] == "complete"
+                    and checkpoint[1] == fingerprint
+                    and checkpoint[4] != "legacy_deleted"
+                ):
+                    continue
+                if (
+                    checkpoint
+                    and checkpoint[0] == "complete"
+                    and (checkpoint[1] != fingerprint or checkpoint[4] == "legacy_deleted")
+                ):
+                    outcome = _reconcile_knowledge_delta(
+                        connection, source_id, info, checkpoint[2], checkpoint[3]
+                    )
+                    if outcome is None:
+                        reconciled_counts["trashMoved"] += 1
+                        warning("trash_moved")
+                        continue
+                    if outcome == "reparented_folder":
+                        reconciled_counts["reparented"] += 1
+                    connection.execute(
+                        "UPDATE ima.legacy_knowledge_migration SET status='review',last_error=%s,updated_at=now() WHERE source_kind='entity' AND source_id=%s",
+                        (outcome, source_id),
+                    )
+                    warning(outcome)
                     continue
                 if checkpoint and checkpoint[1] != fingerprint:
                     connection.execute(
@@ -1046,6 +1324,7 @@ def _legacy_knowledge_report(action: str = "report") -> None:
                         (source_id, fingerprint, type(exc).__name__, type(exc).__name__),
                     )
                     warning("migration_failed")
+            summary["reconciled"] = reconciled_counts
             summary["storage"] = _legacy_knowledge_storage_phase(action, settings, connection)
             summary["statuses"] = {
                 str(status): int(count)
@@ -1209,10 +1488,19 @@ def _legacy_knowledge_storage_phase(action: str, settings: Any, connection: Any)
             summary["complete"] += 1
             continue
         try:
+            checksum_hex = normalize_legacy_checksum(str(checksum))
+        except ValueError:
+            connection.execute(
+                """INSERT INTO ima.legacy_knowledge_migration(source_kind,source_id,source_fingerprint,status,attempts,last_error,updated_at) VALUES ('storage',%s,%s,'review',1,'invalid_legacy_checksum',now()) ON CONFLICT(source_kind,source_id) DO UPDATE SET source_fingerprint=EXCLUDED.source_fingerprint,status='review',last_error='invalid_legacy_checksum',updated_at=now()""",
+                (checkpoint_id, fingerprint),
+            )
+            summary["review"] += 1
+            continue
+        try:
             client.copy_verified(
                 source_key,
                 target_key,
-                str(checksum),
+                checksum_hex,
                 int(size_bytes),
                 str(mime_type or "application/octet-stream"),
             )
@@ -1220,7 +1508,8 @@ def _legacy_knowledge_storage_phase(action: str, settings: Any, connection: Any)
                 {
                     "sourceBlobId": str(blob_id),
                     "targetObjectKey": target_key,
-                    "checksum": str(checksum),
+                    "checksum": checksum_hex,
+                    "legacyChecksum": str(checksum),
                     "sizeBytes": int(size_bytes),
                 }
             )
@@ -1228,7 +1517,7 @@ def _legacy_knowledge_storage_phase(action: str, settings: Any, connection: Any)
                 """INSERT INTO ima.document_file_versions(document_id,version,workspace_id,object_state,object_key,checksum,size_bytes,mime_type,original_filename,source_fingerprint,created_at,verified_at) SELECT d.id,1,d.workspace_id,'verified',%s,%s,%s,%s,d.title,%s,now(),now() FROM ima.documents d WHERE d.id=%s ON CONFLICT(document_id,version) DO NOTHING""",
                 (
                     target_key,
-                    str(checksum),
+                    checksum_hex,
                     int(size_bytes),
                     str(mime_type or "application/octet-stream"),
                     fingerprint,
@@ -1239,7 +1528,7 @@ def _legacy_knowledge_storage_phase(action: str, settings: Any, connection: Any)
                 """UPDATE ima.documents SET storage_key=%s,checksum=%s,size_bytes=%s,mime_type=%s,file_state='pending',updated_at=now() WHERE id=%s AND current_version=1""",
                 (
                     target_key,
-                    str(checksum),
+                    checksum_hex,
                     int(size_bytes),
                     str(mime_type or "application/octet-stream"),
                     target_id,
@@ -1260,6 +1549,542 @@ def _legacy_knowledge_storage_phase(action: str, settings: Any, connection: Any)
             )
             summary[status] += 1
     return summary
+
+
+def _migrate_legacy_command(args: Any) -> None:
+    """Dispatch the cutover-oriented migrate-legacy subcommands."""
+    action = args.action
+    if action == "report-all":
+        _legacy_report_all()
+        return
+    if action in {"reconcile", "reconcile-report"}:
+        _legacy_reconcile_report(args.subaction or "all")
+        return
+    if action == "blob-verify":
+        _legacy_blob_verify()
+        return
+    if action == "reingest":
+        mode = args.subaction or "report"
+        if mode == "enqueue":
+            _legacy_reingest_enqueue(args.reingest_limit, args.reingest_max_active)
+        elif mode == "report":
+            _legacy_reingest_report()
+        else:
+            _json_error("invalid_action", "reingest supports enqueue or report")
+        return
+    if action == "conversations-archive":
+        _legacy_conversations_archive()
+        return
+    _json_error(
+        "invalid_action",
+        "migrate-legacy supports report-all, reconcile-report, blob-verify, reingest, "
+        "conversations-archive",
+    )
+
+
+def _maintenance_command(args: Any) -> None:
+    """Enter/exit/report the typed maintenance write freeze."""
+    if args.action != "freeze":
+        _json_error("invalid_action", "maintenance supports freeze")
+    mode = args.subaction or "status"
+    operator_id = str(args.operator_id or "")
+    if mode in {"enter", "exit"} and not operator_id:
+        _json_error("operator_required", "freeze enter/exit requires --operator-id")
+    settings = get_settings()
+    engine = create_engine(settings)
+    service = MaintenanceService(engine)
+
+    async def run() -> dict[str, Any]:
+        try:
+            if mode == "enter":
+                return await service.enter_freeze(
+                    operator_id, args.reason or "legacy migration cutover"
+                )
+            if mode == "exit":
+                return await service.exit_freeze(operator_id)
+            return await service.freeze_status()
+        finally:
+            await engine.dispose()
+
+    try:
+        report = asyncio.run(run())
+    except PermissionError as exc:
+        _json_error("operator_forbidden", str(exc), exit_code=3)
+    print(json.dumps(report, sort_keys=True))
+
+
+def _legacy_report_all() -> None:
+    """Pre-flight inventory: legacy counts, blob bytes, MIME and delta probes."""
+    settings = get_settings()
+    connection: Any
+    with psycopg.connect(_conninfo_for(settings)) as connection:
+        tables = (
+            "user",
+            "account",
+            "session",
+            "workspace",
+            "member",
+            "entity",
+            "item",
+            "page",
+            "pagePatch",
+            "blob",
+            "connector",
+            "chat",
+            "message",
+            "messageEntity",
+            "toolCall",
+        )
+        counts: dict[str, int] = {}
+        for table in tables:
+            exists = connection.execute(
+                "SELECT to_regclass(%s)", (f'public."{table}"',)
+            ).fetchone()[0]
+            if exists:
+                counts[table] = int(
+                    connection.execute(f'SELECT count(*) FROM public."{table}"').fetchone()[0]
+                )
+        blob_bytes = 0
+        if "blob" in counts:
+            blob_bytes = int(
+                connection.execute('SELECT COALESCE(sum(size),0) FROM public."blob"').fetchone()[0]
+            )
+        mime_histogram: dict[str, int] = {}
+        unsupported: dict[str, int] = {}
+        item_table = connection.execute("SELECT to_regclass('public.\"item\"')").fetchone()[0]
+        if item_table:
+            for mime, count in connection.execute(
+                "SELECT COALESCE(\"mimeType\",'application/octet-stream'),count(*) "
+                'FROM public."item" WHERE "blobId" IS NOT NULL GROUP BY 1 ORDER BY 1'
+            ).fetchall():
+                mime_histogram[str(mime)] = int(count)
+                if str(mime).lower() not in SUPPORTED_MIME_TYPES:
+                    unsupported[str(mime)] = int(count)
+        connector_pending: list[str] = []
+        connector_table = connection.execute("SELECT to_regclass('public.connector')").fetchone()[0]
+        if connector_table:
+            rows = connection.execute(
+                'SELECT id,mode,"folderRootId","expiresAt","revokedAt" '
+                "FROM public.connector ORDER BY id"
+            ).fetchall()
+            inventory = safe_inventory(tuple(LegacyConnector(*row) for row in rows), {})
+            connector_pending = [
+                str(record["connectorId"])
+                for record in cast(list[dict[str, Any]], inventory["records"])
+                if record["classification"] == "pending"
+            ]
+        delta: dict[str, int] = {}
+        for table, column, checkpoint_table in (
+            ("user", "updatedAt", "ima.legacy_identity_migration"),
+            ("entity", "updatedAt", "ima.legacy_knowledge_migration"),
+        ):
+            has_column = connection.execute(
+                "SELECT 1 FROM information_schema.columns WHERE table_schema='public' "
+                "AND table_name=%s AND column_name=%s",
+                (table, column),
+            ).fetchone()
+            last_pass = connection.execute(
+                f"SELECT max(updated_at) FROM {checkpoint_table}"
+            ).fetchone()[0]
+            if has_column and last_pass:
+                delta[table] = int(
+                    connection.execute(
+                        f'SELECT count(*) FROM public."{table}" WHERE "{column}" > %s',
+                        (last_pass,),
+                    ).fetchone()[0]
+                )
+        summary = {
+            "action": "report-all",
+            "tables": counts,
+            "blobBytes": blob_bytes,
+            "mimeHistogram": mime_histogram,
+            "unsupportedMime": unsupported,
+            "deltaSinceLastPass": delta,
+            "connectorPending": connector_pending,
+            "complete": not connector_pending,
+            "secretValues": False,
+        }
+    print(json.dumps(summary, sort_keys=True))
+    if connector_pending:
+        raise SystemExit(4)
+
+
+def _legacy_reconcile_report(scope: str) -> None:
+    """Machine-readable reconciliation report with exit-code gating."""
+    if scope not in {"all", "identity", "authorization", "knowledge"}:
+        _json_error("invalid_scope", f"unknown reconcile scope: {scope}")
+    settings = get_settings()
+    findings: list[ReconcileFinding] = []
+    connection: Any
+    with psycopg.connect(_conninfo_for(settings)) as connection:
+        if scope in {"all", "identity"}:
+            user_table = connection.execute("SELECT to_regclass('public.\"user\"')").fetchone()[0]
+            if user_table:
+                legacy_users = [
+                    str(row[0])
+                    for row in connection.execute('SELECT id FROM public."user"').fetchall()
+                ]
+                checkpoints = {
+                    str(row[0]): str(row[1])
+                    for row in connection.execute(
+                        "SELECT source_id,status FROM ima.legacy_identity_migration "
+                        "WHERE source_kind='user'"
+                    ).fetchall()
+                }
+                findings.extend(
+                    compare_row_sets(
+                        scope="identity", legacy_ids=legacy_users, checkpoints=checkpoints
+                    )
+                )
+        if scope in {"all", "authorization"}:
+            for table, kind, query in (
+                ("workspace", "workspace", 'SELECT id FROM public."workspace"'),
+                ("member", "member", 'SELECT DISTINCT "workspaceId" FROM public."member"'),
+                ("entity", "folder", "SELECT id FROM public.\"entity\" WHERE type='dir'"),
+            ):
+                legacy_table = connection.execute(
+                    "SELECT to_regclass(%s)", (f'public."{table}"',)
+                ).fetchone()[0]
+                if not legacy_table:
+                    continue
+                legacy_ids = [str(row[0]) for row in connection.execute(query).fetchall()]
+                checkpoints = {
+                    str(row[0]): str(row[1])
+                    for row in connection.execute(
+                        "SELECT source_id,status FROM ima.workspace_authorization_migration "
+                        "WHERE source_kind=%s",
+                        (kind,),
+                    ).fetchall()
+                }
+                findings.extend(
+                    compare_row_sets(
+                        scope=f"authorization:{kind}",
+                        legacy_ids=legacy_ids,
+                        checkpoints=checkpoints,
+                    )
+                )
+        if scope in {"all", "knowledge"}:
+            source_info, flags, _counts, _warnings = _legacy_knowledge_source_scan(connection)
+            if flags and flags[0]:
+                checkpoints = {
+                    str(row[0]): str(row[1])
+                    for row in connection.execute(
+                        "SELECT source_id,status FROM ima.legacy_knowledge_migration "
+                        "WHERE source_kind='entity'"
+                    ).fetchall()
+                }
+                findings.extend(
+                    compare_row_sets(
+                        scope="knowledge",
+                        legacy_ids=list(source_info),
+                        checkpoints=checkpoints,
+                        deletion_decision=PROPAGATE_TRASH,
+                    )
+                )
+                checkpoint_rows = {
+                    str(row[0]): (row[1], row[2], row[3])
+                    for row in connection.execute(
+                        "SELECT source_id,source_fingerprint,target_kind,target_id "
+                        "FROM ima.legacy_knowledge_migration "
+                        "WHERE source_kind='entity' AND status='complete'"
+                    ).fetchall()
+                }
+                for source_id, (stored, target_kind, target_id) in checkpoint_rows.items():
+                    info = source_info.get(source_id)
+                    if not info or stored == info["fingerprint"]:
+                        continue
+                    state = _knowledge_target_state(connection, source_id, info, target_id)
+                    if state is None:
+                        findings.append(
+                            ReconcileFinding(
+                                scope="knowledge",
+                                rule=LEGACY_ABSENT_IN_TARGET,
+                                source_id=source_id,
+                                decision=REIMPORT,
+                                detail="target row missing after fingerprint change",
+                            )
+                        )
+                        continue
+                    target_lifecycle, target_parent = state
+                    row = info["row"]
+                    rule, decision = classify_entity_delta(
+                        target_kind=str(info["kind"]),
+                        target_lifecycle=target_lifecycle,
+                        in_trash=bool(info["in_trash"]),
+                        original_parent_provable=bool(info["original_parent"]),
+                        current_parent=str(
+                            info["original_parent"] or row["parent_id"] or row["root_id"]
+                        ),
+                        target_parent=target_parent,
+                    )
+                    findings.append(
+                        ReconcileFinding(
+                            scope="knowledge",
+                            rule=rule,
+                            source_id=source_id,
+                            decision=decision,
+                            detail=f"checkpoint fingerprint drift; target kind {target_kind}",
+                        )
+                    )
+            decision_rows = connection.execute(
+                "SELECT source_id,last_error FROM ima.legacy_knowledge_migration "
+                "WHERE source_kind='entity' AND status='review' AND last_error IN "
+                "('reparented_folder','legacy_deleted','source_changed')"
+            ).fetchall()
+            decision_map = {
+                "reparented_folder": DELETE_AND_REIMPORT_SUBTREE,
+                "legacy_deleted": PROPAGATE_TRASH,
+                "source_changed": OPERATOR_REVIEW,
+            }
+            for source_id, last_error in decision_rows:
+                findings.append(
+                    ReconcileFinding(
+                        scope="knowledge",
+                        rule=str(last_error),
+                        source_id=str(source_id),
+                        decision=decision_map.get(str(last_error), OPERATOR_REVIEW),
+                        detail="recorded review decision",
+                    )
+                )
+    rule_counts: dict[str, int] = {}
+    for finding in findings:
+        rule_counts[finding.rule] = rule_counts.get(finding.rule, 0) + 1
+    payload = {
+        "action": "reconcile-report",
+        "scope": scope,
+        "findings": [
+            {
+                "scope": finding.scope,
+                "rule": finding.rule,
+                "sourceId": finding.source_id,
+                "decision": finding.decision,
+                "detail": finding.detail,
+            }
+            for finding in findings
+        ],
+        "ruleCounts": rule_counts,
+        "ok": not findings,
+        "secretValues": False,
+    }
+    print(json.dumps(payload, sort_keys=True))
+    if findings:
+        raise SystemExit(4)
+
+
+def _legacy_blob_verify() -> None:
+    """HEAD-verify every migrated object version and detect orphans/missing."""
+    settings = get_settings()
+    storage_configured = bool(settings.storage_endpoint and settings.storage_bucket)
+    connection: Any
+    with psycopg.connect(_conninfo_for(settings)) as connection:
+        blob_table = connection.execute("SELECT to_regclass('public.\"blob\"')").fetchone()[0]
+        legacy_blob_rows = (
+            int(connection.execute('SELECT count(*) FROM public."blob"').fetchone()[0])
+            if blob_table
+            else 0
+        )
+        rows = connection.execute(
+            "SELECT document_id,version,object_key,checksum,size_bytes,mime_type "
+            "FROM ima.document_file_versions WHERE object_state='verified' "
+            "ORDER BY document_id,version"
+        ).fetchall()
+    records: list[BlobVerifyRecord] = []
+    orphans: list[str] = []
+    if storage_configured:
+        client = ObjectStorageClient(settings)
+        for document_id, version, object_key, checksum, size_bytes, mime_type in rows:
+            try:
+                client.verify(str(object_key), str(checksum), int(size_bytes), str(mime_type))
+                status, detail = VERIFIED, ""
+            except StorageClientError as exc:
+                if exc.code == "OBJECT_MISSING":
+                    status, detail = MISSING, exc.code
+                elif exc.code in {"OBJECT_VERIFICATION_FAILED", "SOURCE_OBJECT_CHANGED"}:
+                    status, detail = CORRUPT, exc.code
+                else:
+                    raise
+            records.append(
+                BlobVerifyRecord(
+                    document_id=str(document_id),
+                    version=int(version),
+                    object_key=str(object_key),
+                    status=status,
+                    detail=detail,
+                )
+            )
+        db_keys = {str(row[2]) for row in rows}
+        orphans = [key for key in client.list_keys("documents/") if key not in db_keys]
+    report = build_blob_verify_report(
+        records=records,
+        orphan_keys=orphans,
+        legacy_blob_rows=legacy_blob_rows,
+        storage_configured=storage_configured,
+    )
+    print(json.dumps(report, sort_keys=True))
+    if not report["ok"]:
+        raise SystemExit(4)
+
+
+def _ensure_task_schema(settings: Any, task_app: Any) -> None:
+    task_conninfo = settings.task_url.replace("postgresql+asyncpg://", "postgresql://")
+    with psycopg.connect(
+        task_conninfo, options=f"-c search_path={settings.task_schema}"
+    ) as connection:
+        row = connection.execute(
+            "SELECT to_regclass(%s)", (f"{settings.task_schema}.procrastinate_jobs",)
+        ).fetchone()
+        exists = row[0] if row else None
+    if exists is None:
+        with task_app.open():
+            task_app.schema_manager.apply_schema()
+
+
+def _legacy_reingest_enqueue(limit: int, max_active: int) -> None:
+    """Resumable, bounded enqueue of migrated files into the ingestion pipeline."""
+    settings = get_settings()
+    deferred: list[tuple[str, int, int]] = []
+    connection: Any
+    with psycopg.connect(_conninfo_for(settings)) as connection:
+        active = int(
+            connection.execute(
+                "SELECT count(*) FROM ima.ingestion_jobs WHERE stage='parse' "
+                "AND status IN ('queued','running','retryable')"
+            ).fetchone()[0]
+        )
+        candidates = connection.execute(
+            """SELECT d.id,fv.version,fv.generation,d.mime_type
+            FROM ima.documents d
+            JOIN ima.document_file_versions fv
+              ON fv.document_id=d.id AND fv.version=d.current_version
+            WHERE d.kind='file' AND d.lifecycle='active' AND d.file_state='pending'
+              AND fv.object_state='verified'
+              AND NOT EXISTS(
+                  SELECT 1 FROM ima.ingestion_jobs j
+                  WHERE j.document_id=d.id AND j.version=fv.version
+              )
+            ORDER BY d.id"""
+        ).fetchall()
+        eligible = [row for row in candidates if mime_supported(row[3])]
+        budget = enqueue_budget(max_active, active, limit, len(eligible))
+        enqueued = 0
+        for document_id, version, generation, _mime in eligible[:budget]:
+            inserted = connection.execute(
+                """INSERT INTO ima.ingestion_jobs(id,idempotency_key,document_id,version,generation,stage,status,correlation_id,created_at,updated_at)
+                VALUES (%s,%s,%s,%s,%s,'parse','queued','legacy-migration-reingest',now(),now())
+                ON CONFLICT(idempotency_key) DO NOTHING RETURNING id""",
+                (
+                    uuid4(),
+                    f"{document_id}:{version}:{generation}:parse",
+                    document_id,
+                    version,
+                    generation,
+                ),
+            ).fetchone()
+            for stage in ("chunk", "embed"):
+                connection.execute(
+                    """INSERT INTO ima.ingestion_jobs(id,idempotency_key,document_id,version,generation,stage,status,correlation_id,created_at,updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,'blocked','legacy-migration-reingest',now(),now())
+                    ON CONFLICT(idempotency_key) DO NOTHING""",
+                    (
+                        uuid4(),
+                        f"{document_id}:{version}:{generation}:{stage}",
+                        document_id,
+                        version,
+                        generation,
+                        stage,
+                    ),
+                )
+            if inserted:
+                enqueued += 1
+                deferred.append((str(document_id), int(version), int(generation)))
+    if deferred:
+        task_app = create_task_app(settings)
+        _ensure_task_schema(settings, task_app)
+        tasks = register_ingestion_tasks(task_app, settings)
+        with task_app.open():
+            for document_id, version, generation in deferred:
+                tasks["parse"].defer(
+                    document_id=document_id, version=version, generation=generation
+                )
+    print(
+        json.dumps(
+            {
+                "action": "reingest-enqueue",
+                "enqueued": enqueued,
+                "candidates": len(eligible),
+                "activeParseJobs": active,
+                "limit": limit,
+                "maxActive": max_active,
+                "secretValues": False,
+            },
+            sort_keys=True,
+        )
+    )
+
+
+def _legacy_reingest_report() -> None:
+    """Readiness report (ready/degraded/failed/pending) grouped by MIME type."""
+    settings = get_settings()
+    with psycopg.connect(_conninfo_for(settings)) as connection:
+        rows = connection.execute(
+            """SELECT d.id,d.mime_type,d.file_state,
+               max(j.status) FILTER (WHERE j.stage='parse') AS parse_status,
+               max(j.status) FILTER (WHERE j.stage='chunk') AS chunk_status,
+               max(j.status) FILTER (WHERE j.stage='embed') AS embed_status
+            FROM ima.documents d
+            LEFT JOIN ima.document_file_versions fv
+              ON fv.document_id=d.id AND fv.version=d.current_version
+            LEFT JOIN ima.ingestion_jobs j
+              ON j.document_id=d.id AND j.version=fv.version
+            WHERE d.kind='file' AND d.lifecycle='active'
+            GROUP BY d.id,d.mime_type,d.file_state ORDER BY d.id"""
+        ).fetchall()
+    by_mime: dict[str, dict[str, int]] = {}
+    unsupported_documents: list[str] = []
+    totals = {"ready": 0, "degraded": 0, "failed": 0, "pending": 0}
+    for document_id, mime_type, file_state, parse_status, chunk_status, embed_status in rows:
+        state = classify_readiness(
+            file_state=str(file_state),
+            parse_status=str(parse_status) if parse_status else None,
+            chunk_status=str(chunk_status) if chunk_status else None,
+            embed_status=str(embed_status) if embed_status else None,
+            mime_type=str(mime_type) if mime_type else None,
+        )
+        mime = str(mime_type or "application/octet-stream")
+        bucket = by_mime.setdefault(mime, {"ready": 0, "degraded": 0, "failed": 0, "pending": 0})
+        bucket[state] += 1
+        totals[state] += 1
+        if not mime_supported(str(mime_type) if mime_type else None):
+            unsupported_documents.append(str(document_id))
+    report = {
+        "action": "reingest-report",
+        "byMimeType": by_mime,
+        "totals": totals,
+        "unsupportedMimeDocuments": unsupported_documents,
+        "ok": totals["pending"] == 0 and totals["failed"] == 0,
+        "secretValues": False,
+    }
+    print(json.dumps(report, sort_keys=True))
+    if not report["ok"]:
+        raise SystemExit(4)
+
+
+def _legacy_conversations_archive() -> None:
+    """Counts-only archive report for legacy conversations (not migrated)."""
+    settings = get_settings()
+    connection: Any
+    with psycopg.connect(_conninfo_for(settings)) as connection:
+        counts: dict[str, int | None] = {}
+        for table in CONVERSATION_TABLES:
+            exists = connection.execute(
+                "SELECT to_regclass(%s)", (f'public."{table}"',)
+            ).fetchone()[0]
+            counts[table] = (
+                int(connection.execute(f'SELECT count(*) FROM public."{table}"').fetchone()[0])
+                if exists
+                else None
+            )
+    print(json.dumps(build_conversation_archive_report(counts), sort_keys=True))
 
 
 def _bootstrap_admin() -> None:

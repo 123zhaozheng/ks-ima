@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 11
+- **Total Sessions**: 12
 - **Last Active**: 2026-08-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~330 | Active |
+| `journal-1.md` | ~453 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 12 | 2026-08-30 | Complete legacy deletion release (final phase B5 + all gates) | `84d7508` | `feat/intranet-ima` |
 | 11 | 2026-08-30 | Legacy deletion B1: frontend rewiring verified green | - | `feat/intranet-ima` |
 | 10 | 2026-08-29 | Legacy migration verification, freeze, and cutover tooling | `c6eb2fe` | `feat/intranet-ima` |
 | 8 | 2026-08-28 | OAuth service principals and MCP delivered | `22950e0` | `feat/intranet-ima` |

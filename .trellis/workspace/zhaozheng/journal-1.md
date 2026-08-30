@@ -414,3 +414,40 @@ Executed phase B4 of legacy-deletion-release. The Caddyfile is now the terminal 
 - Final: runbook sunset-closure annotations + full gate matrix (implement.md steps 18-19)
 
 
+
+
+## Session 12: Complete legacy deletion release (final phase B5 + all gates)
+
+**Date**: 2026-08-30
+**Task**: Complete legacy deletion release (final phase B5 + all gates)
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Finished the legacy deletion release: removed Python bridges/projections/migrate-legacy CLI, dropped 37 legacy public tables via cleanup migration 20260829_0011, passed the full backend+frontend gate matrix, and archived the task.
+
+### Main Changes
+
+- Removed api/internal bridges, legacy application modules, migrate-legacy/inventory-legacy-mcp CLI; added cleanup migration dropping legacy public tables + ACL functions
+- Rewrote legacy-migration-cutover spec to terminal state; updated database-guidelines spec with forced-Postgres gate contract
+- Annotated runbooks and docs (workspace-authorization, DESIGN, model-governance) with sunset-closure evidence
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `84d7508` | (see git log) |
+
+### Testing
+
+- [OK] Backend: ruff format/check, mypy, pytest 180 passed, forced-Postgres 38 tests green, alembic upgrade head + check clean, contract check OK
+- [OK] Frontend: lint 0 errors, bun test, test:unit 32, builds, e2e 42/42, caddy drill ok:true; compose config valid
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Consider archiving parent task 08-24-python-intranet-ima-migration (was 9/10; deletion-release was the last child)
+- Deploy phase C (change-controlled): apply cleanup migration in target env, terminal Caddyfile, post-deploy smoke matrix

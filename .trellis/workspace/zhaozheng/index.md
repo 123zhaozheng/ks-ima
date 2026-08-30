@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 13
+- **Total Sessions**: 14
 - **Last Active**: 2026-08-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~490 | Active |
+| `journal-1.md` | ~524 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 14 | 2026-08-30 | Frontend UX overhaul: audit fixes + self-service workspace + Apple-style polish | `b6588a2` | `feat/intranet-ima` |
 | 13 | 2026-08-30 | Frontend UX overhaul (ima-style) — Phases 0-5 complete | `650765f` | `feat/intranet-ima` |
 | 12 | 2026-08-30 | Complete legacy deletion release (final phase B5 + all gates) | `84d7508` | `feat/intranet-ima` |
 | 11 | 2026-08-30 | Legacy deletion B1: frontend rewiring verified green | - | `feat/intranet-ima` |

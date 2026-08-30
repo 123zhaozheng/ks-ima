@@ -488,3 +488,37 @@ Rebuilt the front app on Tencent ima's design philosophy: left-rail shell, compo
 
 - User manual UX review in browser; fix visual nits
 - Optional follow-up: backend folder-scope param for /ask (scope chip is UI-only today)
+
+
+## Session 14: Frontend UX overhaul: audit fixes + self-service workspace + Apple-style polish
+
+**Date**: 2026-08-30
+**Task**: Frontend UX overhaul: audit fixes + self-service workspace + Apple-style polish
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Session summary was not supplied.
+
+### Main Changes
+
+- Fixed all browser-audit P0s: KB folder/note/upload ID wiring, tree refresh, dialog stacking, first-run onboarding with self-service POST /workspaces, signup gating via /auth/capabilities, localized error mapping
+- Owner feedback R7/R8: right preview panes collapse by default; Ask home recentered as ChatGPT/Claude-style hero with elevated composer card
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b6588a2` | (see git log) |
+
+### Testing
+
+- [OK] vue-tsc clean, eslint 0/0, front+admin builds, backend 181 unit/contract, e2e 46/46, curl smoke of self-service workspace create, browser screenshots of centered home and collapsed KB preview
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- User self-testing in browser; address any further feedback, then archive 08-30-frontend-ux-overhaul

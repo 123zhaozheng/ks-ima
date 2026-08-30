@@ -451,3 +451,40 @@ Finished the legacy deletion release: removed Python bridges/projections/migrate
 
 - Consider archiving parent task 08-24-python-intranet-ima-migration (was 9/10; deletion-release was the last child)
 - Deploy phase C (change-controlled): apply cleanup migration in target env, terminal Caddyfile, post-deploy smoke matrix
+
+
+## Session 13: Frontend UX overhaul (ima-style) — Phases 0-5 complete
+
+**Date**: 2026-08-30
+**Task**: Frontend UX overhaul (ima-style) — Phases 0-5 complete
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Rebuilt the front app on Tencent ima's design philosophy: left-rail shell, composer home with scope control, streaming conversations with clickable highlighted citations, three-pane knowledge workspace, Semi-inspired tokens, chrome109 build target. Full matrix green incl. 46 e2e tests.
+
+### Main Changes
+
+- AppShell rail + route remap; deleted MainDrawer/TaskPanel/hue engine/GroundedAskPage; tokens.css theme; chrome109 target
+- KnowledgeWorkspace three-pane with create-note/upload/new-folder/tag filter; DocPreview with sanitized markdown + highlight
+- AskComposer/ConversationView/HistoryPage with SSE streaming, citation sup marks, save-as-note; i18n parity 1086 keys both locales
+- Spec captured: .trellis/spec/frontend/ux-design-language.md; e2e rewritten (46 tests)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `650765f` | (see git log) |
+
+### Testing
+
+- [OK] lint 0/0, test:unit 59, vue-tsc clean, builds chrome109, e2e 46/46, caddy drill, backend ruff/mypy/pytest green
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- User manual UX review in browser; fix visual nits
+- Optional follow-up: backend folder-scope param for /ask (scope chip is UI-only today)

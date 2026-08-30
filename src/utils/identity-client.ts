@@ -4,6 +4,7 @@ import type { components } from 'src/api/generated/schema'
 export type IdentityUser = components['schemas']['IdentityUser']
 type SignInRequest = components['schemas']['SignInRequest']
 type SignInResponse = components['schemas']['SignInResponse']
+type AuthCapabilities = components['schemas']['AuthCapabilities']
 type RegisterRequest = components['schemas']['RegisterRequest']
 type PasswordChangeRequest = components['schemas']['PasswordChangeRequest']
 type PasswordResetRequest = components['schemas']['PasswordResetRequest']
@@ -18,6 +19,8 @@ type AdminProfilePatch = components['schemas']['UserPatch']
 type ProfilePatch = components['schemas']['ProfilePatch']
 type SettingPatch = components['schemas']['SettingPatch']
 type WorkspaceRequest = components['schemas']['WorkspaceRequest']
+type MemberWorkspaceCreateRequest = components['schemas']['MemberWorkspaceCreateRequest']
+type WorkspaceCreateResponse = components['schemas']['WorkspaceCreateResponse']
 type WorkspaceList = components['schemas']['WorkspaceList']
 type MemberWorkspace = components['schemas']['MemberWorkspace']
 type PlatformSettings = components['schemas']['PlatformSettings']
@@ -98,6 +101,7 @@ export const identityClient = {
     return result
   },
   register: (input: RegisterRequest) => request<IdentityUser>('/auth/register', { method: 'POST', body: JSON.stringify(input) }),
+  authCapabilities: () => request<AuthCapabilities>('/auth/capabilities'),
   signOut: async () => { const result = await request('/auth/sign-out', { method: 'POST', body: '{}' }); await getSession(); return result },
   changePassword: (input: PasswordChangeRequest) => request('/account/password/change', { method: 'POST', body: JSON.stringify(input) }),
   requestPasswordReset: (input: PasswordForgotRequest) => request('/auth/password/forgot', { method: 'POST', body: JSON.stringify(input) }),
@@ -133,7 +137,8 @@ export const identityClient = {
   grantRole: (userId: string, role: string) => request(`/admin/users/${userId}/roles/${role}`, { method: 'PUT', body: '{}' }),
   revokeRole: (userId: string, role: string) => request(`/admin/users/${userId}/roles/${role}`, { method: 'DELETE' }),
   listWorkspaces: (search = '', cursor?: string) => request<WorkspaceList>(`/admin/workspaces?q=${encodeURIComponent(search)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
-  createWorkspace: (input: WorkspaceRequest) => request('/admin/workspaces', { method: 'POST', body: JSON.stringify(input) }),
+  createWorkspace: (input: WorkspaceRequest) => request<WorkspaceCreateResponse>('/admin/workspaces', { method: 'POST', body: JSON.stringify(input) }),
+  createSelfWorkspace: (input: MemberWorkspaceCreateRequest) => request<WorkspaceCreateResponse>('/workspaces', { method: 'POST', body: JSON.stringify(input) }),
   archiveWorkspace: (id: string) => request(`/admin/workspaces/${id}/archive`, { method: 'POST', body: '{}' }),
   restoreWorkspace: (id: string) => request(`/admin/workspaces/${id}/restore`, { method: 'POST', body: '{}' }),
   deleteWorkspace: (id: string) => request(`/admin/workspaces/${id}`, { method: 'DELETE' }),

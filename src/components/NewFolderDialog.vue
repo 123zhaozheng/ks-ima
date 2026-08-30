@@ -42,6 +42,7 @@ import type { components } from 'src/api/generated/schema'
 import { computed, ref } from 'vue'
 import { Notify } from 'quasar'
 import { useKnowledgeMutations } from 'src/composables/use-knowledge'
+import { apiErrorMessage } from 'src/utils/api-error'
 import { t } from 'src/utils/i18n'
 
 type Folder = components['schemas']['Folder']
@@ -80,7 +81,7 @@ async function create() {
     show.value = false
     emit('created', folder)
   } catch (error) {
-    Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Create failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Create failed') })
   } finally {
     creating.value = false
   }

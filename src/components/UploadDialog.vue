@@ -94,6 +94,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Notify } from 'quasar'
 import FileInputArea from 'src/components/FileInputArea.vue'
 import { useKnowledgeMutations } from 'src/composables/use-knowledge'
+import { apiErrorMessage } from 'src/utils/api-error'
 import { t } from 'src/utils/i18n'
 
 const props = defineProps<{
@@ -170,7 +171,7 @@ async function processQueue() {
           break
         }
         task.status = 'error'
-        task.error = error instanceof Error ? error.message : t('Upload failed: {0}', task.file.name)
+        task.error = apiErrorMessage(error, 'Upload failed')
       }
     }
     if (tasks.value.some(task => task.status === 'done') && !abort?.signal.aborted) {

@@ -1088,5 +1088,21 @@
   "Your role is \"Viewer\"; you can only browse the content in this workspace and cannot make modifications.": "您的角色是「檢視者」，只能瀏覽此工作區的內容，無法進行修改。",
   "Your session expired. Sign in to continue.": "工作階段已過期，請登入以繼續。",
   "members": "名成員",
-  "{0} documents": "{0} 個文件"
+  "{0} documents": "{0} 個文件",
+  "Workspace name": "工作區名稱",
+  "You will become the administrator of the new workspace.": "你將成為新工作區的管理員。",
+  "Workspace created": "工作區已建立",
+  "Registration is closed on this server. Ask an administrator for an invitation.": "此伺服器已關閉註冊。請聯絡管理員取得邀請。",
+  "Account created": "帳號已建立",
+  "Get started": "開始使用",
+  "Start with a workspace": "從建立工作區開始",
+  "Workspace settings live in a workspace. Create one, or join a workspace with an invitation.": "工作區設定隸屬於具體工作區。建立一個工作區，或透過邀請加入。",
+  "Ask grounds every answer in a workspace knowledge base. Create one, or join a workspace with an invitation.": "提問將以工作區知識庫為依據作答。建立一個工作區，或透過邀請加入。",
+  "History lives in a workspace": "歷史記錄隸屬於工作區",
+  "Create a workspace, or join one with an invitation, and your conversations will appear here.": "建立工作區或透過邀請加入後，你的對話將顯示在這裡。",
+  "Start a conversation": "開始對話",
+  "Your knowledge base lives in a workspace": "知識庫隸屬於工作區",
+  "Create a workspace to start collecting notes and files, or join one with an invitation.": "建立一個工作區，開始收集筆記與檔案；或透過邀請加入。",
+  "Connectors live in a workspace": "連接器隸屬於工作區",
+  "Create a workspace, or join one with an invitation, to manage agent access.": "建立一個工作區或透過邀請加入，以管理代理存取。"
 }

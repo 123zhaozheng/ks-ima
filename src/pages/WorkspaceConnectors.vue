@@ -262,15 +262,66 @@
         </q-list>
       </section>
     </q-page>
+    <q-page
+      v-else
+      flex
+      flex-center
+      text-on-sur-var
+    >
+      <q-spinner
+        v-if="!listReady"
+        color="primary"
+        size="40px"
+      />
+      <div
+        v-else
+        class="tk-empty"
+        data-testid="connectors-onboarding"
+      >
+        <q-icon
+          name="sym_o_link"
+          size="56px"
+          class="tk-empty-icon"
+        />
+        <div class="tk-empty-title">
+          {{ t('Connectors live in a workspace') }}
+        </div>
+        <div class="tk-empty-subtitle">
+          {{ t('Create a workspace, or join one with an invitation, to manage agent access.') }}
+        </div>
+        <div class="tk-empty-actions">
+          <q-btn
+            unelevated
+            no-caps
+            class="tk-cta"
+            :label="t('Create Workspace')"
+            data-testid="connectors-create-workspace"
+            @click="showCreateWorkspace = true"
+          />
+          <q-btn
+            flat
+            no-caps
+            class="tk-cta-secondary"
+            :label="t('Join workspace')"
+            data-testid="connectors-join-workspace"
+            @click="joinWorkspace"
+          />
+        </div>
+      </div>
+    </q-page>
   </q-page-container>
+  <create-workspace-dialog v-model="showCreateWorkspace" />
 </template>
 
 <script setup lang="ts">
 import type { components } from 'src/api/generated/schema'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { copyToClipboard, useQuasar } from 'quasar'
+import { useRouter } from 'vue-router'
+import CreateWorkspaceDialog from 'src/components/CreateWorkspaceDialog.vue'
 import { useWorkspaceStore } from 'src/stores/workspace'
 import { useUiStateStore } from 'src/stores/ui-state'
+import { apiErrorMessage } from 'src/utils/api-error'
 import { identityClient, session } from 'src/utils/identity-client'
 import { t } from 'src/utils/i18n'
 
@@ -288,6 +339,24 @@ const scopeOptions = [
 const workspaceStore = useWorkspaceStore()
 const uiStateStore = useUiStateStore()
 const $q = useQuasar()
+const router = useRouter()
+const showCreateWorkspace = ref(false)
+const listReady = computed(() => workspaceStore.workspacesStatus === 'success')
+
+function joinWorkspace() {
+  $q.dialog({
+    title: t('Join Workspace'),
+    prompt: {
+      model: '',
+      label: t('Invitation Link'),
+    },
+    cancel: true,
+  }).onOk((link: string) => {
+    const token = link.match(/\/invitations\/(.+)/)?.[1]
+    token && router.push(`/invitations/${token}`)
+  })
+}
+
 const principals = ref<ServicePrincipal[]>([])
 const grants = ref<ConnectedGrant[]>([])
 const credentials = ref<Record<string, Credential[]>>({})
@@ -336,7 +405,9 @@ async function load() {
     if (generation !== loadGeneration) return
     role.value = workspace.data?.role ?? ''
     grants.value = (connected.data ?? []).filter(grant => grant.workspaceId === workspaceId)
-    error.value = workspace.error?.message ?? connected.error?.message ?? ''
+    error.value = workspace.error || connected.error
+      ? apiErrorMessage(workspace.error ?? connected.error, 'Agent access is unavailable.')
+      : ''
     principals.value = []
     credentials.value = {}
     if (role.value !== 'workspace_admin') return
@@ -344,7 +415,7 @@ async function load() {
     const list = await identityClient.listServicePrincipals(workspaceId)
     if (generation !== loadGeneration) return
     principals.value = list.data ?? []
-    error.value = list.error?.message ?? error.value
+    error.value = list.error ? apiErrorMessage(list.error, 'Agent access is unavailable.') : error.value
     if (list.error) return
     const details = await Promise.all(
       principals.value.map(principal => identityClient.getServicePrincipal(workspaceId, principal.id)),
@@ -353,7 +424,8 @@ async function load() {
     credentials.value = Object.fromEntries(
       details.flatMap(detail => detail.data ? [[detail.data.id, detail.data.credentials]] : []),
     )
-    error.value = details.find(detail => detail.error)?.error?.message ?? error.value
+    const detailError = details.find(detail => detail.error)?.error
+    error.value = detailError ? apiErrorMessage(detailError, 'Agent access is unavailable.') : error.value
   } catch {
     if (generation === loadGeneration) error.value = t('Agent access is unavailable.')
   } finally {
@@ -391,7 +463,7 @@ async function createPrincipal() {
       form.purpose = ''
       await load()
     } else {
-      error.value = result.error?.message ?? t('Could not create service principal')
+      error.value = apiErrorMessage(result.error, 'Could not create service principal')
     }
   } finally {
     creating.value = false
@@ -402,13 +474,13 @@ async function revokePrincipal(id: string) {
   const workspaceId = workspaceStore.id
   if (!workspaceId) return
   const result = await identityClient.revokeServicePrincipal(workspaceId, id)
-  if (result.error) error.value = result.error.message
+  if (result.error) error.value = apiErrorMessage(result.error, 'Could not revoke service principal')
   else await load()
 }
 
 async function revokeGrant(id: string) {
   const result = await identityClient.revokeConnectedOAuthGrant(id)
-  if (result.error) error.value = result.error.message
+  if (result.error) error.value = apiErrorMessage(result.error, 'Could not revoke connection')
   else await load()
 }
 
@@ -424,7 +496,7 @@ async function rotateFirstCredential(principal: ServicePrincipal) {
     { expiresAt: principal.expiresAt, overlapExpiresAt: null },
   )
   if (result.data) oneTime.value = result.data
-  else error.value = result.error?.message ?? t('Could not rotate credential')
+  else error.value = apiErrorMessage(result.error, 'Could not rotate credential')
   await load()
 }
 
@@ -436,7 +508,7 @@ async function revokeCredential(principalId: string, credentialId: string) {
     principalId,
     credentialId,
   )
-  if (result.error) error.value = result.error.message
+  if (result.error) error.value = apiErrorMessage(result.error, 'Could not revoke credential')
   else await load()
 }
 

@@ -885,6 +885,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Capabilities */
+        get: operations["authCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/csrf": {
         parameters: {
             query?: never;
@@ -1492,7 +1509,8 @@ export interface paths {
         /** List Member Workspaces */
         get: operations["listMemberWorkspaces"];
         put?: never;
-        post?: never;
+        /** Create Member Workspace */
+        post: operations["createMemberWorkspace"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2414,6 +2432,11 @@ export interface components {
         AuditEventList: {
             /** Items */
             items: components["schemas"]["AuditEvent"][];
+        };
+        /** AuthCapabilities */
+        AuthCapabilities: {
+            /** Registration */
+            registration: boolean;
         };
         /**
          * AuthorizationServerMetadata
@@ -3434,6 +3457,11 @@ export interface components {
              * Format: date-time
              */
             updatedAt: string;
+        };
+        /** MemberWorkspaceCreateRequest */
+        MemberWorkspaceCreateRequest: {
+            /** Name */
+            name: string;
         };
         /** MessageResponse */
         MessageResponse: {
@@ -6273,6 +6301,26 @@ export interface operations {
             };
         };
     };
+    authCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthCapabilities"];
+                };
+            };
+        };
+    };
     authCsrf: {
         parameters: {
             query?: never;
@@ -7482,6 +7530,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+        };
+    };
+    createMemberWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberWorkspaceCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -48,6 +48,17 @@ Internal employees of a private deployment: ordinary users (view/ask/edit per AC
 
 Full existing matrix must pass after the overhaul: lint (0/0), bun test, test:unit, build:front, build:admin, e2e (updated to the new IA), caddy drill, backend matrix untouched.
 
+### R7. Right-side preview panes collapse by default (owner feedback, 2026-08-30)
+
+- Every right-hand preview pane (KB document preview, and any future sibling) defaults to **collapsed**, showing only a slim reopen rail; it auto-expands when the user selects a document (or deep-links one) and can be closed again.
+- The conversation citation pane already opens on demand and stays that way.
+
+### R8. ChatGPT/Claude-grade Ask hero and composer aesthetic (owner feedback, 2026-08-30)
+
+- Ask home is a vertically and horizontally centered hero (like ChatGPT/Claude): display title, one-line greeting, single composer card, hint chips, footnote — never pinned to the top.
+- Composer is a white elevated card (20px radius, hairline border, soft shadow that deepens on focus), 16px input, round accent send button.
+- Conversation thread and follow-up composer stay centered in a ≤860px column.
+
 ## Out of scope
 
 - React or Semi UI migration (decision recorded in research/semi-design-feasibility.md).

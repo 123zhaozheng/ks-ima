@@ -1088,5 +1088,21 @@
   "Your role is \"Viewer\"; you can only browse the content in this workspace and cannot make modifications.": "您的角色是\"查看者\"，只能浏览此工作区的内容，无法进行修改。",
   "Your session expired. Sign in to continue.": "会话已过期，请登录以继续。",
   "members": "名成员",
-  "{0} documents": "{0} 个文档"
+  "{0} documents": "{0} 个文档",
+  "Workspace name": "工作区名称",
+  "You will become the administrator of the new workspace.": "你将成为新工作区的管理员。",
+  "Workspace created": "工作区已创建",
+  "Registration is closed on this server. Ask an administrator for an invitation.": "此服务器已关闭注册。请联系管理员获取邀请。",
+  "Account created": "账号已创建",
+  "Get started": "开始使用",
+  "Start with a workspace": "从创建工作区开始",
+  "Workspace settings live in a workspace. Create one, or join a workspace with an invitation.": "工作区设置归属于具体工作区。创建一个工作区，或通过邀请加入。",
+  "Ask grounds every answer in a workspace knowledge base. Create one, or join a workspace with an invitation.": "提问将基于工作区知识库作答。创建一个工作区，或通过邀请加入。",
+  "History lives in a workspace": "历史记录归属于工作区",
+  "Create a workspace, or join one with an invitation, and your conversations will appear here.": "创建一个工作区，或通过邀请加入后，你的对话将显示在这里。",
+  "Start a conversation": "开始对话",
+  "Your knowledge base lives in a workspace": "知识库归属于工作区",
+  "Create a workspace to start collecting notes and files, or join one with an invitation.": "创建一个工作区，开始收集笔记和文件；或通过邀请加入。",
+  "Connectors live in a workspace": "连接器归属于工作区",
+  "Create a workspace, or join one with an invitation, to manage agent access.": "创建一个工作区，或通过邀请加入，以管理智能体访问。"
 }

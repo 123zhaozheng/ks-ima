@@ -53,6 +53,7 @@ import { Notify } from 'quasar'
 import FolderPickerList from 'src/components/FolderPickerList.vue'
 import type { PickedFolder } from 'src/components/folder-picker-list'
 import { useKnowledgeMutations } from 'src/composables/use-knowledge'
+import { apiErrorMessage } from 'src/utils/api-error'
 import { t } from 'src/utils/i18n'
 
 type Citation = components['schemas']['CitationResponse'] & { title?: string }
@@ -101,7 +102,7 @@ async function save() {
     emit('created', document.id)
     emit('update:modelValue', false)
   } catch (error) {
-    Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Save failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Save failed') })
   }
 }
 </script>

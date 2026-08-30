@@ -16,7 +16,7 @@
       @keydown="onKeydown"
     />
     <div class="ask-composer-bar">
-      <template v-if="mode === 'home'">
+      <template v-if="mode === 'home' && workspaceId">
         <q-chip
           v-if="askContext.hasDocumentScope"
           dense
@@ -107,7 +107,8 @@ const inputRef = ref<InstanceType<typeof QInput>>()
 
 const placeholderText = computed(() => props.placeholder ?? t('Ask anything about your knowledge base'))
 const scopeLabel = computed(() => scope.value?.title ?? t('Whole workspace'))
-const canSend = computed(() => Boolean(question.value.trim()) && !props.busy)
+// A question without a workspace can never be answered; block the submit.
+const canSend = computed(() => Boolean(question.value.trim()) && !props.busy && (props.mode === 'conversation' || Boolean(props.workspaceId)))
 
 function pickScope(folder: PickedFolder | null) {
   scope.value = folder
@@ -145,19 +146,21 @@ defineExpose({ focus, scope, setText })
 
 <style scoped>
 .ask-composer {
-  background-color: var(--tk-bg);
+  background-color: var(--tk-surface-white);
   border: 1px solid var(--tk-border);
-  border-radius: var(--tk-radius-lg);
+  border-radius: 20px;
   box-shadow: var(--tk-shadow-md);
-  padding: var(--tk-space-3) var(--tk-space-3) var(--tk-space-2);
+  padding: var(--tk-space-4) var(--tk-space-4) var(--tk-space-3);
+  transition: box-shadow var(--tk-dur) var(--tk-ease), border-color var(--tk-dur) var(--tk-ease);
 }
 
 .ask-composer:focus-within {
-  border-color: var(--tk-accent);
+  border-color: rgba(0, 0, 0, 0.16);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), 0 12px 32px rgba(0, 0, 0, 0.1);
 }
 
 .ask-composer-input {
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .ask-composer-bar {

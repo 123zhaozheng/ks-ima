@@ -32,11 +32,13 @@
       flex
     >
       <q-btn
+        v-if="registration"
         :label="t('Sign up')"
         to="/auth/sign-up"
         flat
         dense
         color="primary"
+        data-testid="sign-up-link"
       />
       <q-btn
         :label="t('Forgot password')"
@@ -54,8 +56,9 @@
 
 import { useQuasar } from 'quasar'
 import { t } from 'src/utils/i18n'
+import { apiErrorMessage } from 'src/utils/api-error'
 import { identityClient, session } from 'src/utils/identity-client'
-import { reactive, ref, watch } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import ForgotPasswordDialog from './ForgotPasswordDialog.vue'
 import VerifyTotpDialog from './VerifyTotpDialog.vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -66,12 +69,21 @@ const input = reactive({
 })
 
 const loading = ref(false)
+// Assume registration is open until the capabilities endpoint says otherwise,
+// so a failed lookup never hides the sign-up path by mistake.
+const registration = ref(true)
 const $q = useQuasar()
 const router = useRouter()
 const route = useRoute()
 function getRedirect() {
   return route.query.redirect as string || '/'
 }
+
+onMounted(async () => {
+  const { data } = await identityClient.authCapabilities()
+  if (data) registration.value = data.registration
+})
+
 async function signIn() {
   loading.value = true
   const result = await identityClient.signIn({
@@ -90,7 +102,7 @@ async function signIn() {
   } else if (result.error) {
     console.error(result.error)
     $q.notify({
-      message: t('Failed to sign in: {0}', result.error.message),
+      message: apiErrorMessage(result.error, 'Sign in failed'),
       color: 'negative',
     })
   }

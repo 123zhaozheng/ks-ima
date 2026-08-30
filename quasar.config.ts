@@ -114,7 +114,7 @@ export default defineConfig((ctx) => {
       config: {
         // Brand primary comes from the accent token in src/styles/tokens.css.
         brand: {
-          primary: '#0077fa',
+          primary: '#0071e3',
         },
       },
 

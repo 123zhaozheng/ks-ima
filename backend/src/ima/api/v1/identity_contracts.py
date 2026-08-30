@@ -57,6 +57,10 @@ class PasswordResetRequest(IdentityModel):
     password: str = Field(min_length=12, max_length=1024)
 
 
+class AuthCapabilities(IdentityModel):
+    registration: bool
+
+
 class PasswordChangeRequest(IdentityModel):
     current_password: str = Field(alias="currentPassword", min_length=1, max_length=1024)
     password: str = Field(min_length=12, max_length=1024)

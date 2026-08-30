@@ -7,6 +7,7 @@ from typing import Any, cast
 from fastapi import APIRouter, HTTPException, Request
 
 from ima.api.v1.auth import Current, check_csrf
+from ima.api.v1.identity_contracts import WorkspaceCreateResponse
 from ima.api.v1.workspace_contracts import (
     AclReplaceRequest,
     AclSubject,
@@ -24,6 +25,7 @@ from ima.api.v1.workspace_contracts import (
     MemberAddRequest,
     MemberPatchRequest,
     MemberWorkspace,
+    MemberWorkspaceCreateRequest,
     PermissionPreviewRequest,
     UserSearchResult,
     WorkspaceAdminRepairRequest,
@@ -54,6 +56,23 @@ async def list_member_workspaces(request: Request, current: Current) -> list[dic
         return await workspace_service(request).list_workspaces(current[1].id)
     except WorkspaceError as exc:
         raise map_error(exc) from exc
+
+
+@router.post(
+    "", response_model=WorkspaceCreateResponse, operation_id="createMemberWorkspace"
+)
+async def create_member_workspace(
+    payload: MemberWorkspaceCreateRequest, request: Request, current: Current
+) -> WorkspaceCreateResponse:
+    session, actor = current
+    check_csrf(request, session)
+    try:
+        workspace = await workspace_service(request).create_workspace(
+            actor.id, payload.name, actor.id, self_service=True
+        )
+    except WorkspaceError as exc:
+        raise map_error(exc) from exc
+    return WorkspaceCreateResponse(id=workspace["id"], name=workspace["name"], isActive=True)
 
 
 @router.get("/{workspace_id}", response_model=MemberWorkspace, operation_id="getMemberWorkspace")

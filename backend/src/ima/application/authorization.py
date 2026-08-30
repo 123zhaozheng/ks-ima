@@ -572,13 +572,13 @@ class WorkspaceService:
             return [dict(row) for row in rows]
 
     async def create_workspace(
-        self, actor_id: str, name: str, admin_user_id: str
+        self, actor_id: str, name: str, admin_user_id: str, *, self_service: bool = False
     ) -> dict[str, Any]:
         workspace_id = new_legacy_id()
-        selected = admin_user_id
+        selected = actor_id if self_service else admin_user_id
         async with self.engine.begin() as conn:
             await assert_writes_allowed(conn)
-            if not await self._platform(conn, actor_id, "platform_admin"):
+            if not self_service and not await self._platform(conn, actor_id, "platform_admin"):
                 raise WorkspaceError(
                     403, "PLATFORM_FORBIDDEN", "Platform administration is required"
                 )

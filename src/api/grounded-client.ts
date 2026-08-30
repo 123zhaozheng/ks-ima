@@ -1,5 +1,5 @@
 import type { components } from 'src/api/generated/schema'
-import { imaClient } from './ima-client'
+import { IMAApiError, imaClient } from './ima-client'
 
 type AskRequest = components['schemas']['AskRequest']
 type Citation = components['schemas']['CitationResponse']
@@ -15,13 +15,28 @@ type StreamHandler = (event: string, payload: Record<string, unknown>) => void
 
 const path = (value: string | number) => encodeURIComponent(String(value))
 
+type ProblemDetails = components['schemas']['ProblemDetails']
+
+async function toProblem(response: Response): Promise<ProblemDetails> {
+  const problem = await response.json().catch(() => null) as ProblemDetails | null
+  if (problem && typeof problem === 'object' && 'status' in problem) return problem
+  return {
+    type: 'about:blank',
+    title: 'Request failed',
+    status: response.status,
+    detail: '',
+    code: '',
+    correlationId: '',
+  }
+}
+
 function streamRequest(url: string, body: Record<string, unknown>, signal: AbortSignal, onEvent: StreamHandler) {
   return async () => {
     const headers = new Headers({ Accept: 'text/event-stream', 'Content-Type': 'application/json' })
     const csrf = document.cookie.split('; ').find(value => value.startsWith('ima_csrf='))?.split('=').slice(1).join('=')
     if (csrf) headers.set('X-CSRF-Token', decodeURIComponent(csrf))
     const response = await fetch(url, { method: 'POST', credentials: 'include', headers, body: JSON.stringify(body), signal })
-    if (!response.ok || !response.body) throw new Error('Grounded Ask is unavailable')
+    if (!response.ok || !response.body) throw new IMAApiError(await toProblem(response))
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let pending = ''

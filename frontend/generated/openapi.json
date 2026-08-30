@@ -561,6 +561,20 @@
         "title": "AuditEventList",
         "type": "object"
       },
+      "AuthCapabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "registration": {
+            "title": "Registration",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "registration"
+        ],
+        "title": "AuthCapabilities",
+        "type": "object"
+      },
       "AuthorizationServerMetadata": {
         "additionalProperties": false,
         "description": "RFC 8414 authorization-server metadata for the OAuth endpoints.",
@@ -3393,6 +3407,22 @@
           "role"
         ],
         "title": "MemberWorkspace",
+        "type": "object"
+      },
+      "MemberWorkspaceCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "MemberWorkspaceCreateRequest",
         "type": "object"
       },
       "MessageResponse": {
@@ -8487,6 +8517,27 @@
         ]
       }
     },
+    "/api/v1/auth/capabilities": {
+      "get": {
+        "operationId": "authCapabilities",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthCapabilities"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Capabilities",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/auth/csrf": {
       "get": {
         "operationId": "authCsrf",
@@ -10196,6 +10247,45 @@
           }
         },
         "summary": "List Member Workspaces",
+        "tags": [
+          "workspaces"
+        ]
+      },
+      "post": {
+        "operationId": "createMemberWorkspace",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberWorkspaceCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceCreateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Member Workspace",
         "tags": [
           "workspaces"
         ]

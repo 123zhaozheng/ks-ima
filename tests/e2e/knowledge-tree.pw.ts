@@ -42,8 +42,9 @@ test.describe('knowledge workspace desktop/mobile journey (new IA)', () => {
     await expect(page.getByTestId('kb-new-folder')).toBeEnabled()
     await expect(page.getByTestId('kb-new-note')).toBeEnabled()
     await expect(page.getByTestId('kb-upload')).toBeEnabled()
-    // The empty preview pane offers the affordance to reopen once collapsed.
-    await expect(page.getByText('Select a document to preview')).toBeVisible()
+    // The preview pane defaults to collapsed; only the reopen rail shows.
+    await expect(page.getByTestId('kb-preview-reopen')).toBeVisible()
+    await expect(page.getByTestId('kb-preview-pane')).toHaveCount(0)
 
     // Create a folder from the tree pane header.
     // Quasar renders the q-input data-testid onto the native input itself.

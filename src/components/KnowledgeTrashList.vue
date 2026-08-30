@@ -75,6 +75,7 @@
 import { useKnowledgeTrash } from 'src/composables/use-knowledge'
 import { knowledgeClient } from 'src/api/knowledge-client'
 import { identityClient } from 'src/utils/identity-client'
+import { apiErrorMessage } from 'src/utils/api-error'
 import { t } from 'src/utils/i18n'
 import { Notify } from 'quasar'
 
@@ -98,13 +99,16 @@ async function restore(documentId: string, version: number) {
     const item = items.value.find(row => row.id === documentId)
     if (item?.kind === 'folder') {
       const result = await identityClient.restoreWorkspaceFolder(props.workspaceId, documentId, { expectedVersion: version })
-      if (result.error) throw new Error(result.error.message)
+      if (result.error) {
+        Notify.create({ type: 'negative', message: apiErrorMessage(result.error, 'Restore failed') })
+        return
+      }
     } else {
       await knowledgeClient.restoreDocument(documentId, version)
     }
     await query.refetch()
   } catch (error) {
-    Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Restore failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Restore failed') })
   }
 }
 
@@ -113,13 +117,16 @@ async function remove(documentId: string) {
     const item = items.value.find(row => row.id === documentId)
     if (item?.kind === 'folder') {
       const result = await identityClient.deleteWorkspaceFolder(props.workspaceId, documentId, versionFor(documentId))
-      if (result.error) throw new Error(result.error.message)
+      if (result.error) {
+        Notify.create({ type: 'negative', message: apiErrorMessage(result.error, 'Delete failed') })
+        return
+      }
     } else {
       await knowledgeClient.deleteDocument(documentId)
     }
     await query.refetch()
   } catch (error) {
-    Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Delete failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Delete failed') })
   }
 }
 

@@ -1,21 +1,24 @@
 <template>
   <q-dialog
     v-model="show"
-    @hide="title = ''"
+    @hide="name = ''"
   >
     <q-card min-w="360px">
       <q-card-section class="text-h6">
-        {{ t('New note') }}
+        {{ t('Create Workspace') }}
       </q-card-section>
       <q-card-section>
         <q-input
-          v-model="title"
+          v-model="name"
           outlined
           autofocus
-          :label="t('Title')"
-          data-testid="note-title-input"
+          :label="t('Workspace name')"
+          data-testid="workspace-name-input"
           @keyup.enter="create"
         />
+        <div class="tk-caption q-mt-sm">
+          {{ t('You will become the administrator of the new workspace.') }}
+        </div>
       </q-card-section>
       <q-card-actions align="right">
         <q-btn
@@ -28,8 +31,8 @@
           color="primary"
           :label="t('Create')"
           :loading="creating"
-          :disable="!title.trim()"
-          data-testid="note-create-button"
+          :disable="!name.trim()"
+          data-testid="workspace-create-button"
           @click="create"
         />
       </q-card-actions>
@@ -38,23 +41,21 @@
 </template>
 
 <script setup lang="ts">
-import type { components } from 'src/api/generated/schema'
 import { computed, ref } from 'vue'
 import { Notify } from 'quasar'
-import { useKnowledgeMutations } from 'src/composables/use-knowledge'
+import { useQueryClient } from '@tanstack/vue-query'
+import { useWorkspaceStore } from 'src/stores/workspace'
 import { apiErrorMessage } from 'src/utils/api-error'
+import { identityClient } from 'src/utils/identity-client'
 import { t } from 'src/utils/i18n'
-
-type Document = components['schemas']['DocumentResponse']
 
 const props = defineProps<{
   modelValue: boolean
-  folderId: string
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [boolean]
-  created: [Document]
+  created: [workspaceId: string]
 }>()
 
 const show = computed({
@@ -62,22 +63,29 @@ const show = computed({
   set: value => emit('update:modelValue', value),
 })
 
-const title = ref('')
+const name = ref('')
 const creating = ref(false)
-const mutations = useKnowledgeMutations()
+const queryClient = useQueryClient()
+const workspaceStore = useWorkspaceStore()
 
 async function create() {
-  const name = title.value.trim()
-  if (!name || creating.value) return
+  const workspaceName = name.value.trim()
+  if (!workspaceName || creating.value) return
   creating.value = true
   try {
-    const document = await mutations.createNote.mutateAsync({
-      folderId: props.folderId,
-      input: { title: name, markdown: '' },
+    const { data, error } = await identityClient.createSelfWorkspace({
+      name: workspaceName,
     })
-    Notify.create({ type: 'positive', message: t('Note created') })
+    if (error || !data) {
+      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Create failed') })
+      return
+    }
+    Notify.create({ type: 'positive', message: t('Workspace created') })
     show.value = false
-    emit('created', document)
+    // Membership list drives the workspace switcher; refresh then select it.
+    await queryClient.invalidateQueries({ queryKey: ['workspaces', 'member'] })
+    workspaceStore.switchWorkspace(data.id)
+    emit('created', data.id)
   } catch (error) {
     Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Create failed') })
   } finally {

@@ -26,7 +26,7 @@
           </q-item-label>
           <q-item-label
             v-else
-            text-warn
+            class="text-secondary"
           >
             {{ t('No workspace selected') }}
           </q-item-label>
@@ -113,64 +113,89 @@
               {{ t('Connectors') }}
             </q-item-section>
           </q-item>
-          <q-item-label
-            header
-            mt-2
-          >
-            {{ t('Workspace admin') }}
-          </q-item-label>
-          <q-item
-            to="/workspace"
-            exact
-            item-rd
-            min-h="40px"
-            data-testid="rail-nav-workspace"
-          >
-            <q-item-section avatar>
-              <q-icon name="sym_o_group" />
-            </q-item-section>
-            <q-item-section>
-              {{ t('Overview') }}
-            </q-item-section>
-          </q-item>
-          <q-item
-            to="/workspace/tags"
-            item-rd
-            min-h="40px"
-          >
-            <q-item-section avatar>
-              <q-icon name="sym_o_tag" />
-            </q-item-section>
-            <q-item-section>
-              {{ t('Tags') }}
-            </q-item-section>
-          </q-item>
-          <q-item
-            to="/workspace/models"
-            item-rd
-            min-h="40px"
-          >
-            <q-item-section avatar>
-              <q-icon name="sym_o_psychology" />
-            </q-item-section>
-            <q-item-section>
-              {{ t('Models') }}
-            </q-item-section>
-          </q-item>
-          <q-item
-            to="/trash"
-            item-rd
-            min-h="40px"
-            data-testid="rail-nav-trash"
-          >
-            <q-item-section avatar>
-              <q-icon name="sym_o_delete" />
-            </q-item-section>
-            <q-item-section>
-              {{ t('Trash') }}
-            </q-item-section>
-          </q-item>
+          <template v-if="workspaceStore.id">
+            <q-item-label
+              header
+              mt-2
+            >
+              {{ t('Workspace admin') }}
+            </q-item-label>
+            <q-item
+              to="/workspace"
+              exact
+              item-rd
+              min-h="40px"
+              data-testid="rail-nav-workspace"
+            >
+              <q-item-section avatar>
+                <q-icon name="sym_o_group" />
+              </q-item-section>
+              <q-item-section>
+                {{ t('Overview') }}
+              </q-item-section>
+            </q-item>
+            <q-item
+              to="/workspace/tags"
+              item-rd
+              min-h="40px"
+            >
+              <q-item-section avatar>
+                <q-icon name="sym_o_tag" />
+              </q-item-section>
+              <q-item-section>
+                {{ t('Tags') }}
+              </q-item-section>
+            </q-item>
+            <q-item
+              to="/workspace/models"
+              item-rd
+              min-h="40px"
+            >
+              <q-item-section avatar>
+                <q-icon name="sym_o_psychology" />
+              </q-item-section>
+              <q-item-section>
+                {{ t('Models') }}
+              </q-item-section>
+            </q-item>
+            <q-item
+              to="/trash"
+              item-rd
+              min-h="40px"
+              data-testid="rail-nav-trash"
+            >
+              <q-item-section avatar>
+                <q-icon name="sym_o_delete" />
+              </q-item-section>
+              <q-item-section>
+                {{ t('Trash') }}
+              </q-item-section>
+            </q-item>
+          </template>
+          <template v-else>
+            <q-item-label
+              header
+              mt-2
+            >
+              {{ t('Get started') }}
+            </q-item-label>
+            <q-item
+              clickable
+              item-rd
+              min-h="40px"
+              data-testid="rail-create-workspace"
+              @click="showCreateWorkspace = true"
+            >
+              <q-item-section avatar>
+                <q-icon name="sym_o_add_box" />
+              </q-item-section>
+              <q-item-section>
+                {{ t('Create Workspace') }}
+              </q-item-section>
+            </q-item>
+          </template>
         </q-list>
+        <create-workspace-dialog v-model="showCreateWorkspace" />
         <q-list p-2>
           <q-item
             to="/settings"
@@ -232,7 +257,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, provide } from 'vue'
+import { computed, provide, ref } from 'vue'
 import { useQuasar } from 'quasar'
 import { useRouter } from 'vue-router'
 import { t } from 'src/utils/i18n'
@@ -241,6 +266,7 @@ import { useUiStateStore } from 'src/stores/ui-state'
 import { identityClient, session } from 'src/utils/identity-client'
 import { workspaceAvatar } from 'src/utils/defaults'
 import AAvatar from 'src/components/AAvatar.vue'
+import CreateWorkspaceDialog from 'src/components/CreateWorkspaceDialog.vue'
 import WorkspaceMenuList from 'src/components/WorkspaceMenuList.vue'
 import { groundedKey, useGroundedKnowledge } from 'src/composables/use-grounded-knowledge'
 
@@ -248,6 +274,7 @@ const uiStateStore = useUiStateStore()
 const workspaceStore = useWorkspaceStore()
 const $q = useQuasar()
 const router = useRouter()
+const showCreateWorkspace = ref(false)
 
 // Shared Ask state: streams keep running while the main pane routes from the
 // Ask home to /ask/:conversationId.

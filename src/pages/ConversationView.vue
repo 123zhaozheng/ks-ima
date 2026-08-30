@@ -254,6 +254,7 @@ import { groundedKey, useGroundedKnowledge } from 'src/composables/use-grounded-
 import { useRequireLogin } from 'src/composables/require-login'
 import { useUiStateStore } from 'src/stores/ui-state'
 import { useWorkspaceStore } from 'src/stores/workspace'
+import { apiErrorMessage } from 'src/utils/api-error'
 import { pageFhStyle } from 'src/utils/functions'
 import { t } from 'src/utils/i18n'
 import { citationMarkerRanks, injectCitationMarks, renderMarkdown } from 'src/utils/markdown'
@@ -331,7 +332,7 @@ async function followUp(question: string) {
   try {
     await grounded.ask(question)
   } catch (error) {
-    Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Ask failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Ask failed') })
   }
 }
 
@@ -340,7 +341,7 @@ function retryAfter(message: Message) {
   const user = [...messages.value.slice(0, index)].reverse().find(item => item.role === 'user')
   if (!user) return
   grounded.retry(user).catch(error => {
-    Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Retry failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Retry failed') })
   })
 }
 
@@ -348,7 +349,7 @@ function retryLastUser() {
   const user = [...messages.value].reverse().find(item => item.role === 'user')
   if (!user) return
   grounded.retry(user).catch(error => {
-    Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Retry failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Retry failed') })
   })
 }
 

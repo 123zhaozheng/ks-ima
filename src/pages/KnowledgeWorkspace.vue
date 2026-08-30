@@ -18,30 +18,45 @@
       flex-center
       text-on-sur-var
     >
+      <q-spinner
+        v-if="!listReady"
+        color="primary"
+        size="40px"
+      />
       <div
-        text-center
-        px-6
+        v-else
+        class="tk-empty"
+        data-testid="kb-onboarding"
       >
-        <q-spinner
-          v-if="!listReady"
-          color="primary"
-          size="40px"
+        <q-icon
+          name="sym_o_folder_open"
+          size="56px"
+          class="tk-empty-icon"
         />
-        <template v-else>
-          <q-icon
-            name="sym_o_folder_open"
-            size="56px"
+        <div class="tk-empty-title">
+          {{ t('Your knowledge base lives in a workspace') }}
+        </div>
+        <div class="tk-empty-subtitle">
+          {{ t('Create a workspace to start collecting notes and files, or join one with an invitation.') }}
+        </div>
+        <div class="tk-empty-actions">
+          <q-btn
+            unelevated
+            no-caps
+            class="tk-cta"
+            :label="t('Create Workspace')"
+            data-testid="kb-create-workspace"
+            @click="showCreateWorkspace = true"
           />
-          <div
-            text-h6
-            mt-3
-          >
-            {{ t('No workspace selected') }}
-          </div>
-          <div class="text-caption q-mt-md">
-            {{ t('A platform administrator must assign you to a workspace.') }}
-          </div>
-        </template>
+          <q-btn
+            flat
+            no-caps
+            class="tk-cta-secondary"
+            :label="t('Join workspace')"
+            data-testid="kb-join-workspace"
+            @click="joinWorkspace"
+          />
+        </div>
       </div>
     </q-page>
     <q-page
@@ -62,7 +77,7 @@
             icon="sym_o_create_new_folder"
             :title="t('New folder')"
             data-testid="kb-new-folder"
-            @click="showNewFolder = true"
+            @click="activeDialog = 'folder'"
           />
         </div>
         <folder-tree ref="treeRef" />
@@ -76,7 +91,7 @@
             :label="t('New note')"
             :disable="!folderId"
             data-testid="kb-new-note"
-            @click="showCreateNote = true"
+            @click="activeDialog = 'note'"
           />
           <q-btn
             flat
@@ -85,7 +100,7 @@
             :label="t('Upload')"
             :disable="!folderId"
             data-testid="kb-upload"
-            @click="showUpload = true"
+            @click="activeDialog = 'upload'"
           />
           <q-space />
           <q-select
@@ -150,27 +165,33 @@
     </q-page>
   </q-page-container>
   <new-folder-dialog
-    v-model="showNewFolder"
+    :model-value="activeDialog === 'folder'"
     :workspace-id="workspaceStore.id ?? ''"
     :parent-folder-id="folderId"
+    @update:model-value="open => (activeDialog = open ? 'folder' : null)"
     @created="onFolderCreated"
   />
   <create-note-dialog
-    v-model="showCreateNote"
+    :model-value="activeDialog === 'note'"
     :folder-id="folderId"
+    @update:model-value="open => (activeDialog = open ? 'note' : null)"
     @created="onNoteCreated"
   />
   <upload-dialog
-    v-model="showUpload"
+    :model-value="activeDialog === 'upload'"
     :folder-id="folderId"
+    @update:model-value="open => (activeDialog = open ? 'upload' : null)"
   />
+  <create-workspace-dialog v-model="showCreateWorkspace" />
 </template>
 
 <script setup lang="ts">
 import type { components } from 'src/api/generated/schema'
 import { computed, ref, useTemplateRef, watch } from 'vue'
+import { useQuasar } from 'quasar'
 import { useRoute, useRouter } from 'vue-router'
 import CreateNoteDialog from 'src/components/CreateNoteDialog.vue'
+import CreateWorkspaceDialog from 'src/components/CreateWorkspaceDialog.vue'
 import DocPreview from 'src/components/DocPreview.vue'
 import FolderTree from 'src/components/FolderTree.vue'
 import KnowledgeList from 'src/components/KnowledgeList.vue'
@@ -191,6 +212,7 @@ useRequireLogin()
 
 const route = useRoute()
 const router = useRouter()
+const $q = useQuasar()
 const workspaceStore = useWorkspaceStore()
 const uiStateStore = useUiStateStore()
 
@@ -209,20 +231,34 @@ const documentId = computed(() => {
 })
 
 const treeRef = useTemplateRef<InstanceType<typeof FolderTree>>('treeRef')
-const showNewFolder = ref(false)
-const showCreateNote = ref(false)
-const showUpload = ref(false)
-const previewCollapsed = ref(false)
+// Only one KB dialog may be open at a time; they previously stacked.
+const activeDialog = ref<'folder' | 'note' | 'upload' | null>(null)
+const showCreateWorkspace = ref(false)
+const previewCollapsed = ref(true)
 // One-shot: a freshly created note opens straight in the editor.
 const editDocId = ref<string>()
+
+function joinWorkspace() {
+  $q.dialog({
+    title: t('Join Workspace'),
+    prompt: {
+      model: '',
+      label: t('Invitation Link'),
+    },
+    cancel: true,
+  }).onOk((link: string) => {
+    const token = link.match(/\/invitations\/(.+)/)?.[1]
+    token && router.push(`/invitations/${token}`)
+  })
+}
 
 const tagFilter = ref<string | null>(null)
 const tags = useKnowledgeTags(() => workspaceStore.id)
 const tagOptions = computed(() => (tags.data.value ?? []).map(tag => ({ label: tag.name, value: tag.id })))
 
-watch(documentId, () => {
-  previewCollapsed.value = false
-})
+watch(documentId, id => {
+  if (id) previewCollapsed.value = false
+}, { immediate: true })
 
 watch(() => workspaceStore.id, (id, previous) => {
   if (!id || !previous || id === previous) return

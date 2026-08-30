@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from ima.api.v1.identity_contracts import (
     AcceptTokenRequest,
+    AuthCapabilities,
     IdentityUser,
     PasswordForgotRequest,
     PasswordResetRequest,
@@ -151,6 +152,11 @@ async def sign_out(
 @router.get("/session", response_model=IdentityUser, operation_id="authSession")
 async def session(current_session: Current) -> IdentityUser:
     return current_session[1]
+
+
+@router.get("/capabilities", response_model=AuthCapabilities, operation_id="authCapabilities")
+async def capabilities(request: Request) -> AuthCapabilities:
+    return AuthCapabilities(registration=await service(request).registration_enabled())
 
 
 @router.post("/register", response_model=IdentityUser, operation_id="authRegister")

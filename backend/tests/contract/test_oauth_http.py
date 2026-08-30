@@ -544,3 +544,32 @@ def test_one_time_service_secret_response_is_no_store_and_digest_free() -> None:
     assert response.headers["cache-control"] == "no-store"
     assert response.json()["secret"] == "one-time-secret"
     assert "digest" not in response.text.casefold()
+
+
+def test_auth_capabilities_reflects_registration_flag_without_auth() -> None:
+    client, _ = app_client()
+    client.app.state.identity_service = SimpleNamespace(
+        current_session=AsyncMock(return_value=None),
+        registration_enabled=AsyncMock(return_value=True),
+    )
+    enabled = client.get("/api/v1/auth/capabilities")
+    assert enabled.status_code == 200
+    assert enabled.json() == {"registration": True}
+
+    client.app.state.identity_service = SimpleNamespace(
+        current_session=AsyncMock(return_value=None),
+        registration_enabled=AsyncMock(return_value=False),
+    )
+    disabled = client.get("/api/v1/auth/capabilities")
+    assert disabled.status_code == 200
+    assert disabled.json() == {"registration": False}
+
+
+def test_auth_capabilities_is_advertised_with_stable_operation_id() -> None:
+    client, _ = app_client()
+    schema = client.app.openapi()
+    operation = schema["paths"]["/api/v1/auth/capabilities"]["get"]
+    assert operation["operationId"] == "authCapabilities"
+    assert operation["responses"]["200"]["content"]["application/json"]["schema"][
+        "$ref"
+    ].endswith("/AuthCapabilities")

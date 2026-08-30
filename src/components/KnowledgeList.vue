@@ -134,6 +134,7 @@ import { computed, ref, watch } from 'vue'
 import { knowledgeClient } from 'src/api/knowledge-client'
 import { IMAApiError } from 'src/api/ima-client'
 import { useFolderContents, useKnowledgeMutations } from 'src/composables/use-knowledge'
+import { apiErrorMessage } from 'src/utils/api-error'
 import { t } from 'src/utils/i18n'
 
 type ContentRow = components['schemas']['ContentRow']
@@ -203,7 +204,7 @@ function confirmTrash(item: ContentRow) {
       })
       Notify.create({ type: 'positive', message: t('Moved to trash') })
     } catch (error) {
-      Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Trash failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Trash failed') })
     }
   })
 }

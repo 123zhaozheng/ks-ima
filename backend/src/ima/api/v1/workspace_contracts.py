@@ -24,6 +24,10 @@ AclActionLiteral = Literal[
 ]
 
 
+class MemberWorkspaceCreateRequest(IdentityModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
 class WorkspaceMember(IdentityModel):
     workspace_id: str = Field(alias="workspaceId")
     user_id: str = Field(alias="userId")

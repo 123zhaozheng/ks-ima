@@ -309,6 +309,7 @@ import { useFileVersions, useKnowledgeDocument, useKnowledgeIngestion, useKnowle
 import { knowledgeClient } from 'src/api/knowledge-client'
 import { IMAApiError } from 'src/api/ima-client'
 import { useAskContextStore } from 'src/stores/ask-context'
+import { apiErrorMessage } from 'src/utils/api-error'
 import { renderMarkdown } from 'src/utils/markdown'
 import { t } from 'src/utils/i18n'
 
@@ -399,7 +400,7 @@ async function replaceFile(event: Event) {
   } catch (error) {
     if ((error as DOMException).name === 'AbortError') return
     conflict.value = error instanceof IMAApiError && error.problem.code === 'VERSION_CONFLICT'
-    Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Replacement failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Replacement failed') })
   } finally {
     replacing.value = false
     replacementAbort = undefined
@@ -419,7 +420,7 @@ async function download() {
   try {
     window.location.assign((await knowledgeClient.download(document.value.id)).url)
   } catch (error) {
-    Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Download failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Download failed') })
   }
 }
 
@@ -429,7 +430,7 @@ async function loadPreviewUrl() {
     previewUrl.value = (await knowledgeClient.preview(document.value.id)).url
   } catch (error) {
     previewUrl.value = undefined
-    Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Preview unavailable') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Preview unavailable') })
   }
 }
 
@@ -460,7 +461,7 @@ async function save() {
     conflict.value = false
   } catch (error) {
     conflict.value = error instanceof IMAApiError && error.problem.code === 'VERSION_CONFLICT'
-    Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Save failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Save failed') })
   } finally {
     saving.value = false
   }
@@ -482,7 +483,7 @@ async function restore(version: number) {
     showHistory.value = false
     await query.refetch()
   } catch (error) {
-    Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Restore failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Restore failed') })
   }
 }
 
@@ -508,7 +509,7 @@ function confirmTrash() {
       Notify.create({ type: 'positive', message: t('Moved to trash') })
       emit('trashed')
     } catch (error) {
-      Notify.create({ type: 'negative', message: error instanceof Error ? error.message : t('Trash failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Trash failed') })
     }
   })
 }

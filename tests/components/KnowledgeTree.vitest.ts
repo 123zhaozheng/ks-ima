@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   updateDocument: vi.fn(),
   currentDocumentId: 'note-1',
   workspaceId: 'workspace-1',
-  route: { params: { documentId: 'note-1' } },
+  route: { params: { documentId: 'note-1' }, query: {} },
   router: { back: vi.fn(), push: vi.fn() },
   dialog: vi.fn(),
 }))
@@ -228,9 +228,9 @@ describe('knowledge query and component states', () => {
     expect(mocks.contents).toHaveBeenCalledWith('workspace-1', { kind: 'folder', limit: 100 })
     const child = wrapper.findAll('[role="treeitem"]').find(node => node.text().includes('Child'))
     await child?.trigger('keydown', { key: 'Enter' })
-    expect(mocks.router.push).toHaveBeenCalledWith('/folder/folder-2')
+    expect(mocks.router.push).toHaveBeenCalledWith({ path: '/', query: { folderId: 'folder-2' } })
     await child?.trigger('keydown', { key: ' ' })
-    expect(mocks.router.push).toHaveBeenCalledWith('/folder/folder-2')
+    expect(mocks.router.push).toHaveBeenCalledWith({ path: '/', query: { folderId: 'folder-2' } })
   })
 })
 

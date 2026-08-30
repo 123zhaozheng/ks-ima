@@ -284,6 +284,7 @@ import { computed, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { identityClient } from 'src/utils/identity-client'
 import { useWorkspaceStore } from 'src/stores/workspace'
+import { queryClient } from 'src/boot/vue-query'
 import { t } from 'src/utils/i18n'
 import type { components } from 'src/api/generated/schema'
 import FolderAclDialog from 'src/components/FolderAclDialog.vue'
@@ -367,7 +368,15 @@ function revokeInvitation(invitation: Invitation) {
 }
 function leaveWorkspace() {
   if (!workspaceStore.id) return
-  $q.dialog({ title: t('Leave workspace'), message: t('Leave this workspace?'), cancel: true, ok: { color: 'negative', label: t('Leave') } }).onOk(() => identityClient.leaveWorkspaceMember(workspaceStore.id!).then(() => { workspaceStore.id = null }))
+  $q.dialog({ title: t('Leave workspace'), message: t('Leave this workspace?'), cancel: true, ok: { color: 'negative', label: t('Leave') } }).onOk(async () => {
+    const result = await identityClient.leaveWorkspaceMember(workspaceStore.id!)
+    if (result.error) {
+      $q.notify({ message: result.error.message, color: 'negative' })
+      return
+    }
+    await queryClient.invalidateQueries({ queryKey: ['workspaces', 'member'] })
+    workspaceStore.id = null
+  })
 }
 function createGroup() {
   if (!workspaceStore.id) return

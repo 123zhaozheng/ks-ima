@@ -90,12 +90,3 @@ def validate_grants(grants: frozenset[AclAction] | set[AclAction]) -> frozenset[
     }.issubset(normalized):
         raise ValueError("download requires view_metadata and view_content")
     return normalized
-
-
-def legacy_role(role: str) -> WorkspaceRole:
-    return {
-        "owner": WorkspaceRole.WORKSPACE_ADMIN,
-        "admin": WorkspaceRole.WORKSPACE_ADMIN,
-        "member": WorkspaceRole.EDITOR,
-        "guest": WorkspaceRole.VIEWER,
-    }[role]

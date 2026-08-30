@@ -56,18 +56,6 @@
         filled
       />
     </common-item>
-    <common-item
-      icon="sym_o_search"
-      :label="t('Search in workspace')"
-    >
-      <shortcut-key-input
-        :model-value="perfs.searchWorkspaceKey"
-        @update:model-value="update('searchWorkspaceKey', $event ?? null)"
-        dense
-        filled
-        class="min-w-100px"
-      />
-    </common-item>
     <q-item text-on-sur-var>
       <q-item-section>
         <q-item-label caption>
@@ -86,7 +74,6 @@ import { useQuasar } from 'quasar'
 import HueSliderDialog from './HueSliderDialog.vue'
 import HctPreviewCircle from './HctPreviewCircle.vue'
 import SendKeySelect from './SendKeySelect.vue'
-import ShortcutKeyInput from './ShortcutKeyInput.vue'
 import CommonItem from './CommonItem.vue'
 import { localData } from 'src/utils/local-data'
 import { toRef } from 'vue'

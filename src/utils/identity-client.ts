@@ -66,6 +66,7 @@ type CredentialIssue = components['schemas']['CredentialIssueResponse']
 type CredentialRotate = components['schemas']['CredentialRotate']
 type ConnectedGrant = components['schemas']['ConnectedGrantResponse']
 type ServicePrincipalDetail = components['schemas']['ServicePrincipalDetailResponse']
+type InvitationAcceptance = { workspaceId: string, userId: string, role: MemberWorkspace['role'], state: string }
 type Result<T> = { data?: T, error?: { code?: string, message: string } }
 
 async function request<T>(path: string, init: RequestInit = {}, prefix = '/api/v1'): Promise<Result<T>> {
@@ -169,7 +170,7 @@ export const identityClient = {
   issueWorkspaceInvitation: (workspaceId: string, input: InvitationCreateRequest) => request<Invitation>(`/workspaces/${encodeURIComponent(workspaceId)}/invitations`, { method: 'POST', body: JSON.stringify(input) }),
   listWorkspaceInvitations: (workspaceId: string) => request<Invitation[]>(`/workspaces/${encodeURIComponent(workspaceId)}/invitations`),
   revokeWorkspaceInvitation: (workspaceId: string, invitationId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/invitations/${encodeURIComponent(invitationId)}`, { method: 'DELETE' }),
-  acceptWorkspaceInvitation: (token: string) => request(`/workspace-invitations/${encodeURIComponent(token)}/accept`, { method: 'POST', body: '{}' }),
+  acceptWorkspaceInvitation: (token: string) => request<InvitationAcceptance>(`/workspace-invitations/${encodeURIComponent(token)}/accept`, { method: 'POST', body: '{}' }),
   previewWorkspacePermissions: (workspaceId: string, input: PermissionPreviewRequest) => request<Folder[]>(`/workspaces/${encodeURIComponent(workspaceId)}/permission-preview`, { method: 'POST', body: JSON.stringify(input) }),
   repairWorkspaceAdmin: (workspaceId: string, userId: string) => request(`/admin/workspaces/${encodeURIComponent(workspaceId)}/workspace-admin-repair`, { method: 'POST', body: JSON.stringify({ userId }) }),
   listModelGateways: () => request<ModelGatewayList>('/admin/model-gateways'),

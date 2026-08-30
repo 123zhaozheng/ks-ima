@@ -15,14 +15,12 @@ Internet features from upstream Nya AI are removed (web search, GitHub plugin, p
 
 The preferred protected resource is `https://your-host/mcp`. Interactive clients discover OAuth from that URL; service credentials exchange at `/oauth/token` for a short-lived access token before calling it.
 
-During the temporary coexistence window only, existing connector keys keep their original Bun endpoint and semantics:
-
 ```json
 {
   "mcpServers": {
     "intranet-ima": {
-      "url": "https://your-host/api/mcp",
-      "headers": { "Authorization": "Bearer ima_..." }
+      "url": "https://your-host/mcp",
+      "headers": { "Authorization": "Bearer <access-token>" }
     }
   }
 }
@@ -32,15 +30,22 @@ Tools: `kb_list_dir`, `kb_search`, `kb_ask`, `kb_get_note`, `kb_get_file`, `kb_c
 
 ## Development
 
+The Python API in `backend/` is the only backend; the frontend dev servers proxy `/api` to it.
+
 ```sh
 cp .env.example .env
 bun install
 bun quasar prepare
-bun dev:db-up
-bun dev:server
-zero-cache-dev
-bun dev:frontend
+docker compose -p ima-dev -f backend/tests/integration/identity-compose.yml up -d # Postgres at 127.0.0.1:55432
+cd backend
+uv sync --frozen
+IMA_DATABASE_URL=postgresql+asyncpg://postgres:identity-gate-password@127.0.0.1:55432/app uv run ima migrate
+IMA_DATABASE_URL=postgresql+asyncpg://postgres:identity-gate-password@127.0.0.1:55432/app uv run uvicorn ima.main:app --reload --port 8000
+cd ..
+bun dev:front # or: bun dev:admin
 ```
+
+`docker compose -f docker-compose.example.yml up --build` runs the full deployment example (Postgres, API, worker, web with Caddy).
 
 Point model providers at an intranet OpenAI-compatible gateway. Do not configure public search or crawl endpoints.
 

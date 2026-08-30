@@ -7,6 +7,31 @@ post-deletion recovery. Connector credentials are handled exclusively through
 the OAuth/MCP runbook's inventory, reissue, and revoke flow; this runbook
 never reconstructs or converts a legacy key.
 
+## Sunset Closure
+
+The legacy deletion release is complete (2026-08-29). Everything below this
+section is retained as historical evidence of the cutover window; it no
+longer describes a reachable state:
+
+- The legacy `public.*` tables and ACL functions were dropped by Alembic
+  migration `20260829_0011_legacy_schema_removal`. Its `downgrade()` is
+  intentionally snapshot restore only; there is no schema-level rollback.
+- The `migrate-legacy-*` importer commands, `inventory-legacy-mcp`, and the
+  internal Bun bridges were removed from the codebase; the commands quoted
+  below cannot be re-run from current releases. Checkpoint/history tables
+  (`ima.legacy_knowledge_migration`, `ima.legacy_model_governance_migration`,
+  `ima.legacy_identity_projection`) and audit rows are retained as migration
+  history.
+- `bun run test:caddy-routing` now pins only the terminal matrix (Python
+  prefixes proxied, `/api/v1/internal/*` 404, retired legacy resources 410,
+  residual `/api/*` 404) with the pinned `caddy:2.10.2-alpine` image digest
+  and Caddyfile SHA-256. The cutover/rollback derivation phases were retired
+  with the legacy edge.
+- Post-Deletion Recovery is the only supported recovery path: snapshot
+  restore plus the recorded pre-deletion deployment, never a mixed rollback.
+- The maintenance freeze (`uv run ima maintenance freeze ...`) is retained as
+  a generic operations tool.
+
 ## Current State
 
 - Until cutover, the legacy Bun service remains the source of truth for

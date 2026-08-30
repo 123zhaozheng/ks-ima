@@ -1,1 +1,9 @@
 {"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/08-24-legacy-deletion-release/research/deletion-inventory-bun-zero.md", "reason": "Deletion-release research: deletion-inventory-bun-zero"}
+{"file": ".trellis/tasks/08-24-legacy-deletion-release/research/deletion-inventory-frontend.md", "reason": "Deletion-release research: deletion-inventory-frontend"}
+{"file": ".trellis/tasks/08-24-legacy-deletion-release/research/deletion-inventory-python-db.md", "reason": "Deletion-release research: deletion-inventory-python-db"}
+{"file": ".trellis/tasks/08-24-legacy-deletion-release/research/dependency-audit.md", "reason": "Deletion-release research: dependency-audit"}
+{"file": ".trellis/tasks/08-24-legacy-deletion-release/research/release-gates.md", "reason": "Deletion-release research: release-gates"}
+{"file": ".trellis/tasks/08-24-legacy-deletion-release/research/ordering-constraints.md", "reason": "Deletion-release research: ordering-constraints"}
+{"file": ".trellis/tasks/08-24-legacy-deletion-release/research/risks-live-references.md", "reason": "Deletion-release research: risks-live-references"}
+{"file": ".trellis/tasks/08-24-legacy-deletion-release/research/deletion-plan-input.md", "reason": "Deletion-release research: deletion-plan-input"}

@@ -9,29 +9,15 @@ export const useUiStateStore = defineStore('ui-state', () => {
   function toggleMainDrawer() {
     mainDrawerOpen.value = !mainDrawerOpen.value
   }
-  const mainDrawerAbove = computed(() => $q.screen.width > mainDrawerBreakpoint)
-  const rightDrawerBreakpoint = 960
-  const rightDrawerOpen = ref(false)
-  function toggleRightDrawer() {
-    rightDrawerOpen.value = !rightDrawerOpen.value
-  }
   const $q = useQuasar()
-  const rightDrawerAbove = computed(() => $q.screen.width > rightDrawerBreakpoint)
-  const chatScrollTops = ref(new Map<string, number>())
+  const mainDrawerAbove = computed(() => $q.screen.width > mainDrawerBreakpoint)
 
-  const searchDialogOpen = ref(false)
   return {
     mainDrawerWidth,
     mainDrawerBreakpoint,
     mainDrawerOpen,
     mainDrawerAbove,
     toggleMainDrawer,
-    chatScrollTops,
-    rightDrawerAbove,
-    rightDrawerBreakpoint,
-    toggleRightDrawer,
-    rightDrawerOpen,
-    searchDialogOpen,
   }
 })
 

@@ -9,7 +9,7 @@
     flex-col
   >
     <q-item
-      v-if="user.id"
+      v-if="userId"
       clickable
       py-1
     >
@@ -75,19 +75,6 @@
             {{ t('Ask') }}
           </q-item-section>
         </q-item>
-        <q-item
-          clickable
-          @click="searchInWorkspace"
-          item-rd
-          min-h="40px"
-        >
-          <q-item-section avatar>
-            <q-icon name="sym_o_manage_search" />
-          </q-item-section>
-          <q-item-section>
-            {{ t('Search in Workspace') }}
-          </q-item-section>
-        </q-item>
         <task-panel-btn
           item-rd
           min-h="40px"
@@ -147,15 +134,13 @@ import { workspaceAvatar } from 'src/utils/defaults'
 import WorkspaceMenuList from './WorkspaceMenuList.vue'
 import FolderTree from './FolderTree.vue'
 import DarkSwitchBtn from './DarkSwitchBtn.vue'
-import { user } from 'src/utils/zero-session'
+import { session } from 'src/utils/identity-client'
 import { useAskKnowledge } from 'src/composables/ask-knowledge'
 import TaskPanelBtn from './TaskPanelBtn.vue'
+import { computed } from 'vue'
 
 const uiStateStore = useUiStateStore()
 const workspaceStore = useWorkspaceStore()
 const askKnowledge = useAskKnowledge()
-
-function searchInWorkspace() {
-  uiStateStore.searchDialogOpen = true
-}
+const userId = computed(() => session.value.data?.user.id)
 </script>

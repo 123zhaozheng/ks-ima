@@ -202,67 +202,6 @@
           </q-item>
         </q-list>
       </section>
-      <section
-        v-if="isAdmin"
-        class="band"
-      >
-        <header>
-          <q-icon
-            name="sym_o_history"
-            size="24px"
-          /><div><h2>{{ t('Legacy connectors') }}</h2><p>{{ t('Compatibility access') }}</p></div>
-        </header>
-        <q-list separator>
-          <q-item>
-            <q-item-section>{{ t('Existing connector keys remain available during migration.') }}</q-item-section>
-            <q-item-section side>
-              <q-btn
-                outline
-                no-caps
-                :label="t('Create connector')"
-                @click="openLegacyCreate"
-              />
-            </q-item-section>
-          </q-item>
-          <q-item
-            v-for="row in legacyRows"
-            :key="row.id"
-          >
-            <q-item-section>
-              <q-item-label>{{ row.name }}</q-item-label>
-              <q-item-label caption>
-                {{ row.keyPrefix }}... · {{ row.mode === 'readwrite' ? t('Read and write') : t('Read only') }}
-              </q-item-label>
-            </q-item-section>
-            <q-item-section side>
-              <div>
-                <q-btn
-                  flat
-                  no-caps
-                  :label="t('Rotate key')"
-                  @click="rotateLegacy(row.id)"
-                />
-                <q-btn
-                  flat
-                  no-caps
-                  color="negative"
-                  :label="t('Revoke')"
-                  @click="revokeLegacy(row.id)"
-                />
-              </div>
-            </q-item-section>
-          </q-item>
-          <q-item v-if="legacyLoading">
-            <q-item-section>{{ t('Loading connectors…') }}</q-item-section>
-          </q-item>
-          <q-item v-else-if="legacyError">
-            <q-item-section class="text-negative">{{ legacyError }}</q-item-section>
-          </q-item>
-          <q-item v-else-if="!legacyRows.length">
-            <q-item-section>{{ t('No legacy connectors') }}</q-item-section>
-          </q-item>
-        </q-list>
-      </section>
     </q-page>
   </q-page-container>
 </template>
@@ -272,10 +211,6 @@ import type { components } from 'src/api/generated/schema'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { copyToClipboard, useQuasar } from 'quasar'
 import { useWorkspaceStore } from 'src/stores/workspace'
-import CreateConnectorDialog from 'src/components/CreateConnectorDialog.vue'
-import ConnectorCreatedDialog from 'src/components/ConnectorCreatedDialog.vue'
-import { client } from 'src/utils/hc'
-import { rejectAfter } from 'src/utils/reject-after'
 import { identityClient, session } from 'src/utils/identity-client'
 import { t } from 'src/utils/i18n'
 
@@ -284,12 +219,6 @@ type CredentialIssue = components['schemas']['CredentialIssueResponse']
 type ServicePrincipalCreate = components['schemas']['ServicePrincipalCreate']
 type ConnectedGrant = components['schemas']['ConnectedGrantResponse']
 type Credential = components['schemas']['CredentialViewResponse']
-type LegacyConnector = {
-  id: string
-  name: string
-  keyPrefix: string
-  mode: 'read' | 'readwrite'
-}
 
 const scopeOptions = [
   'mcp:workspaces:read',
@@ -306,9 +235,6 @@ const role = ref('')
 const loading = ref(false)
 const creating = ref(false)
 const error = ref('')
-const legacyRows = ref<LegacyConnector[]>([])
-const legacyLoading = ref(false)
-const legacyError = ref('')
 const mcpUrl = window.location.origin.replace(/\/$/, '') + '/mcp'
 const isAdmin = computed(() => role.value === 'workspace_admin')
 const form = reactive({
@@ -335,40 +261,6 @@ function activeCredential(principalId: string) {
   )
 }
 
-function isLegacyConnector(value: unknown): value is LegacyConnector {
-  if (!value || typeof value !== 'object') return false
-  if (!('id' in value) || !('name' in value) || !('keyPrefix' in value) || !('mode' in value)) return false
-  return typeof value.id === 'string' &&
-    typeof value.name === 'string' &&
-    typeof value.keyPrefix === 'string' &&
-    (value.mode === 'read' || value.mode === 'readwrite')
-}
-
-async function loadLegacy(workspaceId: string, generation: number) {
-  legacyLoading.value = true
-  legacyError.value = ''
-  try {
-    const response = await Promise.race([
-      client.api.connectors.$get({ query: { workspaceId } }),
-      rejectAfter(5000),
-    ])
-    if (generation !== loadGeneration) return
-    if (!response.ok) throw new Error('legacy connector request failed')
-    const body: unknown = await response.json()
-    if (!Array.isArray(body) || !body.every(isLegacyConnector)) {
-      throw new Error('legacy connector response is invalid')
-    }
-    legacyRows.value = body
-  } catch {
-    if (generation === loadGeneration) {
-      legacyRows.value = []
-      legacyError.value = t('Could not load legacy connectors.')
-    }
-  } finally {
-    if (generation === loadGeneration) legacyLoading.value = false
-  }
-}
-
 async function load() {
   const workspaceId = workspaceStore.id
   if (!workspaceId) return
@@ -388,12 +280,11 @@ async function load() {
     credentials.value = {}
     if (role.value !== 'workspace_admin') return
 
-    const legacyLoad = loadLegacy(workspaceId, generation)
     const list = await identityClient.listServicePrincipals(workspaceId)
     if (generation !== loadGeneration) return
     principals.value = list.data ?? []
     error.value = list.error?.message ?? error.value
-    if (list.error) { await legacyLoad; return }
+    if (list.error) return
     const details = await Promise.all(
       principals.value.map(principal => identityClient.getServicePrincipal(workspaceId, principal.id)),
     )
@@ -402,7 +293,6 @@ async function load() {
       details.flatMap(detail => detail.data ? [[detail.data.id, detail.data.credentials]] : []),
     )
     error.value = details.find(detail => detail.error)?.error?.message ?? error.value
-    await legacyLoad
   } catch {
     if (generation === loadGeneration) error.value = t('Agent access is unavailable.')
   } finally {
@@ -489,50 +379,6 @@ async function revokeCredential(principalId: string, credentialId: string) {
   else await load()
 }
 
-function showLegacySecret(value: unknown) {
-  if (!value || typeof value !== 'object' || !('apiKey' in value) || typeof value.apiKey !== 'string') return
-  $q.dialog({
-    component: ConnectorCreatedDialog,
-    componentProps: { apiKey: value.apiKey },
-  })
-}
-
-function openLegacyCreate() {
-  $q.dialog({ component: CreateConnectorDialog }).onOk((value: unknown) => {
-    showLegacySecret(value)
-    load().catch(() => undefined)
-  })
-}
-
-function rotateLegacy(id: string) {
-  $q.dialog({
-    title: t('Rotate key'),
-    message: t('The old key stops working immediately and a new key is shown once.'),
-    cancel: true,
-    persistent: true,
-  }).onOk(async () => {
-    const response = await client.api.connectors[':id'].rotate.$post({ param: { id } })
-    const body: unknown = await response.json()
-    showLegacySecret(body)
-    if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string') {
-      $q.notify({ type: 'negative', message: body.error })
-    }
-    await load()
-  })
-}
-
-function revokeLegacy(id: string) {
-  $q.dialog({
-    title: t('Revoke'),
-    message: t('This key will stop working immediately.'),
-    cancel: true,
-    persistent: true,
-  }).onOk(async () => {
-    await client.api.connectors[':id'].$delete({ param: { id } })
-    await load()
-  })
-}
-
 async function copy(value: string) {
   await copyToClipboard(value)
   $q.notify({ message: t('Copied'), type: 'positive' })
@@ -551,7 +397,6 @@ watch(() => workspaceStore.id, () => {
   principals.value = []
   credentials.value = {}
   grants.value = []
-  legacyRows.value = []
   load().catch(() => undefined)
 })
 onMounted(() => { load().catch(() => undefined) })

@@ -5,11 +5,6 @@
   >
     {{ avatar.text }}
   </q-avatar>
-  <image-avatar
-    v-else-if="avatar.type === 'image'"
-    :item-id="avatar.itemId"
-    :style
-  />
   <q-avatar
     v-else-if="avatar.type === 'icon'"
     :icon="avatar.icon"
@@ -31,9 +26,8 @@
 <script setup lang="ts">
 import { useQuasar } from 'quasar'
 import { hctToHex } from 'src/utils/functions'
-import type { Avatar } from 'app/src-shared/utils/validators'
+import type { Avatar } from 'src/utils/validators'
 import { computed } from 'vue'
-import ImageAvatar from './ImageAvatar.vue'
 
 const props = defineProps<{
   avatar: Avatar

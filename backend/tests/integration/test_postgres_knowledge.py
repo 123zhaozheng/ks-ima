@@ -50,7 +50,6 @@ def settings() -> Settings:
         session_pepper="knowledge-integration-session",
         token_pepper="knowledge-integration-token",
         totp_encryption_key="knowledge-integration-totp-key",
-        bridge_token="knowledge-integration-bridge",
         smtp_host=None,
         smtp_from=None,
     )
@@ -181,7 +180,7 @@ def test_knowledge_migration_is_fresh_and_repeatable() -> None:
     with psycopg.connect(SYNC_URL) as connection:
         assert (
             connection.execute("SELECT version_num FROM ima.alembic_version").fetchone()[0]
-            == "20260828_0010"
+            == "20260829_0011"
         )
         for table in (
             "documents",
@@ -525,157 +524,3 @@ async def test_trash_paginates_and_hides_versions_for_trashed_documents() -> Non
                 "DELETE FROM ima.legacy_knowledge_migration WHERE source_kind='entity' AND source_id=%s",
                 (source_id,),
             )
-
-
-@pytest.mark.postgres
-def test_legacy_cli_maps_page_snapshots_tags_and_changed_fingerprint() -> None:
-    assert SYNC_URL and ALEMBIC_URL
-    migrate()
-    root_id = "lk-root-01"
-    source_ids = ("lk-root-01", "lk-note-01", "lk-bad-01")
-    target_note = UUID("00000000-0000-0000-0000-000000000001")
-    # The CLI derives UUID5 IDs; this import uses the same stable namespace.
-    from uuid import NAMESPACE_URL, uuid5
-
-    target_note = uuid5(NAMESPACE_URL, f"legacy-knowledge:{root_id}:lk-note-01")
-    target_bad = uuid5(NAMESPACE_URL, f"legacy-knowledge:{root_id}:lk-bad-01")
-    with psycopg.connect(SYNC_URL) as connection:
-        try:
-            connection.execute(
-                "DELETE FROM ima.document_tags WHERE document_id IN (%s,%s)",
-                (target_note, target_bad),
-            )
-            connection.execute(
-                "DELETE FROM ima.document_versions WHERE document_id IN (%s,%s)",
-                (target_note, target_bad),
-            )
-            connection.execute(
-                "DELETE FROM ima.documents WHERE id IN (%s,%s)", (target_note, target_bad)
-            )
-            connection.execute(
-                "DELETE FROM ima.legacy_knowledge_migration WHERE source_id = ANY(%s)",
-                (list(source_ids),),
-            )
-            connection.execute("DELETE FROM ima.workspaces WHERE id=%s", (root_id,))
-            connection.execute(
-                """INSERT INTO ima.workspaces(id,name,created_at,updated_at)
-                VALUES (%s,'Legacy fixture',now(),now()) ON CONFLICT(id) DO NOTHING""",
-                (root_id,),
-            )
-            connection.execute(
-                """INSERT INTO ima.folders
-                (id,workspace_id,parent_id,name,normalized_name,order_key,is_root,acl_anchor_id,created_at,updated_at)
-                VALUES (%s,%s,NULL,'Legacy fixture','legacy fixture',0,true,%s,now(),now())
-                ON CONFLICT(id) DO NOTHING""",
-                (root_id, root_id, root_id),
-            )
-            connection.execute(
-                """INSERT INTO ima.folder_closure(workspace_id,ancestor_id,descendant_id,depth)
-                VALUES (%s,%s,%s,0) ON CONFLICT DO NOTHING""",
-                (root_id, root_id, root_id),
-            )
-            connection.execute(
-                'CREATE TABLE IF NOT EXISTS public."entity" (id varchar(16) PRIMARY KEY,"rootId" varchar(16) NOT NULL,"parentId" varchar(16),type text NOT NULL,name text,conf jsonb NOT NULL,"sortPriority" integer NOT NULL,hidden boolean NOT NULL)'
-            )
-            connection.execute(
-                'CREATE TABLE IF NOT EXISTS public."page" (id varchar(16) PRIMARY KEY,"rootId" varchar(16) NOT NULL,text text)'
-            )
-            connection.execute(
-                'CREATE TABLE IF NOT EXISTS public."pagePatch" (id varchar(16) PRIMARY KEY,"rootId" varchar(16) NOT NULL,"entityId" varchar(16) NOT NULL,patch text NOT NULL,"userId" text)'
-            )
-            connection.execute('DELETE FROM public."pagePatch" WHERE "rootId"=%s', (root_id,))
-            connection.execute('DELETE FROM public."page" WHERE "rootId"=%s', (root_id,))
-            connection.execute('DELETE FROM public."entity" WHERE "rootId"=%s', (root_id,))
-            rows = (
-                (root_id, root_id, None, "folder", "Legacy fixture", "{}"),
-                ("lk-note-01", root_id, root_id, "item", "Migrated note", '{"tags":["Café"]}'),
-                ("lk-bad-01", root_id, root_id, "item", "Review note", "{}"),
-            )
-            for source_id, source_root, parent, kind, title, conf in rows:
-                connection.execute(
-                    'INSERT INTO public."entity" (id,"rootId","parentId",type,name,conf,"sortPriority",hidden) VALUES (%s,%s,%s,%s,%s,%s::jsonb,0,false)',
-                    (source_id, source_root, parent, kind, title, conf),
-                )
-            connection.execute(
-                'INSERT INTO public."page" (id,"rootId",text) VALUES (%s,%s,%s),(%s,%s,%s)',
-                ("lk-note-01", root_id, "current", "lk-bad-01", root_id, "safe current"),
-            )
-            connection.execute(
-                'INSERT INTO public."pagePatch" (id,"rootId","entityId",patch) VALUES (%s,%s,%s,%s),(%s,%s,%s,%s)',
-                (
-                    "lk-patch-01",
-                    root_id,
-                    "lk-note-01",
-                    '{"text":"old"}',
-                    "lk-patch-02",
-                    root_id,
-                    "lk-note-01",
-                    '{"text":"current"}',
-                ),
-            )
-            connection.execute(
-                'INSERT INTO public."pagePatch" (id,"rootId","entityId",patch) VALUES (%s,%s,%s,%s)',
-                ("lk-bad-patch", root_id, "lk-bad-01", "replace /text"),
-            )
-        finally:
-            connection.commit()
-    env = {**os.environ, "IMA_DATABASE_URL": ALEMBIC_URL}
-    subprocess.run(
-        ["uv", "run", "ima", "migrate-legacy-knowledge", "apply"],
-        cwd=Path(__file__).parents[2],
-        env=env,
-        check=True,
-    )
-    subprocess.run(
-        ["uv", "run", "ima", "migrate-legacy-knowledge", "apply"],
-        cwd=Path(__file__).parents[2],
-        env=env,
-        check=True,
-    )
-    with psycopg.connect(SYNC_URL) as connection:
-        assert connection.execute(
-            "SELECT markdown FROM ima.document_versions WHERE document_id=%s ORDER BY version",
-            (target_note,),
-        ).fetchall() == [("old",), ("current",)]
-        assert (
-            connection.execute(
-                "SELECT count(*) FROM ima.document_tags WHERE document_id=%s", (target_note,)
-            ).fetchone()[0]
-            == 1
-        )
-        assert connection.execute(
-            "SELECT status,last_error FROM ima.legacy_knowledge_migration WHERE source_id='lk-bad-01'"
-        ).fetchone() == ("review", "unsupported_patch_history")
-        connection.execute(
-            'UPDATE public."page" SET text=%s WHERE id=%s', ("changed", "lk-note-01")
-        )
-        connection.commit()
-    subprocess.run(
-        ["uv", "run", "ima", "migrate-legacy-knowledge", "apply"],
-        cwd=Path(__file__).parents[2],
-        env=env,
-        check=True,
-    )
-    with psycopg.connect(SYNC_URL) as connection:
-        assert connection.execute(
-            "SELECT status,last_error FROM ima.legacy_knowledge_migration WHERE source_id='lk-note-01'"
-        ).fetchone() == ("review", "source_changed")
-        connection.execute(
-            "DELETE FROM ima.document_tags WHERE document_id IN (%s,%s)", (target_note, target_bad)
-        )
-        connection.execute(
-            "DELETE FROM ima.document_versions WHERE document_id IN (%s,%s)",
-            (target_note, target_bad),
-        )
-        connection.execute(
-            "DELETE FROM ima.documents WHERE id IN (%s,%s)", (target_note, target_bad)
-        )
-        connection.execute(
-            "DELETE FROM ima.legacy_knowledge_migration WHERE source_id = ANY(%s)",
-            (list(source_ids),),
-        )
-        connection.execute('DELETE FROM public."pagePatch" WHERE "rootId"=%s', (root_id,))
-        connection.execute('DELETE FROM public."page" WHERE "rootId"=%s', (root_id,))
-        connection.execute('DELETE FROM public."entity" WHERE "rootId"=%s', (root_id,))
-        connection.execute("DELETE FROM ima.workspaces WHERE id=%s", (root_id,))
-        connection.commit()

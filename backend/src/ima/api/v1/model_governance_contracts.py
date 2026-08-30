@@ -266,40 +266,6 @@ class ImpactResponse(IdentityModel):
     requires_reindex: bool = Field(alias="requiresReindex")
 
 
-class GatewayResolveRequest(IdentityModel):
-    workspace_id: str = Field(alias="workspaceId", min_length=1, max_length=64)
-    workflow: Workflow
-    operation: Literal["chat", "embedding", "rerank"]
-
-
-class GatewayResolveResponse(IdentityModel):
-    source: Literal["target", "legacy", "denied"]
-    workflow: Workflow
-    profile_id: UUID | None = Field(default=None, alias="profileId")
-    profile_version: int | None = Field(default=None, alias="profileVersion")
-    binding_id: str | None = Field(default=None, alias="bindingId")
-    reason: str | None = None
-
-
-class ManagedChatRequest(IdentityModel):
-    workspace_id: str = Field(alias="workspaceId", min_length=1, max_length=64)
-    workflow: Literal["grounded_ask", "title_generation", "summarization"]
-    messages: tuple[dict[str, Any], ...] = Field(max_length=200)
-    tools: tuple[dict[str, Any], ...] | None = Field(default=None, max_length=128)
-    stream: bool = False
-
-
-class ManagedEmbeddingRequest(IdentityModel):
-    workspace_id: str = Field(alias="workspaceId", min_length=1, max_length=64)
-    inputs: tuple[str, ...] = Field(min_length=1, max_length=256)
-
-
-class ManagedRerankRequest(IdentityModel):
-    workspace_id: str = Field(alias="workspaceId", min_length=1, max_length=64)
-    query: str = Field(min_length=1, max_length=10000)
-    documents: tuple[str, ...] = Field(min_length=1, max_length=1000)
-
-
 class HealthRequest(IdentityModel):
     capability: Capability | None = None
 

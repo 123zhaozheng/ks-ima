@@ -16,7 +16,7 @@
       min-h="36px"
       py-0
       px-2
-      :to="workspaceStore.id ? `/folder/${workspaceStore.id}` : undefined"
+      :to="workspaceStore.id ? '/' : undefined"
       :active="currentFolderId === workspaceStore.id"
       @keydown.enter.prevent="activate(workspaceStore.id!)"
       @keydown.space.prevent="activate(workspaceStore.id!)"
@@ -49,7 +49,7 @@
       py-0
       pr-2
       :style="{ paddingLeft: `${8 + row.depth * 16}px` }"
-      :to="`/folder/${row.folder.id}`"
+      :to="{ path: '/', query: { folderId: row.folder.id } }"
       :active="currentFolderId === row.folder.id"
       :aria-expanded="row.hasChildren ? expanded.has(row.folder.id) : undefined"
       @keydown.enter.prevent="activate(row.folder.id)"
@@ -111,10 +111,9 @@ const byParent = ref(new Map<string, Folder[]>())
 const folderMap = computed(() => Object.fromEntries([...byParent.value.values()].flat().map(folder => [folder.id, folder])))
 
 const currentFolderId = computed(() => {
-  const { type, id } = route.params
-  if (typeof id !== 'string') return workspaceStore.id ?? ''
-  if (type === 'folder') return id
-  return id || workspaceStore.id || ''
+  const query = route.query.folderId
+  if (typeof query === 'string' && query) return query
+  return workspaceStore.id ?? ''
 })
 
 const expanded = reactive(new Set<string>())
@@ -158,7 +157,8 @@ function activate(id: string) {
   if (folder) {
     toggle(id)
   }
-  router.push(`/folder/${id}`)
+  if (id === workspaceStore.id) router.push('/')
+  else router.push({ path: '/', query: { folderId: id } })
 }
 
 async function loadChildren(parentId: string) {

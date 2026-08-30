@@ -384,38 +384,6 @@ class IdentityService:
                         "now": now,
                     },
                 )
-            legacy_user_table = await conn.scalar(text("SELECT to_regclass('public.user')"))
-            if legacy_user_table:
-                await conn.execute(
-                    text(
-                        """INSERT INTO ima.legacy_identity_projection(user_id,status,updated_at) VALUES (:id,'pending',:now) ON CONFLICT(user_id) DO UPDATE SET status='pending',updated_at=:now"""
-                    ),
-                    {"id": user_id, "now": now},
-                )
-                await conn.execute(
-                    text(
-                        """INSERT INTO public."user"(id,name,email,image,created_at,updated_at) VALUES (:id,:name,:email,:image,:now,:now) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,email=EXCLUDED.email,image=EXCLUDED.image,updated_at=EXCLUDED.updated_at"""
-                    ),
-                    {
-                        "id": user_id,
-                        "name": display_name.strip(),
-                        "email": email.strip(),
-                        "image": None,
-                        "now": now,
-                    },
-                )
-                await conn.execute(
-                    text(
-                        """INSERT INTO public."userData"(id,perfs,data) VALUES (:id,'{}'::jsonb,'{}'::jsonb) ON CONFLICT(id) DO NOTHING"""
-                    ),
-                    {"id": user_id},
-                )
-                await conn.execute(
-                    text(
-                        "UPDATE ima.legacy_identity_projection SET status='complete',migrated_at=:now,updated_at=:now WHERE user_id=:id"
-                    ),
-                    {"id": user_id, "now": now},
-                )
             await self._audit(
                 conn,
                 actor_id,
@@ -1171,43 +1139,4 @@ class IdentityService:
                 "success",
                 target_type="user",
                 target_id=user_id,
-            )
-
-    async def sync_legacy_projection(
-        self, user_id: str, email: str, display_name: str, image_url: str | None
-    ) -> None:
-        """Upsert the compatibility user projection without workspace side effects."""
-        async with self.engine.begin() as conn:
-            await conn.execute(
-                text(
-                    """INSERT INTO ima.legacy_identity_projection(user_id,status,updated_at) VALUES (:id,'pending',now()) ON CONFLICT(user_id) DO UPDATE SET status='pending',updated_at=now()"""
-                ),
-                {"id": user_id},
-            )
-            try:
-                await conn.execute(
-                    text(
-                        """INSERT INTO public."user"(id,name,email,image) VALUES (:id,:name,:email,:image) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,email=EXCLUDED.email,image=EXCLUDED.image"""
-                    ),
-                    {"id": user_id, "name": display_name, "email": email, "image": image_url},
-                )
-                await conn.execute(
-                    text(
-                        """INSERT INTO public."userData"(id,perfs,data) VALUES (:id,'{}'::jsonb,'{}'::jsonb) ON CONFLICT(id) DO NOTHING"""
-                    ),
-                    {"id": user_id},
-                )
-            except Exception as exc:
-                await conn.execute(
-                    text(
-                        "UPDATE ima.legacy_identity_projection SET status='failed',last_error=:error,updated_at=now() WHERE user_id=:id"
-                    ),
-                    {"id": user_id, "error": type(exc).__name__},
-                )
-                raise
-            await conn.execute(
-                text(
-                    "UPDATE ima.legacy_identity_projection SET status='complete',migrated_at=now(),updated_at=now() WHERE user_id=:id"
-                ),
-                {"id": user_id},
             )

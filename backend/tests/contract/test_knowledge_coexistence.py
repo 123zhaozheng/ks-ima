@@ -1,4 +1,4 @@
-"""Repository contracts for the knowledge cutover and retained adapters."""
+"""Repository contracts for the post-deletion knowledge boundary."""
 
 from pathlib import Path
 
@@ -9,7 +9,7 @@ def read_source(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
 
 
-def test_migrated_knowledge_client_has_no_zero_or_bun_writer_fallback() -> None:
+def test_knowledge_client_is_python_only_without_zero_or_bun_fallback() -> None:
     client = read_source("src/api/knowledge-client.ts")
     composable = read_source("src/composables/use-knowledge.ts")
     layout = read_source("src/layouts/TrashLayout.vue")
@@ -24,7 +24,7 @@ def test_migrated_knowledge_client_has_no_zero_or_bun_writer_fallback() -> None:
     assert "KnowledgeTrashList.vue" in layout
 
 
-def test_python_knowledge_router_does_not_import_legacy_mutators() -> None:
+def test_python_knowledge_router_is_the_only_knowledge_backend() -> None:
     router = read_source("backend/src/ima/api/v1/knowledge.py")
     app = read_source("backend/src/ima/api/app.py")
 
@@ -35,37 +35,23 @@ def test_python_knowledge_router_does_not_import_legacy_mutators() -> None:
     assert "api.include_router(knowledge_router)" in app
 
 
-def test_later_child_adapters_remain_present_and_connected() -> None:
-    retained = {
+def test_legacy_bun_server_subtree_is_deleted() -> None:
+    assert not (ROOT / "src-server").exists()
+    for relative in (
         "src-server/kb/ops.ts",
         "src-server/kb.ts",
         "src-server/kb/ingest.ts",
         "src-server/kb/retrieve.ts",
         "src-server/s3.ts",
         "src-server/mcp.ts",
-    }
-    for relative in retained:
-        path = ROOT / relative
-        assert path.is_file(), relative
-        assert path.stat().st_size > 0, relative
-
-    ops = read_source("src-server/kb/ops.ts")
-    mcp = read_source("src-server/mcp.ts")
-    assert "./ingest" in ops
-    assert "./retrieve" in ops
-    assert "../utils/s3" in ops
-    assert "./kb/ops" in mcp
+    ):
+        assert not (ROOT / relative).exists(), relative
 
 
-def test_legacy_zero_is_scoped_not_claimed_deleted() -> None:
-    mixed_component = read_source("src/components/EntityList.vue")
-    workspace_store = read_source("src/stores/workspace.ts")
-
-    assert "zero-session" in mixed_component
-    assert "zero" in workspace_store.casefold()
-    retained_manifest = (
-        ROOT
-        / ".trellis/tasks/archive/2026-08/08-24-knowledge-tree-vue-api"
-        / "research/retained-legacy-symbols.md"
-    )
-    assert retained_manifest.is_file()
+def test_checkpoint_history_tables_outlive_the_legacy_importers() -> None:
+    knowledge = read_source("backend/migrations/versions/20260825_0005_knowledge_tree.py")
+    governance = read_source("backend/migrations/versions/20260825_0004_model_governance.py")
+    identity = read_source("backend/migrations/versions/20260824_0002_identity_platform.py")
+    assert "legacy_knowledge_migration" in knowledge
+    assert "legacy_model_governance_migration" in governance
+    assert "legacy_identity_projection" in identity

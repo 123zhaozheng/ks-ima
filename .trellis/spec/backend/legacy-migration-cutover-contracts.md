@@ -1,76 +1,50 @@
-# Legacy Migration and Cutover Contracts
+# Legacy Migration and Cutover Contracts (Terminal State)
 
-> Executable contracts for the resumable legacy ETL (`migrate-legacy-*` CLI family), write freeze, and cutover tooling. Source modules: `ima/cli.py` (`_legacy_*` helpers), `ima/application/migration_*.py`, `ima/application/maintenance.py`.
+> Historical contracts for the retired `migrate-legacy-*` / `inventory-legacy-mcp` CLI family, plus the retained write freeze. The ETL code and legacy `public.*` tables were deleted in task `08-24-legacy-deletion-release` (cleanup migration `20260829_0011_legacy_schema_removal.py`). Checkpoint/history tables (`ima.legacy_*_migration`, `ima.workspace_authorization_migration`, `ima.legacy_identity_projection`) are retained as migration-history evidence.
 
-Captured from task `08-24-legacy-migration-cutover` implementation and check sessions.
-
----
-
-## Contract: Migration reads legacy, never writes it; checksum normalization happens at read time
-
-### Rule
-
-All `migrate-legacy-*` commands are SELECT-only against `public.*`. Never UPDATE/DELETE legacy rows from migration code. Legacy blob checksums are base64 (`public.blob.sha256`); Python storage verification and `ima.*` checksum columns are hex (CHECK-constrained). Normalize base64→hex at the importer read path only.
-
-### Wrong
-
-```python
-# rewriting legacy data, or storing the legacy checksum verbatim
-connection.execute("UPDATE public.blob SET sha256=%s ...", (hex_digest,))
-target_checksum = row.sha256  # base64 -> violates hex CHECK / fails copy_verified
-```
-
-### Correct
-
-```python
-target_checksum = normalize_legacy_checksum(row.sha256)  # base64 -> hex, read-side only
-```
-
-### Tests Required
-
-- Unit test with a base64 checksum fixture; PostgreSQL test proving `copy_verified`/blob-verify pass on migrated legacy blobs.
+Captured from tasks `08-24-legacy-migration-cutover` and `08-24-legacy-deletion-release`.
 
 ---
 
-## Contract: Trash propagation must keep restoration anchors
+## Contract: Migration history tables are evidence, never live data
 
 ### Rule
 
-Any code path that moves a migrated target row to trash (initial importer, trash-move reconciliation, legacy-deletion propagation) must set the restoration anchors: `documents.original_folder_id = COALESCE(original_folder_id, folder_id)` and `folders.original_parent_id = COALESCE(original_parent_id, parent_id)`. A trashed row without anchors cannot be restored, violating the lifecycle contract.
-
-### Tests Required
-
-- PostgreSQL test: legacy-deleted source propagates to a trashed target row whose anchors point at the pre-trash placement; restore returns it there.
+The `ima.legacy_*_migration` checkpoint tables and `ima.legacy_identity_projection` are append-only historical evidence. No live code path reads them to serve requests, and no new writer exists. Future work must not reintroduce readers of `public.*` legacy tables — the tables themselves are gone after the cleanup migration; any `to_regclass`-guarded probe must treat absence as final, not transient.
 
 ---
 
-## Contract: Rerun convergence — completed checkpoints with stale error state must re-reconcile
+## Contract: Legacy checksum normalization was read-side only
 
 ### Rule
 
-The knowledge apply loop must not silently skip a `complete` checkpoint whose fingerprint matches but whose `last_error` records an unresolved delta (e.g. `legacy_deleted`). If the legacy row reappears (deleted then recreated), the apply must route the checkpoint through `_reconcile_knowledge_delta` again so the target converges; otherwise the row stays trashed forever and reruns never converge.
-
-### Tests Required
-
-- Rerun scenario: row deleted → apply propagates trash → row recreated → rerun restores placement (or records an explicit review decision), never a silent skip.
+Legacy blob checksums were base64 (`public.blob.sha256`); `ima.*` checksum columns are hex (CHECK-constrained). The ETL normalized base64→hex at the importer read path only and never rewrote legacy rows. Migrated `ima.*` rows carry hex digests; any future verification tool must keep the hex CHECK contract.
 
 ---
 
-## Contract: Reconciliation reports are exit-code gated and redacted
+## Contract: Trash propagation keeps restoration anchors
 
 ### Rule
 
-`migrate-legacy reconcile-report` (and all verify/report siblings) print one JSON payload and `raise SystemExit(4)` when findings exist — matching `inventory-legacy-mcp`. Recorded review decisions (`status='review'`, `last_error IN ('reparented_folder','legacy_deleted','source_changed')`) must be reported even when the legacy tables are absent. Reports carry `"secretValues": false` and never include connector key material.
+Any code path that moves a target row to trash must set the restoration anchors: `documents.original_folder_id = COALESCE(original_folder_id, folder_id)` and `folders.original_parent_id = COALESCE(original_parent_id, parent_id)`. A trashed row without anchors cannot be restored, violating the lifecycle contract. (Still live behavior in `ima/application/knowledge.py`.)
 
 ---
 
-## Contract: Write freeze is super-admin only, audited, and fail-closed for bridge mutations
+## Contract: Verification reports are exit-code gated and redacted
 
 ### Rule
+
+Operational verify/report commands print one JSON payload and `raise SystemExit(4)` when findings exist. Reports carry `"secretValues": false` and never include connector key material. New verify tooling must follow the same gating pattern.
+
+---
+
+## Contract: Write freeze is super-admin only, audited, and fail-closed
+
+### Rule (retained machinery)
 
 - Enter/exit require an active super administrator; both write `ima.audit_events` (`maintenance.freeze.enter|exit`) with metadata `{"reason", "secretValues": false}`.
-- While frozen, bridge-served mutating actions and workspace/knowledge/storage mutations raise `MaintenanceFreezeError` → RFC 9457 `503` with code `maintenance_freeze`. Migration-tagged writers (direct importer SQL paths) keep working.
-- The freeze flag lives in `ima.system_settings` (`maintenance_write_freeze` + reason/entered_at/entered_by); the bridge contract uses `Literal` source typing so refusal stays fail-closed.
+- While frozen, mutating workspace/knowledge/storage actions raise `MaintenanceFreezeError` → RFC 9457 `503` with code `maintenance_freeze`. Migration-tagged writers (direct `ima` CLI SQL) bypass it by design.
+- The freeze flag lives in `ima.system_settings` (`maintenance_write_freeze` + reason/entered_at/entered_by). The freeze is a generic operations tool and survives legacy deletion.
 
 ---
 
@@ -90,14 +64,22 @@ CLI helpers connect separately; they cannot see the test connection's uncommitte
 with psycopg.connect(SYNC_URL) as connection:
     connection.execute(insert_fixture)
 # committed here
-cli._legacy_reconcile_report("knowledge")  # sees the fixture
+cli_helper()  # sees the fixture
 ```
 
 Keep cleanup in its own `with psycopg.connect(...)` block inside `finally`.
 
-### Gotcha: shared integration database accumulates residue across suites
+---
 
-Importer suites (identity, knowledge, model governance) leave checkpoints whose legacy rows were deleted and legacy fixtures (`public."user"`, `public."workspace"`). Rehearsal-style tests that assert a clean reconcile must sanitize at start: delete rows from `ima.legacy_*_migration` / `ima.workspace_authorization_migration` and leftover `public.*` fixture rows (guarded by `to_regclass`). Never assume the shared test DB is pristine between runs.
+## Gotcha: shared integration database accumulates residue across suites
+
+### Symptom
+
+Rehearsal-style tests that assert a clean state fail on leftover rows from earlier suites.
+
+### Fix / Prevention
+
+Tests that assert clean state must sanitize at start: delete rows from `ima.legacy_*_migration` / `ima.workspace_authorization_migration` and leftover fixture rows (guarded by `to_regclass`). Never assume the shared test DB is pristine between runs.
 
 ---
 

@@ -18,7 +18,31 @@ Questions to answer:
 
 The foundation uses SQLAlchemy 2 async for runtime probes and future domain
 queries, psycopg for Alembic/operational commands, and PostgreSQL schemas `ima`
-and `ima_jobs`. Legacy public tables are outside this child's ownership.
+and `ima_jobs`. The legacy `public.*` tables were dropped by cleanup migration
+`20260829_0011_legacy_schema_removal.py`; `ima.*` is the only live schema
+surface.
+
+---
+
+## Forced-Postgres Integration Gate
+
+`backend/tests/conftest.py` enforces an EXACT count of `postgres`-marked tests
+when `IMA_REQUIRE_POSTGRES=1` (currently 38); any test add/remove must update
+that number or collection exits 2.
+
+The test database must provide the zhparser parser AND pgvector — a plain
+`postgres:17-alpine` image fails on `CREATE EXTENSION vector`. Use the local
+`nyaai-postgres-it` image (or build `Dockerfile.postgres`), e.g.:
+
+```
+docker run -d --name ima-test-pg -p 55432:5432 \
+  -e POSTGRES_PASSWORD=identity-gate-password -e POSTGRES_DB=app \
+  nyaai-postgres-it:20260825
+```
+
+Tests connect via asyncpg (`IMA_TEST_DATABASE_URL=postgresql+asyncpg://...`);
+Alembic itself needs the sync psycopg driver (`postgresql+psycopg://` in
+`IMA_DATABASE_URL`) because `migrations/env.py` uses a sync engine.
 
 ---
 
@@ -57,6 +81,7 @@ search path. Foundation timestamps are UTC `timestamptz` values.
 
 <!-- Database-related mistakes your team has made -->
 
-Do not point foundation migrations at `public`, drop legacy schemas, or assume
-that a successful Alembic log means bootstrap SQL committed. Verify schema,
-version, extension, and task marker state on a clean PostgreSQL instance.
+Do not point foundation migrations at the wrong schema, bypass explicit
+migration steps, or assume that a successful Alembic log means bootstrap SQL
+committed. Verify schema, version, extension, and task marker state on a clean
+PostgreSQL instance.

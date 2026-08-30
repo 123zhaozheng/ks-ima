@@ -22,15 +22,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push server
-        uses: docker/build-push-action@v6.10.0
-        with:
-          context: .
-          file: ./Dockerfile.server
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/nyaai-server:staging
-
       - name: Build and push web
         uses: docker/build-push-action@v6.10.0
         with:
@@ -39,3 +30,23 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/nyaai-web:staging
+
+      - name: Build and push api
+        uses: docker/build-push-action@v6.10.0
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          target: api
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/nyaai-api:staging
+
+      - name: Build and push worker
+        uses: docker/build-push-action@v6.10.0
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          target: worker
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/nyaai-worker:staging

@@ -21,9 +21,9 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     if not os.environ.get("IMA_TEST_DATABASE_URL"):
         pytest.exit("IMA_REQUIRE_POSTGRES=1 requires IMA_TEST_DATABASE_URL", returncode=2)
     postgres_items = [item for item in items if item.get_closest_marker("postgres")]
-    if len(postgres_items) != 48:
+    if len(postgres_items) != 38:
         pytest.exit(
-            "expected exactly 48 Postgres tests in the integration gate, "
+            "expected exactly 38 Postgres tests in the integration gate, "
             f"found {len(postgres_items)}",
             returncode=2,
         )

@@ -8,7 +8,6 @@ from typing import Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
 
 from ima.api.v1.auth import Current, check_csrf, check_recent_auth
 from ima.api.v1.model_governance_contracts import (
@@ -18,17 +17,12 @@ from ima.api.v1.model_governance_contracts import (
     CapabilityProfile,
     GatewayCreateRequest,
     GatewayPatchRequest,
-    GatewayResolveRequest,
-    GatewayResolveResponse,
     GovernedModel,
     GovernedModelCreateRequest,
     GovernedModelList,
     GovernedModelPatchRequest,
     HealthRequest,
     ImpactResponse,
-    ManagedChatRequest,
-    ManagedEmbeddingRequest,
-    ManagedRerankRequest,
     ModelDiscoveryResponse,
     ModelGateway,
     ModelGatewayList,
@@ -43,7 +37,7 @@ from ima.api.v1.model_governance_contracts import (
     VersionRequest,
     WorkspaceCapability,
 )
-from ima.application.model_governance import ModelGovernanceError, ModelGovernanceService
+from ima.application.model_governance import ModelGovernanceService
 from ima.domain.model_governance import ModelGatewayInput, Workflow
 
 router = APIRouter(prefix="/admin", tags=["model-governance"])
@@ -516,146 +510,4 @@ async def workspace_capabilities(
     return await service(request).workspace_capabilities(current[1].id, workspace_id)
 
 
-internal_router = APIRouter(prefix="/internal/model-governance", tags=["internal-model-governance"])
-
-
-@internal_router.post(
-    "/resolve",
-    response_model=GatewayResolveResponse,
-    include_in_schema=False,
-    operation_id="resolveModelGateway",
-)
-async def resolve_gateway(payload: GatewayResolveRequest, request: Request) -> dict[str, Any]:
-    from hmac import compare_digest
-
-    expected = request.app.state.settings.bridge_token.get_secret_value()
-    actual = request.headers.get("x-ima-bridge-token", "")
-    if not compare_digest(actual, expected):
-        raise HTTPException(404, "Not found")
-    return await service(request).resolve(
-        payload.workspace_id, Workflow(payload.workflow), payload.operation
-    )
-
-
-def _check_bridge(request: Request) -> None:
-    from hmac import compare_digest
-
-    expected = request.app.state.settings.bridge_token.get_secret_value()
-    actual = request.headers.get("x-ima-bridge-token", "")
-    if not compare_digest(actual, expected):
-        raise HTTPException(404, "Not found")
-
-
-@internal_router.post("/execute/chat", include_in_schema=False, operation_id="executeManagedChat")
-async def execute_managed_chat(payload: ManagedChatRequest, request: Request) -> object:
-    _check_bridge(request)
-    workflow = Workflow(payload.workflow)
-    status = await service(request).resolve(payload.workspace_id, workflow, "chat")
-    if status["source"] != "target":
-        reason = str(status.get("reason") or "UNAVAILABLE")
-        raise ModelGovernanceError(
-            409 if reason == "NO_ASSIGNMENT" else 503,
-            reason,
-            "Managed chat capability is unavailable",
-        )
-    if payload.stream:
-        return StreamingResponse(
-            service(request).managed_chat_stream(
-                payload.workspace_id,
-                workflow,
-                list(payload.messages),
-                list(payload.tools) if payload.tools else None,
-            ),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-        )
-    return await service(request).managed_chat(
-        payload.workspace_id,
-        workflow,
-        list(payload.messages),
-        list(payload.tools) if payload.tools else None,
-    )
-
-
-@internal_router.post("/execute/legacy/chat", include_in_schema=False)
-async def execute_legacy_chat(payload: ManagedChatRequest, request: Request) -> object:
-    _check_bridge(request)
-    result = await service(request).managed_legacy_chat(
-        payload.workspace_id,
-        Workflow(payload.workflow),
-        list(payload.messages),
-        list(payload.tools) if payload.tools else None,
-        stream=payload.stream,
-    )
-    if payload.stream:
-        return StreamingResponse(
-            cast(Any, result),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-        )
-    return result
-
-
-@internal_router.post(
-    "/execute/embedding", include_in_schema=False, operation_id="executeManagedEmbedding"
-)
-async def execute_managed_embedding(
-    payload: ManagedEmbeddingRequest, request: Request
-) -> dict[str, object]:
-    _check_bridge(request)
-    status = await service(request).resolve(payload.workspace_id, Workflow.EMBEDDING, "embedding")
-    if status["source"] != "target":
-        reason = str(status.get("reason") or "UNAVAILABLE")
-        raise ModelGovernanceError(
-            409 if reason == "NO_ASSIGNMENT" else 503,
-            reason,
-            "Managed embedding capability is unavailable",
-        )
-    vectors = await service(request).managed_embeddings(payload.workspace_id, list(payload.inputs))
-    return {"vectors": vectors}
-
-
-@internal_router.post("/execute/legacy/embedding", include_in_schema=False)
-async def execute_legacy_embedding(
-    payload: ManagedEmbeddingRequest, request: Request
-) -> dict[str, object]:
-    _check_bridge(request)
-    vectors = await service(request).managed_legacy_embeddings(
-        payload.workspace_id, list(payload.inputs)
-    )
-    return {"vectors": vectors}
-
-
-@internal_router.post(
-    "/execute/rerank", include_in_schema=False, operation_id="executeManagedRerank"
-)
-async def execute_managed_rerank(
-    payload: ManagedRerankRequest, request: Request
-) -> dict[str, object]:
-    _check_bridge(request)
-    status = await service(request).resolve(payload.workspace_id, Workflow.RERANKING, "rerank")
-    if status["source"] != "target":
-        reason = str(status.get("reason") or "UNAVAILABLE")
-        raise ModelGovernanceError(
-            409 if reason == "NO_ASSIGNMENT" else 503,
-            reason,
-            "Managed reranking capability is unavailable",
-        )
-    result = await service(request).managed_rerank(
-        payload.workspace_id, payload.query, list(payload.documents)
-    )
-    return {"results": [{"index": index, "relevance_score": score} for index, score in result]}
-
-
-@internal_router.post("/execute/legacy/rerank", include_in_schema=False)
-async def execute_legacy_rerank(
-    payload: ManagedRerankRequest, request: Request
-) -> dict[str, object]:
-    _check_bridge(request)
-    result = await service(request).managed_legacy_rerank(
-        payload.workspace_id, payload.query, list(payload.documents)
-    )
-    return {"results": [{"index": index, "relevance_score": score} for index, score in result]}
-
-
-__all__ = ["internal_router", "router", "workspace_router"]
+__all__ = ["router", "workspace_router"]

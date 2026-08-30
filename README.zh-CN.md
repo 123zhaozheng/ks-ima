@@ -13,14 +13,14 @@
 
 ## 连接器
 
-工作区 owner/admin 在 `/workspace/connectors` 创建 API Key。其他助手配置：
+首选受保护资源是 `https://your-host/mcp`。交互式客户端从该地址自动发现 OAuth；服务凭据先在 `/oauth/token` 换取短期访问令牌，再调用该资源。
 
 ```json
 {
   "mcpServers": {
     "intranet-ima": {
-      "url": "https://your-host/api/mcp",
-      "headers": { "Authorization": "Bearer ima_..." }
+      "url": "https://your-host/mcp",
+      "headers": { "Authorization": "Bearer <access-token>" }
     }
   }
 }
@@ -30,14 +30,21 @@
 
 ## 开发
 
+`backend/` 中的 Python API 是唯一后端，前端开发服务器会把 `/api` 代理到它。
+
 ```sh
 cp .env.example .env
 bun install
 bun quasar prepare
-bun dev:db-up
-bun dev:server
-zero-cache-dev
-bun dev:frontend
+docker compose -p ima-dev -f backend/tests/integration/identity-compose.yml up -d # Postgres 位于 127.0.0.1:55432
+cd backend
+uv sync --frozen
+IMA_DATABASE_URL=postgresql+asyncpg://postgres:identity-gate-password@127.0.0.1:55432/app uv run ima migrate
+IMA_DATABASE_URL=postgresql+asyncpg://postgres:identity-gate-password@127.0.0.1:55432/app uv run uvicorn ima.main:app --reload --port 8000
+cd ..
+bun dev:front # 或：bun dev:admin
 ```
+
+`docker compose -f docker-compose.example.yml up --build` 会运行完整的部署示例（Postgres、API、worker、带 Caddy 的 web）。
 
 模型请指向内网 OpenAI 兼容网关。

@@ -3,9 +3,6 @@ import { describe, expect, test, vi } from 'vitest'
 import { nextTick, reactive } from 'vue'
 import WorkspaceConnectors from '../../src/pages/WorkspaceConnectors.vue'
 
-vi.mock('src/components/CreateConnectorDialog.vue', () => ({ default: { template: '<div />' } }))
-vi.mock('src/components/ConnectorCreatedDialog.vue', () => ({ default: { template: '<div />' } }))
-
 const workspaceState = reactive({ id: 'w1' as string | null })
 const principal = { id: 'p1', workspaceId: 'w1', folderRootId: null, displayName: 'Indexer', purpose: 'Nightly indexing', ownerUserId: 'u1', scopes: ['mcp:knowledge:read'], state: 'active', expiresAt: '2030-01-01T00:00:00Z', rateLimit: 10, concurrencyLimit: 2, cidrAllowlist: [] }
 const credential = { id: 'c1', principalId: 'p1', credentialId: 'key1', secretPrefix: 'mcpsc_', expiresAt: '2030-01-01T00:00:00Z', createdAt: '', revokedAt: null, lastUsedAt: null }
@@ -17,7 +14,6 @@ vi.mock('quasar', () => ({
 
 function response(url: string, role = 'workspace_admin') {
   if (url.endsWith('/oauth/grants')) return []
-  if (url.includes('/api/connectors')) return []
   if (url.endsWith('/workspaces/w1/service-principals')) return [principal]
   if (url.endsWith('/workspaces/w1/service-principals/p1')) return { ...principal, credentials: [credential] }
   if (url.endsWith('/workspaces/w1')) return { id: 'w1', name: 'Workspace', role, isActive: true, createdAt: '', updatedAt: '' }
@@ -32,7 +28,7 @@ describe('WorkspaceConnectors service access', () => {
     expect(wrapper.text()).toContain('Indexer')
     expect(wrapper.text()).toContain('Nightly indexing')
     expect(wrapper.text()).toContain('Create service principal')
-    expect(wrapper.text()).toContain('Legacy connectors')
+    expect(wrapper.text()).not.toContain('Legacy connectors')
     expect(wrapper.text()).not.toContain('ima_')
     expect(wrapper.text()).not.toContain('one-time-secret')
   })

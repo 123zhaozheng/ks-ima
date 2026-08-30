@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -17,12 +17,22 @@ export const PYTHON_PATHS = [
   '/api/v1/oauth/grants',
 ] as const
 
-export const BUN_PATHS = ['/api/mcp', '/api/legacy-check'] as const
-export const ZERO_PATHS = ['/zero-cache/replica'] as const
+// Retired legacy resources; the edge answers 410 Gone so consumers repoint.
+export const GONE_PATHS = [
+  '/api/mcp',
+  '/api/kb',
+  '/api/s3',
+  '/api/search',
+  '/api/v1/chat/completions',
+  '/api/connectors',
+] as const
+
+// Residual legacy API space with no backend; the edge answers 404.
+export const NOT_FOUND_PATHS = ['/api/legacy-check', '/api/nonexistent'] as const
+
 export const INTERNAL_PATH = '/api/v1/internal/session/introspect'
 
-type JsonObject = Record<string, unknown>
-type Marker = 'python' | 'bun' | 'zero' | 'none'
+type Marker = 'python' | 'none'
 
 export interface RouteEvidence {
   listener: 8080 | 8081
@@ -32,7 +42,7 @@ export interface RouteEvidence {
 }
 
 export interface PhaseEvidence {
-  phase: 'current' | 'cutover' | 'pre_sunset_rollback' | 'restored'
+  phase: 'terminal'
   routes: RouteEvidence[]
 }
 
@@ -113,105 +123,6 @@ function dockerHostUrl(server: MarkerServer): string {
   return `http://host.docker.internal:${server.server.port}`
 }
 
-function isObject(value: unknown): value is JsonObject {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-export function buildRollbackConfig(adapted: unknown): JsonObject {
-  assert(isObject(adapted), 'Adapted Caddy configuration is not an object')
-  const apps = adapted.apps
-  assert(isObject(apps), 'Adapted Caddy configuration has no apps object')
-  const http = apps.http
-  assert(isObject(http), 'Adapted Caddy configuration has no HTTP app')
-  const servers = http.servers
-  assert(isObject(servers), 'Adapted Caddy configuration has no servers')
-
-  const changed: string[] = []
-  for (const [name, value] of Object.entries(servers)) {
-    if (!isObject(value) || !Array.isArray(value.listen) || !Array.isArray(value.routes)) continue
-    const listeners = value.listen.filter((item): item is string => typeof item === 'string')
-    if (!listeners.some(listener => listener.endsWith(':8080') || listener.endsWith(':8081'))) {
-      continue
-    }
-    value.routes.unshift({
-      match: [{ path: ['/mcp'] }],
-      handle: [{ handler: 'static_response', status_code: 404 }],
-      terminal: true,
-    })
-    changed.push(name)
-  }
-  assert(changed.length === 2, `Expected two public Caddy servers, changed ${changed.length}`)
-  return adapted
-}
-
-export interface CutoverDials {
-  legacyDial: string
-  pythonDial: string
-}
-
-function withdrawLegacyDials(node: unknown, dials: CutoverDials): number {
-  if (Array.isArray(node)) {
-    return node.reduce((count, item) => count + withdrawLegacyDials(item, dials), 0)
-  }
-  if (!isObject(node)) return 0
-  let withdrawn = 0
-  if (node.handler === 'reverse_proxy' && Array.isArray(node.upstreams)) {
-    node.upstreams = node.upstreams.map((upstream: unknown) => {
-      if (!isObject(upstream)) return upstream
-      const dial = upstream.dial
-      if (typeof dial === 'string') {
-        if (dial !== dials.legacyDial) return upstream
-        withdrawn += 1
-        return { ...upstream, dial: dials.pythonDial }
-      }
-      if (!Array.isArray(dial)) return upstream
-      let touched = false
-      const rewritten = dial.map((entry: unknown) => {
-        if (entry !== dials.legacyDial) return entry
-        withdrawn += 1
-        touched = true
-        return dials.pythonDial
-      })
-      return touched ? { ...upstream, dial: rewritten } : upstream
-    })
-  }
-  for (const value of Object.values(node)) withdrawn += withdrawLegacyDials(value, dials)
-  return withdrawn
-}
-
-export function buildCutoverConfig(adapted: unknown, dials: CutoverDials): JsonObject {
-  assert(isObject(adapted), 'Adapted Caddy configuration is not an object')
-  const apps = adapted.apps
-  assert(isObject(apps), 'Adapted Caddy configuration has no apps object')
-  const http = apps.http
-  assert(isObject(http), 'Adapted Caddy configuration has no HTTP app')
-  const servers = http.servers
-  assert(isObject(servers), 'Adapted Caddy configuration has no servers')
-
-  const changed: string[] = []
-  for (const [name, value] of Object.entries(servers)) {
-    if (!isObject(value) || !Array.isArray(value.listen) || !Array.isArray(value.routes)) continue
-    const listeners = value.listen.filter((item): item is string => typeof item === 'string')
-    if (!listeners.some(listener => listener.endsWith(':8080') || listener.endsWith(':8081'))) {
-      continue
-    }
-    const withdrawn = withdrawLegacyDials(value.routes, dials)
-    assert(withdrawn > 0, `Server ${name} has no legacy upstream to withdraw`)
-    value.routes.unshift({
-      match: [{ path: ['/api/mcp'] }],
-      handle: [{ handler: 'static_response', status_code: 410 }],
-      terminal: true,
-    })
-    changed.push(name)
-  }
-  assert(changed.length === 2, `Expected two public Caddy servers, changed ${changed.length}`)
-  assert(
-    !JSON.stringify(adapted).includes(dials.legacyDial),
-    'A legacy upstream dial survived the cutover rewrite',
-  )
-  return adapted
-}
-
 export function resolveImageDigest(value: unknown): string {
   assert(Array.isArray(value), 'Pinned Caddy image has no repository digests')
   const digests = value.filter(
@@ -265,11 +176,7 @@ function totalHits(markers: MarkerServer[]): number {
   return markers.reduce((count, marker) => count + marker.hits.length, 0)
 }
 
-async function validateCurrent(
-  container: string,
-  phase: 'current' | 'restored',
-  markers: MarkerServer[],
-): Promise<PhaseEvidence> {
+async function validateTerminal(container: string, markers: MarkerServer[]): Promise<PhaseEvidence> {
   const ports = {
     8080: await mappedPort(container, 8080),
     8081: await mappedPort(container, 8081),
@@ -278,56 +185,21 @@ async function validateCurrent(
   const routes: RouteEvidence[] = []
   for (const listener of [8080, 8081] as const) {
     for (const path of PYTHON_PATHS) routes.push(await probe(ports[listener], listener, path, 200, 'python'))
-    for (const path of BUN_PATHS) routes.push(await probe(ports[listener], listener, path, 200, 'bun'))
-    for (const path of ZERO_PATHS) routes.push(await probe(ports[listener], listener, path, 200, 'zero'))
-    const hitsBeforeInternal = totalHits(markers)
-    routes.push(await probe(ports[listener], listener, INTERNAL_PATH, 404, 'none'))
-    assert(totalHits(markers) === hitsBeforeInternal, `${listener}${INTERNAL_PATH} reached an upstream`)
-  }
-  return { phase, routes }
-}
-
-async function validateRollback(container: string, markers: MarkerServer[]): Promise<PhaseEvidence> {
-  const ports = {
-    8080: await mappedPort(container, 8080),
-    8081: await mappedPort(container, 8081),
-  }
-  await Promise.all([waitForCaddy(ports[8080]), waitForCaddy(ports[8081])])
-  const routes: RouteEvidence[] = []
-  for (const listener of [8080, 8081] as const) {
-    const hitsBeforeMcp = totalHits(markers)
-    routes.push(await probe(ports[listener], listener, '/mcp', 404, 'none'))
-    assert(totalHits(markers) === hitsBeforeMcp, `${listener}/mcp reached an upstream`)
-    routes.push(await probe(ports[listener], listener, '/api/mcp', 200, 'bun'))
-    routes.push(await probe(ports[listener], listener, '/oauth/token', 200, 'python'))
-    routes.push(await probe(ports[listener], listener, '/zero-cache/replica', 200, 'zero'))
-    const hitsBeforeInternal = totalHits(markers)
-    routes.push(await probe(ports[listener], listener, INTERNAL_PATH, 404, 'none'))
-    assert(totalHits(markers) === hitsBeforeInternal, `${listener}${INTERNAL_PATH} reached an upstream`)
-  }
-  return { phase: 'pre_sunset_rollback', routes }
-}
-
-async function validateCutover(container: string, markers: MarkerServer[]): Promise<PhaseEvidence> {
-  const ports = {
-    8080: await mappedPort(container, 8080),
-    8081: await mappedPort(container, 8081),
-  }
-  await Promise.all([waitForCaddy(ports[8080]), waitForCaddy(ports[8081])])
-  const routes: RouteEvidence[] = []
-  for (const listener of [8080, 8081] as const) {
-    const hitsBeforeLegacy = totalHits(markers)
-    routes.push(await probe(ports[listener], listener, '/api/mcp', 410, 'none'))
-    assert(totalHits(markers) === hitsBeforeLegacy, `${listener}/api/mcp reached an upstream`)
-    for (const path of ['/api/legacy-check', ...PYTHON_PATHS]) {
-      routes.push(await probe(ports[listener], listener, path, 200, 'python'))
+    for (const path of GONE_PATHS) {
+      const hitsBefore = totalHits(markers)
+      routes.push(await probe(ports[listener], listener, path, 410, 'none'))
+      assert(totalHits(markers) === hitsBefore, `${listener}${path} reached an upstream`)
     }
-    routes.push(await probe(ports[listener], listener, '/zero-cache/replica', 200, 'zero'))
+    for (const path of NOT_FOUND_PATHS) {
+      const hitsBefore = totalHits(markers)
+      routes.push(await probe(ports[listener], listener, path, 404, 'none'))
+      assert(totalHits(markers) === hitsBefore, `${listener}${path} reached an upstream`)
+    }
     const hitsBeforeInternal = totalHits(markers)
     routes.push(await probe(ports[listener], listener, INTERNAL_PATH, 404, 'none'))
     assert(totalHits(markers) === hitsBeforeInternal, `${listener}${INTERNAL_PATH} reached an upstream`)
   }
-  return { phase: 'cutover', routes }
+  return { phase: 'terminal', routes }
 }
 
 async function startCaddy(
@@ -346,8 +218,6 @@ async function startCaddy(
     '--volume', `${configPath}:${configTarget}:ro`,
     '--volume', `${frontDir}:/srv/front:ro`, '--volume', `${adminDir}:/srv/admin:ro`,
     '--env', `PYTHON_API_URL=${dockerHostUrl(marker.python)}`,
-    '--env', `SERVER_URL=${dockerHostUrl(marker.bun)}`,
-    '--env', `ZERO_CACHE_URL=${dockerHostUrl(marker.zero)}`,
     CADDY_IMAGE, 'caddy', 'run', '--config', configTarget,
   ])
 }
@@ -356,36 +226,15 @@ async function removeContainer(container: string): Promise<void> {
   await command(['docker', 'rm', '--force', container], 15_000).catch(() => undefined)
 }
 
-async function adaptCaddyfile(
-  caddyfile: string,
-  adaptContainer: string,
-  markers: MarkerServer[],
-): Promise<JsonObject> {
-  const marker = Object.fromEntries(markers.map(item => [item.marker, item])) as Record<string, MarkerServer>
-  const { stdout } = await command([
-    'docker', 'run', '--rm', '--name', adaptContainer,
-    '--volume', `${caddyfile}:/etc/caddy/Caddyfile:ro`,
-    '--env', `PYTHON_API_URL=${dockerHostUrl(marker.python)}`,
-    '--env', `SERVER_URL=${dockerHostUrl(marker.bun)}`,
-    '--env', `ZERO_CACHE_URL=${dockerHostUrl(marker.zero)}`,
-    CADDY_IMAGE, 'caddy', 'adapt', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile',
-  ])
-  const adapted = JSON.parse(stdout)
-  assert(isObject(adapted), 'Adapted Caddy configuration is not an object')
-  return adapted
-}
-
 async function main(): Promise<void> {
   const root = resolve(import.meta.dir, '..')
   const caddyfile = join(root, 'Caddyfile')
   const temporary = await mkdtemp(join(tmpdir(), 'ima-caddy-routing-'))
   const frontDir = join(temporary, 'front')
   const adminDir = join(temporary, 'admin')
-  const cutoverPath = join(temporary, 'cutover.json')
-  const rollbackPath = join(temporary, 'rollback.json')
   const prefix = `ima-caddy-drill-${randomUUID()}`
   const containers = new Set<string>()
-  const markers = [markerServer('python'), markerServer('bun'), markerServer('zero')]
+  const markers = [markerServer('python')]
   let cleaning = false
 
   const cleanup = async () => {
@@ -420,52 +269,17 @@ async function main(): Promise<void> {
     const imageDigest = resolveImageDigest(JSON.parse(digestOutput))
     const caddyfileSha256 = createHash('sha256').update(await readFile(caddyfile)).digest('hex')
 
-    const currentContainer = `${prefix}-current`
-    containers.add(currentContainer)
-    await startCaddy(currentContainer, caddyfile, '/etc/caddy/Caddyfile', frontDir, adminDir, markers)
-    const current = await validateCurrent(currentContainer, 'current', markers)
-    await removeContainer(currentContainer)
-    containers.delete(currentContainer)
-
-    const adaptContainer = `${prefix}-adapt`
-    containers.add(adaptContainer)
-    const marker = Object.fromEntries(markers.map(item => [item.marker, item])) as Record<string, MarkerServer>
-    const dialOf = (server: MarkerServer) => dockerHostUrl(server).replace(/^https?:\/\//, '')
-    const adapted = await adaptCaddyfile(caddyfile, adaptContainer, markers)
-    containers.delete(adaptContainer)
-    const cutover = buildCutoverConfig(structuredClone(adapted), {
-      legacyDial: dialOf(marker.bun),
-      pythonDial: dialOf(marker.python),
-    })
-    const rollback = buildRollbackConfig(structuredClone(adapted))
-    await writeFile(cutoverPath, `${JSON.stringify(cutover, null, 2)}\n`)
-    await writeFile(rollbackPath, `${JSON.stringify(rollback, null, 2)}\n`)
-
-    const cutoverContainer = `${prefix}-cutover`
-    containers.add(cutoverContainer)
-    await startCaddy(cutoverContainer, cutoverPath, '/etc/caddy/cutover.json', frontDir, adminDir, markers)
-    const cutoverPhase = await validateCutover(cutoverContainer, markers)
-    await removeContainer(cutoverContainer)
-    containers.delete(cutoverContainer)
-
-    const rollbackContainer = `${prefix}-rollback`
-    containers.add(rollbackContainer)
-    await startCaddy(rollbackContainer, rollbackPath, '/etc/caddy/rollback.json', frontDir, adminDir, markers)
-    const preSunsetRollback = await validateRollback(rollbackContainer, markers)
-    await removeContainer(rollbackContainer)
-    containers.delete(rollbackContainer)
-
-    const restoredContainer = `${prefix}-restored`
-    containers.add(restoredContainer)
-    await startCaddy(restoredContainer, caddyfile, '/etc/caddy/Caddyfile', frontDir, adminDir, markers)
-    const restored = await validateCurrent(restoredContainer, 'restored', markers)
+    const terminalContainer = `${prefix}-terminal`
+    containers.add(terminalContainer)
+    await startCaddy(terminalContainer, caddyfile, '/etc/caddy/Caddyfile', frontDir, adminDir, markers)
+    const terminal = await validateTerminal(terminalContainer, markers)
 
     console.log(JSON.stringify({
       ok: true,
       image: CADDY_IMAGE,
       imageDigest,
       caddyfileSha256,
-      phases: [current, cutoverPhase, preSunsetRollback, restored],
+      phases: [terminal],
     }, null, 2))
   } finally {
     process.off('SIGINT', onSignal)

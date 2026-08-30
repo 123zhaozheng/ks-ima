@@ -1,8 +1,7 @@
-"""Maintenance write-freeze for the legacy cutover window (G5).
+"""Maintenance write-freeze for operational windows.
 
 Transport-neutral service: the API layer maps ``MaintenanceFreezeError`` to a
-RFC 9457 problem response, while the authorization bridge maps the same state
-to a fail-closed decision. Migration-tagged writers (the ``ima`` CLI) never
+RFC 9457 problem response. Migration-tagged writers (the ``ima`` CLI) never
 call ``assert_writes_allowed`` and keep working during the freeze.
 """
 

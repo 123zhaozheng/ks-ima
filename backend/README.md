@@ -1,7 +1,7 @@
 # IMA Python Foundation
 
-The foundation runs beside the retained Bun/Zero runtime. It owns only
-`/health/*` and `/api/v1/system/*` in this phase.
+IMA is the only backend: the legacy Bun/Zero runtime was removed with the
+legacy deletion release, and Python owns every live HTTP prefix.
 
 ## Development
 
@@ -46,12 +46,13 @@ idempotent enqueue, controlled retry, persisted attempt/status state, heartbeat,
 and queued work surviving the API/Worker process boundary. The integration test
 also starts a normal `diagnostic` worker beside the
 `diagnostic-integration` worker and asserts that queue isolation holds. The
-Compose gate requires `IMA_TEST_DATABASE_URL` and exactly two Postgres tests;
+Compose gate requires `IMA_TEST_DATABASE_URL` and exactly 38 Postgres tests;
 missing database configuration cannot silently turn the gate into skips.
 
-## Coexistence
+## Deployment routing
 
 `docker compose -f docker-compose.example.yml up --build` runs the explicit
-`ima-migrate` job before API/worker readiness. Caddy sends only exact Python
-foundation paths to `PYTHON_API_URL`; `/api/v1/chat/completions`, other Bun
-routes, and `/zero-cache/*` retain their existing upstreams.
+`ima-migrate` job before API/worker readiness. Caddy routes every live
+prefix to `PYTHON_API_URL`; `/api/v1/internal/*` answers a public 404, and
+the retired legacy `/api/*` space answers 410/404 at the edge. The routing
+matrix is pinned by `bun run test:caddy-routing`.

@@ -18,7 +18,7 @@
         v-for="item in items"
         :key="item.id"
         clickable
-        :to="item.kind === 'folder' ? `/folder/${item.id}` : `/knowledge/${item.id}`"
+        :to="item.kind === 'folder' ? { path: '/', query: { folderId: item.id } } : `/knowledge/${item.id}`"
         :aria-label="item.title"
       >
         <q-item-section avatar>

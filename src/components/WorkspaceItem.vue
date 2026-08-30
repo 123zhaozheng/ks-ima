@@ -18,11 +18,11 @@
 </template>
 
 <script setup lang="ts">
-import type { Row } from '@rocicorp/zero'
+import type { Avatar } from 'src/utils/validators'
 import { workspaceAvatar } from 'src/utils/defaults'
 import AAvatar from './AAvatar.vue'
 
 defineProps<{
-  workspace: Row['workspace']
+  workspace: { name: string, avatar?: Avatar | null }
 }>()
 </script>

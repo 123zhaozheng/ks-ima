@@ -84,19 +84,6 @@ class ModelGovernanceService:
             custom_ca_dir=self.settings.model_custom_ca_dir,
         )
 
-    def _deployment_policy(self) -> EgressPolicy:
-        return EgressPolicy(
-            allowed_hosts=self.settings.model_allowed_hosts,
-            allowed_cidrs=self.settings.model_allowed_cidrs,
-            allow_insecure_private=self.settings.model_allow_insecure_private,
-            max_response_bytes=self.settings.model_max_response_bytes,
-            connect_timeout_seconds=self.settings.model_connect_timeout_seconds,
-            read_timeout_seconds=self.settings.model_read_timeout_seconds,
-            write_timeout_seconds=self.settings.model_write_timeout_seconds,
-            pool_timeout_seconds=self.settings.model_pool_timeout_seconds,
-            custom_ca_dir=self.settings.model_custom_ca_dir,
-        )
-
     def _client_for_gateway(self, row: Any) -> GuardedGatewayClient:
         return GuardedGatewayClient(self._policy_for_gateway(row))
 
@@ -1740,32 +1727,6 @@ class ModelGovernanceService:
             )
         return capabilities
 
-    async def resolve(
-        self, workspace_id: str, workflow: Workflow, operation: str
-    ) -> dict[str, Any]:
-        row = await self._execution_target(workspace_id, workflow, operation)
-        if not row:
-            return {"source": "denied", "workflow": workflow.value, "reason": "NO_ASSIGNMENT"}
-        if row["reason"]:
-            return {
-                "source": "denied",
-                "workflow": workflow.value,
-                "profileId": row["profile_id"],
-                "profileVersion": row["profile_version"],
-                "reason": row["reason"],
-            }
-        # The resolver is intentionally metadata-only. Model URL, credential,
-        # profile config, and remote name stay inside Python execution.
-        return {
-            "source": "target",
-            "workflow": workflow.value,
-            "profileId": row["profile_id"],
-            "profileVersion": row["profile_version"],
-            "bindingId": hashlib.sha256(
-                f"{row['profile_id']}:{row['profile_version']}:{row['model_id']}".encode()
-            ).hexdigest()[:24],
-        }
-
     async def _execution_target(
         self,
         workspace_id: str,
@@ -1817,8 +1778,7 @@ class ModelGovernanceService:
             # A target assignment is authoritative even when its typed config
             # references a missing model (or a partially migrated row).  The
             # inner joins above intentionally prevent execution, but must not
-            # turn that case into NO_ASSIGNMENT, otherwise Bun can fall through
-            # to the legacy adapter and bypass the target denial.
+            # turn that case into NO_ASSIGNMENT, which would hide the denial.
             async with self.engine.connect() as conn:
                 assignment = (
                     (
@@ -1912,143 +1872,6 @@ class ModelGovernanceService:
             api_key=row["api_key"],
             custom_ca_ref=row["custom_ca_ref"],
             insecure_private=row["insecure_private"],
-        )
-
-    async def _legacy_model(
-        self, workspace_id: str, workflow: Workflow, operation: str
-    ) -> tuple[dict[str, Any], GuardedGatewayClient] | None:
-        """Read one legacy binding during rollback without exposing its secret.
-
-        This adapter is deliberately read-only and only called after the target
-        resolver has returned ``NO_ASSIGNMENT``.  The same guarded transport and
-        deployment allowlist are used for legacy rows as for target gateways.
-        """
-        model_expression = {
-            Workflow.GROUNDED_ASK: "e.conf->>'chatModelId'",
-            Workflow.TITLE_GENERATION: 'COALESCE(e.conf->>\'chatTitleModelId\', gs."defaultChatTitleModel", gs."defaultChatModel")',
-            Workflow.SUMMARIZATION: "e.conf->>'chatModelId'",
-            Workflow.EMBEDDING: "COALESCE(ws.perfs->>'embeddingModelId', gs.\"embeddingModelId\")",
-            Workflow.RERANKING: "COALESCE(ws.perfs->>'rerankModelId', gs.\"rerankModelId\")",
-        }[workflow]
-        workspace_join = (
-            "LEFT JOIN public.workspace ws ON ws.id=:workspace"
-            if operation in {"embedding", "rerank"}
-            else ""
-        )
-        query = text(
-            f"""SELECT m.id,m.name,m.settings AS model_settings,p.settings AS provider_settings
-            FROM public.model m
-            JOIN public.provider p ON p.id=m."entityId"
-            LEFT JOIN public.entity e ON e.id=:workspace
-            LEFT JOIN public."globalSettings" gs ON true
-            {workspace_join}
-            WHERE m.id=CAST(({model_expression}) AS text)
-            LIMIT 1"""
-        )
-        try:
-            async with self.engine.connect() as conn:
-                row = (await conn.execute(query, {"workspace": workspace_id})).mappings().first()
-        except Exception:
-            # Legacy tables can be absent after their owner has been removed.
-            return None
-        if (
-            not row
-            or not isinstance(row["model_settings"], dict)
-            or not isinstance(row["provider_settings"], dict)
-        ):
-            return None
-        settings = row["provider_settings"]
-        base_url = settings.get("baseURL") or settings.get("baseUrl") or settings.get("url")
-        if not isinstance(base_url, str) or not base_url:
-            return None
-        api_key = settings.get("apiKey")
-        if api_key is not None and not isinstance(api_key, str):
-            return None
-        policy = self._deployment_policy()
-        try:
-            normalized = await validate_egress(
-                base_url, policy, insecure_private=base_url.lower().startswith("http://")
-            )
-        except GatewayError:
-            return None
-        return (
-            {
-                "normalized_base_url": normalized,
-                "remote_name": row["name"],
-                "api_key": api_key,
-            },
-            GuardedGatewayClient(policy),
-        )
-
-    async def managed_legacy_chat(
-        self,
-        workspace_id: str,
-        workflow: Workflow,
-        messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]] | None = None,
-        *,
-        stream: bool = False,
-    ) -> dict[str, object] | AsyncIterator[bytes]:
-        if await self._execution_target(workspace_id, workflow, "chat") is not None:
-            raise ModelGovernanceError(503, "TARGET_UNAVAILABLE", "Managed target is authoritative")
-        legacy = await self._legacy_model(workspace_id, workflow, "chat")
-        if not legacy:
-            raise ModelGovernanceError(409, "NO_ASSIGNMENT", "No legacy model assignment exists")
-        row, client = legacy
-        payload: dict[str, object] = {"messages": messages, "max_tokens": 2048}
-        if tools:
-            payload["tools"] = tools
-        if stream:
-            return client.stream_chat_completion(
-                row["normalized_base_url"],
-                row["remote_name"],
-                payload,
-                api_key=row["api_key"],
-                insecure_private=row["normalized_base_url"].startswith("http://"),
-            )
-        return await client.chat_completion(
-            row["normalized_base_url"],
-            row["remote_name"],
-            payload,
-            api_key=row["api_key"],
-            insecure_private=row["normalized_base_url"].startswith("http://"),
-        )
-
-    async def managed_legacy_embeddings(
-        self, workspace_id: str, inputs: list[str]
-    ) -> tuple[tuple[float, ...], ...]:
-        if await self._execution_target(workspace_id, Workflow.EMBEDDING, "embedding") is not None:
-            raise ModelGovernanceError(503, "TARGET_UNAVAILABLE", "Managed target is authoritative")
-        legacy = await self._legacy_model(workspace_id, Workflow.EMBEDDING, "embedding")
-        if not legacy:
-            raise ModelGovernanceError(
-                409, "NO_ASSIGNMENT", "No legacy embedding assignment exists"
-            )
-        row, client = legacy
-        return await client.embeddings(
-            row["normalized_base_url"],
-            row["remote_name"],
-            inputs,
-            api_key=row["api_key"],
-            insecure_private=row["normalized_base_url"].startswith("http://"),
-        )
-
-    async def managed_legacy_rerank(
-        self, workspace_id: str, query: str, documents: list[str]
-    ) -> tuple[tuple[int, float], ...]:
-        if await self._execution_target(workspace_id, Workflow.RERANKING, "rerank") is not None:
-            raise ModelGovernanceError(503, "TARGET_UNAVAILABLE", "Managed target is authoritative")
-        legacy = await self._legacy_model(workspace_id, Workflow.RERANKING, "rerank")
-        if not legacy:
-            raise ModelGovernanceError(409, "NO_ASSIGNMENT", "No legacy reranker assignment exists")
-        row, client = legacy
-        return await client.rerank(
-            row["normalized_base_url"],
-            row["remote_name"],
-            query,
-            documents,
-            api_key=row["api_key"],
-            insecure_private=row["normalized_base_url"].startswith("http://"),
         )
 
     async def managed_chat_stream(

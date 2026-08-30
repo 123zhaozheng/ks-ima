@@ -44,7 +44,9 @@ codes. They do not contain names, paths, display labels, invitation tokens, or
 content. The temporary Bun/Zero compatibility reader is target-derived and
 fail-closed; its deletion owner is `knowledge-tree-vue-api`.
 
-The retained compatibility callers are deliberately enumerated here:
+The retained compatibility callers are deliberately enumerated here (historical:
+all of them were deleted with the Bun/Zero subtree in the legacy deletion
+release; this list is closure evidence, not live architecture):
 
 - `src-server/utils/permissions.ts`: Bun document/search/RAG and connector/MCP
   reads that still query `public.entity`; it calls `/internal/authorization`

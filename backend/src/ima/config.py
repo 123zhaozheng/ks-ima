@@ -40,9 +40,6 @@ class Settings(BaseSettings):
     session_pepper: SecretStr = SecretStr("development-session-pepper-change-me")
     token_pepper: SecretStr = SecretStr("development-token-pepper-change-me")
     totp_encryption_key: SecretStr = SecretStr("development-totp-key-change-me-32bytes!")
-    bridge_token: SecretStr = SecretStr("development-bridge-token-change-me")
-    python_api_internal_url: str = "http://api:8000"
-    bridge_timeout_ms: int = 1500
     session_idle_seconds: int = 86400
     session_absolute_seconds: int = 2592000
     recent_auth_seconds: int = 900
@@ -311,7 +308,6 @@ class Settings(BaseSettings):
                 "session_pepper": self.session_pepper,
                 "token_pepper": self.token_pepper,
                 "totp_encryption_key": self.totp_encryption_key,
-                "bridge_token": self.bridge_token,
             }.items():
                 if "change-me" in value.get_secret_value() or len(value.get_secret_value()) < 32:
                     raise ValueError(f"production requires a high-entropy {key}")

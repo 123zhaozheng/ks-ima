@@ -11,7 +11,6 @@ export default {
   // fileRegExp: /\.[jt]s$/,
   input: [
     'src/**/*.{js,ts,vue}',
-    'src-shared/**/*.{js,ts}',
   ],
   output: {
     path: join(__dirname, './i18n/'),

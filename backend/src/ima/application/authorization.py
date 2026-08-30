@@ -2481,26 +2481,6 @@ class WorkspaceService:
                     "WORKSPACE_CONTENT_DEPENDENCY",
                     "Workspace still has folder content dependencies",
                 )
-            legacy_member = await conn.scalar(text("SELECT to_regclass('public.member')"))
-            if legacy_member and await conn.scalar(
-                text('SELECT EXISTS(SELECT 1 FROM public.member WHERE "workspaceId"=:id)'),
-                {"id": workspace_id},
-            ):
-                raise WorkspaceError(
-                    409,
-                    "WORKSPACE_LEGACY_DEPENDENCY",
-                    "Workspace still has legacy membership dependencies",
-                )
-            legacy_entity = await conn.scalar(text("SELECT to_regclass('public.entity')"))
-            if legacy_entity and await conn.scalar(
-                text('SELECT EXISTS(SELECT 1 FROM public.entity WHERE "rootId"=:id AND id<>:id)'),
-                {"id": workspace_id},
-            ):
-                raise WorkspaceError(
-                    409,
-                    "WORKSPACE_LEGACY_DEPENDENCY",
-                    "Workspace still has legacy content dependencies",
-                )
             await self._audit(
                 conn,
                 actor_id,

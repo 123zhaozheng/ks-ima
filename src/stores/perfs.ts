@@ -4,11 +4,9 @@ import { computed, watchEffect } from 'vue'
 import { localReactive } from 'src/composables/local-reactive'
 import type { ShortcutKey, Writable } from 'src/utils/types'
 import { Dark } from 'quasar'
-import { mutators } from 'app/src-shared/mutators'
 import { useUserDataStore } from './user-data'
 import { useWorkspaceStore } from './workspace'
 import { DEFAULT_HUE } from 'src/utils/config'
-import { mutate } from '../utils/zero-session'
 
 const StorageKey = 'perfs'
 
@@ -23,8 +21,6 @@ export const DefaultPerfs = {
   expandReasoningContent: true,
   codePasteOptimize: false,
   sendMessageKey: { key: 'Enter', withCtrl: true } as ShortcutKey,
-  navigationPanelShortcut: { key: 'KeyP', withCtrl: true } as ShortcutKey,
-  searchWorkspaceKey: null as ShortcutKey,
   regenerateCurrKey: { key: 'KeyR', withCtrl: true } as ShortcutKey,
   editCurrKey: { key: 'KeyE', withCtrl: true } as ShortcutKey,
   scrollUpKey: { key: 'ArrowUp', withCtrl: true } as ShortcutKey,
@@ -44,7 +40,9 @@ export const usePerfsStore = defineStore('perfsStore', () => {
   const userDataStore = useUserDataStore()
   const workspaceStore = useWorkspaceStore()
   const userPerfs = computed(() => userDataStore.perfs ?? {})
-  const workspacePerfs = computed(() => workspaceStore.workspace?.perfs ?? {})
+  const workspacePerfs = computed(() =>
+    workspaceStore.id ? userDataStore.workspacePerfs[workspaceStore.id] ?? {} : {},
+  )
   const localPerfs = localReactive<Partial<Writable<Perfs>>>(StorageKey, {})
   const { perfs } = usePerfsState(computed(() => [userPerfs.value, workspacePerfs.value, localPerfs]), DefaultPerfs)
 
@@ -52,22 +50,16 @@ export const usePerfsStore = defineStore('perfsStore', () => {
     Dark.set(perfs.value.darkMode)
   })
 
-  async function update({ updates, deletes, scope }: {
+  function update({ updates, deletes, scope }: {
     updates?: Partial<Perfs>
     deletes?: (keyof Perfs)[]
     scope: 'user' | 'workspace' | 'local'
   }) {
     if (scope === 'user') {
-      await mutate(mutators.updateUserPerfs({
-        updates,
-        deletes,
-      })).client
+      userDataStore.updatePerfs(updates, deletes)
     } else if (scope === 'workspace') {
-      await mutate(mutators.updateWorkspacePerfs({
-        workspaceId: workspaceStore.id!,
-        updates,
-        deletes,
-      })).client
+      if (!workspaceStore.id) return
+      userDataStore.updateWorkspacePerfs(workspaceStore.id, updates, deletes)
     } else {
       Object.assign(localPerfs, updates)
       deletes?.forEach(key => {

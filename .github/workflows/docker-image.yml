@@ -23,17 +23,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push server
-        uses: docker/build-push-action@v6.10.0
-        with:
-          context: .
-          file: ./Dockerfile.server
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/nyaai-server:${{ github.event.release.tag_name }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/nyaai-server:latest
-
       - name: Build and push web
         uses: docker/build-push-action@v6.10.0
         with:
@@ -44,3 +33,27 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/nyaai-web:${{ github.event.release.tag_name }}
             ${{ secrets.DOCKERHUB_USERNAME }}/nyaai-web:latest
+
+      - name: Build and push api
+        uses: docker/build-push-action@v6.10.0
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          target: api
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/nyaai-api:${{ github.event.release.tag_name }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/nyaai-api:latest
+
+      - name: Build and push worker
+        uses: docker/build-push-action@v6.10.0
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          target: worker
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/nyaai-worker:${{ github.event.release.tag_name }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/nyaai-worker:latest

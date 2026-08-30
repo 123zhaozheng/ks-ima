@@ -292,3 +292,125 @@ Delivered the cutover task: G1 checksum normalization, reconciliation/delta repo
 ### Status
 
 [OK] **Completed**
+
+
+## Session 11: Legacy deletion B1: frontend rewiring verified green
+
+**Date**: 2026-08-30
+**Task**: Legacy deletion B1: frontend rewiring verified green
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Executed and verified phase B1 (frontend rewiring) of legacy-deletion-release: shell stores, login guard, invitation flow, root redirect, drawer, admin empty page, and WorkspaceConnectors now run on identity-client + TanStack Query (Python API); legacy modules left in place but unused by the shell.
+
+### Main Changes
+
+- Rewired workspace/user-data/perfs/readonly stores and require-login/ask-knowledge composables off zero-session onto identity session + vue-query
+- InvitationLayout accepts via identityClient.acceptWorkspaceInvitation (contract-verified against Python authorization service)
+- Stripped legacy connector section from WorkspaceConnectors; retired CreateConnectorDialog legacy mode; mcp-config + test point at canonical /mcp
+- Fixed ambiguous model-governance e2e selector (getByRole tab) that failed mobile-chromium strict mode
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] bun run lint: 0 errors; bun test 30/30; bun run test:unit 32/32; build:front and build:admin succeeded
+- [OK] bun run test:e2e (IMA_E2E_POSTGRES_PORT=55433): 42 passed, exit 0
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- B2: delete legacy frontend subtree; rework /folder/:id landing (switchWorkspace, RedirectToFolder, FolderTree) when /:type routes are removed
+- B2: remove orphaned CreateConnectorDialog/ConnectorCreatedDialog/DeleteWorkspaceDialog/CreateInvitationDialog and AppFront SearchEntityDialog/NavigationDialog mounts
+
+## Session 12: Legacy deletion B2 + B3: frontend subtree and Bun server deleted
+
+**Date**: 2026-08-30
+**Task**: Legacy deletion B2 + B3: frontend subtree and Bun server deleted
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Completed phase B2 (verified the previously-staged legacy frontend subtree deletion is clean and the route rework is in place) and executed phase B3 (Bun server and tooling deletion plus dependency pruning) of legacy-deletion-release. Zero/src-shared/hc/ZERO_CACHE_URL residue is gone from src/, and the whole-repo vue-tsc check now passes via the build-time checker.
+
+### Main Changes
+
+- Verified B2: /chat/:id redirects to /; switchWorkspace lands on / (folder landing rework); zero-session/src-shared/hc/ZERO_CACHE_URL absent from src/; quasar dev proxies point /api at Python
+- B3 deletions: src-server/ (39 files), drizzle/ (8 migration dirs), drizzle.config.ts, drizzle-zero.config.ts, Dockerfile.server, dev-db/, scripts/{mcp-handshake,mcp-live,permission-smoke,dev-pg}.ts, stray Caddyfile;C/
+- package.json: removed legacy scripts (dev:server, build:server, generate:zero, test:permissions, test:mcp, test:mcp-live, dev:pg, dev:db-up/down/rm) and ~27 unused deps (zero, drizzle-*, hono, ai/ai-sdk, @modelcontextprotocol/sdk, nodemailer, tokenx, ky, idb, liquidjs, hash-wasm, fflate, zod, postgres, croner, aws4fetch, embedded-postgres, drizzle-kit, @types/pg, @types/nodemailer); regenerated bun.lock (-970 lines)
+
+### Git Commits
+
+(No commits - deletions staged/unstaged in working tree; commit deferred to a later batch)
+
+### Testing
+
+- [OK] bun run lint: 0 errors (425 warnings, all stylistic)
+- [OK] bun test: 13 passed / 0 failed
+- [OK] bun run test:unit: 32 passed (12 files)
+- [OK] bun run build:front and build:admin: succeeded (vue-tsc whole-repo check clean)
+- [OK] bun run test:e2e (IMA_E2E_POSTGRES_PORT=55433): 42 passed, exit 0
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- B4: rewrite Caddyfile to terminal form; repin scripts/caddy-routing-drill.ts to the post-deletion matrix; update compose example/.env.example/README; fix GitHub workflows (drop nyaai-server build, add backend image build)
+- B4: retire remaining ZERO_CACHE_URL/zero-cache references in Caddyfile, compose example, .env.example, README
+- B5: Python legacy retirement (internal bridges, legacy model adapters, migrate-legacy-* CLI + tests, coexistence contract tests) — note backend/tests/contract/test_knowledge_coexistence.py still pins src-server files and must be re-scoped there
+
+## Session 13: Legacy deletion B4: terminal routing, deployment artifacts, CI
+
+**Date**: 2026-08-30
+**Task**: Legacy deletion B4: terminal Caddy routing, deployment artifacts, CI
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Executed phase B4 of legacy-deletion-release. The Caddyfile is now the terminal form (all live prefixes → Python, `/api/v1/internal/*` 404, retired legacy prefixes 410, residual `/api/*` 404), the routing drill pins only the terminal matrix, and compose/.env/README/workflows are free of server/zero-cache residue.
+
+### Main Changes
+
+- Caddyfile (both listeners): kept all `@ima_*` exact matchers → `PYTHON_API_URL`; kept internal-404; added `@api_gone` 410 for `/api/{mcp,kb,s3,search,connectors}` + `/api/v1/chat/*`; `@api path /api/*` now answers 404 locally; dropped `SERVER_URL` proxy, `@forbidden` 403 blocks, `/zero-cache*` blocks, and the `ZERO_CACHE_URL` env usage
+- scripts/caddy-routing-drill.ts: single `terminal` phase; dropped buildCutoverConfig/buildRollbackConfig derivation, bun/zero markers, and SERVER_URL/ZERO_CACHE_URL container env; kept CADDY_IMAGE pin, imageDigest, caddyfileSha256, fail-closed no-upstream-hit assertions, and the `{ok, image, imageDigest, caddyfileSha256, phases}` evidence shape
+- scripts/caddy-routing-drill.test.ts: repinned to GONE_PATHS/NOT_FOUND_PATHS/INTERNAL_PATH constants + digest selection
+- docker-compose.example.yml: removed `server` and `zero-cache` services, `zero-cache-data` volume, `wal_level=logical`, `CREATE DATABASE zero`, and web's SERVER_URL/ZERO_CACHE_URL/bridge env (web now only carries PYTHON_API_URL)
+- .env.example: retired SITE_NAME/FRONT_URL/ADMIN_URL/DATABASE_URL/SERVER_URL/ZERO_*/S3_*; documented IMA_* keys used by compose; kept PYTHON_API_URL (quasar dev proxy)
+- README.md + README.zh-CN.md: removed coexistence `/api/mcp` bearer block and bun dev:server/db-up/zero-cache-dev steps; documented Python-only dev flow (identity-compose Postgres + uvicorn, quasar dev proxy)
+- .github/workflows/docker-image{,-staging}.yml: dropped Dockerfile.server/nyaai-server build; added Dockerfile.backend builds published as nyaai-api (target api) and nyaai-worker (target worker) beside nyaai-web
+- backend/README.md: replaced the Coexistence section with terminal Deployment routing description
+
+### Git Commits
+
+(No commits — changes left in working tree per workflow)
+
+### Testing
+
+- [OK] bun run test:caddy-routing: exit 0, `"ok": true`, single `terminal` phase with 36 route evidences (live → python 200; gone → 410; residual/internal → 404; zero upstream hits), imageDigest `caddy@sha256:4c6e...`, caddyfileSha256 `15cb5a...`
+- [OK] bun test: 9 passed / 0 failed (drill contract repinned)
+- [OK] bun run lint: 0 errors (425 pre-existing stylistic warnings)
+- [OK] docker compose -f docker-compose.example.yml config: parses (with IMA_BRIDGE_TOKEN/IMA_MODEL_* set); no zero/server/wal_level/SERVER_URL in resolved output
+- [OK] Residue grep (tracked files, excl. .trellis): zero-cache, ZERO_*, SERVER_URL, Dockerfile.server, nyaai-server, wal_level → no matches; `/api/mcp` only in docs/ runbooks + historical DESIGN.md
+- [OK] Surviving Python contract assertions (test_coexistence Caddyfile/compose checks, test_search_coexistence Caddy checks) verified against new artifacts — all pass
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- B5: re-scope backend/tests/contract/test_coexistence.py (drill buildCutoverConfig/buildRollbackConfig/'pre_sunset_rollback' tokens and README `"url": ".../api/mcp"` assertion now fail by design) and backend/tests/integration/test_postgres_cutover.py drill-token block (~lines 760-890)
+- B5: test_search_coexistence.py still pins src-server/kb/retrieve.ts and src/views/ChatView.vue (absent since B2)
+- B5: retire IMA_BRIDGE_TOKEN/IMA_BRIDGE_TIMEOUT_MS from compose/.env.example together with the bridge-token settings; refresh backend/README.md opening paragraph (still says "owns only /health/* and /api/v1/system/* in this phase")
+- Local untracked state to clean on the dev machine: gitignored `.env` (legacy keys — regenerate from .env.example) and `.dev-pg/` data dir
+- Final: runbook sunset-closure annotations + full gate matrix (implement.md steps 18-19)
+
+

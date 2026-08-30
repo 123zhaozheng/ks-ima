@@ -41,7 +41,6 @@ def integration_settings() -> Settings:
         session_pepper="oauth-integration-session",
         token_pepper="oauth-integration-token",
         totp_encryption_key="oauth-integration-key",
-        bridge_token="oauth-integration-bridge",
         smtp_host=None,
         smtp_from=None,
     )

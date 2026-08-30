@@ -31,7 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Avatar } from 'app/src-shared/utils/validators'
+import type { Avatar } from 'src/utils/validators'
 import AAvatar from './AAvatar.vue'
 
 defineProps<{

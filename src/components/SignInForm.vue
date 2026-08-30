@@ -16,7 +16,6 @@
         filled
         class="mt-4"
       />
-      <policy-links class="mt-4" />
       <q-btn
         :label="t('Sign In')"
         :loading
@@ -60,7 +59,6 @@ import { reactive, ref, watch } from 'vue'
 import ForgotPasswordDialog from './ForgotPasswordDialog.vue'
 import VerifyTotpDialog from './VerifyTotpDialog.vue'
 import { useRoute, useRouter } from 'vue-router'
-import PolicyLinks from './PolicyLinks.vue'
 
 const input = reactive({
   email: '',

@@ -184,30 +184,7 @@ def test_parser_dispatches_registration_and_preserves_other_commands(
     monkeypatch.setattr(cli, "_run_migrations", lambda: invoked.append("migrate"))
     monkeypatch.setattr(cli, "_bootstrap_admin", lambda: invoked.append("bootstrap-admin"))
     monkeypatch.setattr(
-        cli, "_legacy_identity_report", lambda action: invoked.append(f"identity:{action}")
-    )
-    monkeypatch.setattr(
-        cli,
-        "_legacy_authorization_report",
-        lambda action: invoked.append(f"authorization:{action}"),
-    )
-    monkeypatch.setattr(
         cli, "_rotate_model_secrets", lambda action: invoked.append(f"rotate:{action}")
-    )
-    monkeypatch.setattr(
-        cli,
-        "_legacy_model_governance_report",
-        lambda action, mapping: invoked.append(f"model:{action}:{mapping}"),
-    )
-    monkeypatch.setattr(
-        cli, "_legacy_knowledge_report", lambda action: invoked.append(f"knowledge:{action}")
-    )
-    monkeypatch.setattr(
-        cli,
-        "_legacy_mcp_inventory",
-        lambda action, mapping, operator: invoked.append(
-            f"inventory:{action}:{mapping}:{operator}"
-        ),
     )
     commands = [
         (["worker"], "worker"),
@@ -215,12 +192,7 @@ def test_parser_dispatches_registration_and_preserves_other_commands(
         (["check-worker"], "check-worker"),
         (["migrate"], "migrate"),
         (["bootstrap-admin"], "bootstrap-admin"),
-        (["migrate-legacy-identity", "apply"], "identity:apply"),
-        (["migrate-legacy-authorization", "verify"], "authorization:verify"),
-        (["rotate-model-secrets", "report"], "rotate:report"),
-        (["migrate-legacy-model-governance", "plan"], "model:plan:None"),
-        (["migrate-legacy-knowledge", "apply"], "knowledge:apply"),
-        (["inventory-legacy-mcp", "report"], "inventory:report:None:None"),
+        (["rotate-model-secrets", "verify"], "rotate:verify"),
     ]
     for arguments, expected in commands:
         monkeypatch.setattr(sys, "argv", ["ima", *arguments])

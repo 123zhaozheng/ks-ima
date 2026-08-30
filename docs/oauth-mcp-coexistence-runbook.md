@@ -1,5 +1,26 @@
 # OAuth MCP Coexistence, Sunset, and Rollback
 
+## Sunset Closure
+
+The legacy deletion release is complete (2026-08-29). Everything below this
+section is retained as historical evidence of the coexistence window; it no
+longer describes a reachable state:
+
+- The canonical Python `/mcp` is the only protected resource and token
+  audience. `/api/mcp` (and every other retired legacy resource) answers
+  `410 Gone` at the edge; residual `/api/*` answers `404`.
+- The `inventory-legacy-mcp` commands and the Bun `/api/mcp` handler were
+  removed with the legacy server; the commands quoted below cannot be re-run
+  from current releases. The additive `ima.mcp_*` schema and audit rows are
+  retained.
+- `bun run test:caddy-routing` now pins only the terminal matrix (canonical
+  `/mcp` and OAuth prefixes proxied to Python, `/api/v1/internal/*` 404,
+  retired legacy resources 410, residual `/api/*` 404) with the pinned
+  `caddy:2.10.2-alpine` image digest and Caddyfile SHA-256. The pre-sunset
+  rollback derivation phase was retired with the legacy edge.
+- Post-Sunset Recovery is the only supported recovery path: snapshot restore
+  plus the recorded pre-sunset deployment, never a mixed rollback.
+
 ## Current Routing
 
 - Publish `https://<public-origin>/mcp` as the only preferred resource and token audience.

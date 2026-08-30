@@ -62,15 +62,13 @@
 </template>
 
 <script setup lang="ts">
-import { queries } from 'app/src-shared/queries'
-import { useQuery } from 'src/composables/zero/query'
 import DenseItem from './DenseItem.vue'
 import { workspaceAvatar } from 'src/utils/defaults'
 import { useWorkspaceStore } from 'src/stores/workspace'
 import { t } from 'src/utils/i18n'
 import { useQuasar } from 'quasar'
 import MenuItem from './MenuItem.vue'
-import { toRef } from 'vue'
+import { computed, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import WorkspaceItem from './WorkspaceItem.vue'
 import { identityClient } from 'src/utils/identity-client'
@@ -79,7 +77,7 @@ const workspaceStore = useWorkspaceStore()
 const workspace = toRef(workspaceStore, 'workspace')
 const $q = useQuasar()
 
-const { data: workspaces } = useQuery(queries.workspaces())
+const workspaces = computed(() => workspaceStore.workspaces ?? [])
 
 const router = useRouter()
 function joinWorkspace() {

@@ -1,6 +1,5 @@
 import Front from 'src/AppFront.vue'
 import MainLayout from 'src/layouts/MainLayout.vue'
-import DualViewPage from 'src/pages/DualViewPage.vue'
 import NotFoundPage from 'src/pages/NotFoundPage.vue'
 import type { RouteRecordRaw } from 'vue-router'
 import { authRoute } from './auth'
@@ -11,7 +10,7 @@ import SettingsLayout from 'src/layouts/SettingsLayout.vue'
 import WorkspaceOverview from 'src/pages/WorkspaceOverview.vue'
 import WorkspaceConnectors from 'src/pages/WorkspaceConnectors.vue'
 import AccountLayout from 'src/layouts/AccountLayout.vue'
-import RedirectToFolder from 'src/pages/RedirectToFolder.vue'
+import WorkspaceKnowledgePage from 'src/pages/WorkspaceKnowledgePage.vue'
 import AccountSecurity from 'src/pages/AccountSecurity.vue'
 import WorkspaceModels from 'src/pages/WorkspaceModels.vue'
 import WorkspaceTags from 'src/pages/WorkspaceTags.vue'
@@ -29,20 +28,16 @@ const routes: RouteRecordRaw[] = [
         path: '/',
         component: MainLayout,
         children: [
-          { path: '/', component: RedirectToFolder },
-          { path: '/welcome', component: RedirectToFolder },
+          { path: '/', component: WorkspaceKnowledgePage },
+          { path: '/welcome', component: WorkspaceKnowledgePage },
           { path: '/knowledge/:documentId', component: KnowledgeDocumentPage },
         ],
       },
+      // Legacy chat deep links are gone with the Zero-bound chat experience;
+      // send them to the workspace knowledge page instead of a dead end.
       {
-        path: '/:type(chat|item|folder)',
-        component: MainLayout,
-        children: [
-          { path: '/:type(item)', component: RedirectToFolder },
-          { path: '/:type(chat)/welcome', component: RedirectToFolder },
-          { path: '/:type(item)/welcome', component: RedirectToFolder },
-          { path: ':id', component: DualViewPage },
-        ],
+        path: '/chat/:rest*',
+        redirect: '/',
       },
       {
         path: '/workspace',

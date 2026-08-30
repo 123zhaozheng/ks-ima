@@ -1,16 +1,16 @@
 # Central Model Governance Operations
 
-Python is the only writer for model gateways, credentials, governed models,
-capability profiles, health and workspace assignments. The Bun server receives
-only short-lived per-request gateway material over the private bridge; the
-browser never receives it.
+Python is the only writer and executor for model gateways, credentials,
+governed models, capability profiles, health and workspace assignments.
+Gateway material stays server-side; the browser never receives it. The
+private Bun bridge that existed during coexistence was removed with the
+legacy deletion release.
 
 ## Key Ring
 
 Generate a deployment key ring and fingerprint key in the secret manager, then
 set `IMA_MODEL_KEY_RING`, `IMA_MODEL_CURRENT_KEY_VERSION`, and
 `IMA_MODEL_FINGERPRINT_KEY` on the Python API, worker, and migration container.
-The Bun server receives only `IMA_BRIDGE_TOKEN`.
 
 Preview and perform envelope rotation:
 
@@ -47,6 +47,12 @@ limits timeout and response size. Do not add arbitrary headers or proxy URLs.
 5. Disable immediately for an incident; delete only after dependency checks pass.
 
 ## Legacy Import And Rollback
+
+> Historical: the `ima migrate-legacy-model-governance` importer was removed
+> and the compatibility `public.*` tables were dropped with the legacy deletion
+> release (Alembic migration `20260829_0011_legacy_schema_removal`). The text
+> below documents how import and rollback-window behavior worked before the
+> cutover; it is closure evidence, not live operations.
 
 ```text
 ima migrate-legacy-model-governance plan

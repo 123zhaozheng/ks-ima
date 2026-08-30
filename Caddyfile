@@ -36,26 +36,22 @@
 		reverse_proxy {$PYTHON_API_URL}
 	}
 
-	# The Python bridge is private Bun-to-API traffic, never a browser route.
+	# The Python internal paths are private API-to-API traffic, never a browser route.
 	@ima_internal_forbidden path /api/v1/internal/*
 	handle @ima_internal_forbidden {
 		respond "Not Found" 404
 	}
 
-	@forbidden {
-		path /api/admin* /api/zero*
-	}
-	handle @forbidden {
-		respond "Forbidden" 403
+	# Retired legacy resources answer Gone so consumers repoint to canonical /mcp.
+	@api_gone path /api/mcp /api/mcp/* /api/kb /api/kb/* /api/s3 /api/s3/* /api/search /api/search/* /api/v1/chat /api/v1/chat/* /api/connectors /api/connectors/*
+	handle @api_gone {
+		respond "Gone" 410
 	}
 
+	# The legacy API has no backend left; residual /api/* space answers 404.
 	@api path /api/*
 	handle @api {
-		reverse_proxy {$SERVER_URL}
-	}
-
-	handle_path /zero-cache* {
-		reverse_proxy {$ZERO_CACHE_URL}
+		respond "Not Found" 404
 	}
 
 	handle {
@@ -98,22 +94,22 @@
 		reverse_proxy {$PYTHON_API_URL}
 	}
 
+	# The Python internal paths are private API-to-API traffic, never a browser route.
 	@ima_internal_forbidden path /api/v1/internal/*
 	handle @ima_internal_forbidden {
 		respond "Not Found" 404
 	}
 
-	handle /api/zero* {
-		respond "Forbidden" 403
+	# Retired legacy resources answer Gone so consumers repoint to canonical /mcp.
+	@api_gone path /api/mcp /api/mcp/* /api/kb /api/kb/* /api/s3 /api/s3/* /api/search /api/search/* /api/v1/chat /api/v1/chat/* /api/connectors /api/connectors/*
+	handle @api_gone {
+		respond "Gone" 410
 	}
 
+	# The legacy API has no backend left; residual /api/* space answers 404.
 	@api path /api/*
 	handle @api {
-		reverse_proxy {$SERVER_URL}
-	}
-
-	handle_path /zero-cache* {
-		reverse_proxy {$ZERO_CACHE_URL}
+		respond "Not Found" 404
 	}
 
 	handle {

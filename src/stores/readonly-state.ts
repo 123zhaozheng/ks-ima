@@ -2,27 +2,23 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import { computed } from 'vue'
 import { useWorkspaceStore } from 'src/stores/workspace'
 import { t } from 'src/utils/i18n'
-import { connectionState } from 'src/utils/zero-session'
+import { session } from 'src/utils/identity-client'
 
 export const useReadonlyStateStore = defineStore('readonlyState', () => {
   const workspaceStore = useWorkspaceStore()
 
   const message = computed(() => {
-    if (connectionState.value.name === 'disconnected') {
-      return t('Currently offline, you can only browse existing local content and cannot perform write operations.')
-    }
-    if (connectionState.value.name === 'error') {
+    if (!session.value.isPending && session.value.error) {
       return t('An error has occurred in the current connection.')
     }
-    if (workspaceStore.member?.role === 'guest') {
-      return t('Your role is "Guest"; you can only browse the content in this workspace and cannot make modifications.')
+    if (workspaceStore.member?.role === 'viewer') {
+      return t('Your role is "Viewer"; you can only browse the content in this workspace and cannot make modifications.')
     }
     return null
   })
   const readonly = computed(() => message.value !== null)
 
   return {
-    connectionState,
     message,
     readonly,
   }

@@ -5,13 +5,11 @@ from pathlib import Path
 import pytest
 
 from ima.api.app import create_app
-from ima.cli import _parse_legacy_acl
 from ima.config import Settings
 from ima.domain.authorization import (
     DEFAULT_ROLE_GRANTS,
     AclAction,
     WorkspaceRole,
-    legacy_role,
     validate_grants,
 )
 from ima.infrastructure.db.authorization import accessible_folder_ids_sql
@@ -28,15 +26,6 @@ def test_default_role_matrix_is_explicit_and_has_no_platform_bypass() -> None:
             AclAction.ASK,
         }
     )
-
-
-def test_legacy_roles_map_without_guessing() -> None:
-    assert legacy_role("owner") is WorkspaceRole.WORKSPACE_ADMIN
-    assert legacy_role("admin") is WorkspaceRole.WORKSPACE_ADMIN
-    assert legacy_role("member") is WorkspaceRole.EDITOR
-    assert legacy_role("guest") is WorkspaceRole.VIEWER
-    with pytest.raises(KeyError):
-        legacy_role("unknown")
 
 
 def test_acl_dependencies_are_rejected() -> None:
@@ -79,31 +68,6 @@ def test_authorization_migration_contains_all_target_tables_and_downgrade_guard(
     ):
         assert f"ima.{table}" in source
     assert "explicit snapshot" in source
-
-
-def test_legacy_acl_parser_is_strict_and_normalizes_dependencies() -> None:
-    entries, error = _parse_legacy_acl(
-        {
-            "acl": {
-                "inherit": False,
-                "aces": [
-                    {"principalType": "role", "principalId": "guest", "actions": ["view", "ask"]}
-                ],
-            }
-        }
-    )
-    assert error is None
-    assert entries is not None
-    assert {item[2] for item in entries} == {"view_metadata", "view_content", "ask"}
-    _, error = _parse_legacy_acl(
-        {
-            "acl": {
-                "inherit": False,
-                "aces": [{"principalType": "role", "principalId": "bad", "actions": ["view"]}],
-            }
-        }
-    )
-    assert error == "unknown_acl_role"
 
 
 def test_policy_predicate_requires_all_dependencies_for_the_same_subject() -> None:

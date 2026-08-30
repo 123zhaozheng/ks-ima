@@ -1,13 +1,8 @@
 import { defineStore, acceptHMRUpdate } from 'pinia'
-import { mutate, user, z } from '../utils/zero-session'
-import { client } from '../utils/hc'
-import { useQuery } from 'src/composables/zero/query'
-import type { FullWorkspace } from 'app/src-shared/queries'
-import { queries } from 'app/src-shared/queries'
-import { mutators } from 'app/src-shared/mutators'
-import type { MemberData } from 'app/src-shared/utils/validators'
-import { computed, ref, watch, watchEffect } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { identityClient, session } from 'src/utils/identity-client'
 import { useUserDataStore } from './user-data'
 import { queryClient } from 'src/boot/vue-query'
 
@@ -15,27 +10,26 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const userDataStore = useUserDataStore()
   const router = useRouter()
   const id = ref<string | null>(null)
-  const { data: workspaces, status: workspacesStatus } = useQuery(() => user.id ? queries.workspaces() : null)
+  const userId = computed(() => session.value.data?.user.id ?? null)
+
+  const { data: workspaces, status: workspacesStatus } = useQuery({
+    queryKey: ['workspaces', 'member'],
+    queryFn: async () => {
+      const result = await identityClient.listMemberWorkspaces()
+      if (result.error) throw new Error(result.error.message)
+      return result.data!.items
+    },
+    enabled: computed(() => Boolean(userId.value)),
+  })
 
   watch(
-    [() => user.id, () => userDataStore.lastWorkspaceId, workspaces],
-    async ([uid, last, list]) => {
+    [userId, () => userDataStore.lastWorkspaceId, workspaces],
+    ([uid, last, list]) => {
       if (!uid) {
         id.value = null
         return
       }
       const ids = (list ?? []).map(w => w.id)
-      if (!ids.length) {
-        try {
-          const res = await client.api.connectors.workspaces.$get()
-          if (res.ok) {
-            const rest = await res.json() as Array<{ id: string }>
-            if (Array.isArray(rest)) ids.push(...rest.map(w => w.id))
-          }
-        } catch {
-          return
-        }
-      }
       if (id.value && ids.includes(id.value)) return
       const next = (last && ids.includes(last) ? last : null) ?? ids[0] ?? null
       if (next) id.value = next
@@ -43,20 +37,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     { immediate: true },
   )
 
-  const { data: workspace, status } = useQuery(() =>
-    id.value ? queries.fullWorkspace(id.value) : null,
-  )
-
-  watchEffect(() => {
-    if (!id.value) return
-    z.preload(queries.entity({ id: id.value, children: { depth: 3 } }))
-    z.preload(queries.entityAccesses(id.value))
-    z.preload(queries.recentChats(id.value))
-    z.preload(queries.recentItems(id.value))
-    z.preload(queries.assistants({
-      workspaceId: id.value,
-      limit: 10,
-    }))
+  const { data: workspace } = useQuery({
+    queryKey: computed(() => ['workspaces', 'member', id.value] as const),
+    queryFn: async () => {
+      const result = await identityClient.getMemberWorkspace(id.value!)
+      if (result.error) throw new Error(result.error.message)
+      return result.data!
+    },
+    enabled: computed(() => Boolean(id.value)),
   })
 
   watch(id, (next, previous) => {
@@ -64,11 +52,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     queryClient.cancelQueries({ queryKey: ['grounded', 'workspace', previous] })
     queryClient.removeQueries({ queryKey: ['grounded', 'workspace', previous] })
   })
-
-  async function updateData(updates: Partial<MemberData>) {
-    if (!id.value) return
-    await mutate(mutators.updateMemberData({ workspaceId: id.value, ...updates })).client
-  }
 
   function switchWorkspace(to: string) {
     if (id.value !== to) {
@@ -80,23 +63,25 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         queryClient.cancelQueries({ queryKey: ['grounded', 'workspace', previous] })
         queryClient.removeQueries({ queryKey: ['grounded', 'workspace', previous] })
       }
-      mutate(mutators.updateLastWorkspaceId(to))
+      userDataStore.setLastWorkspaceId(to)
     }
-    if (router.currentRoute.value.path !== `/folder/${to}`) router.push(`/folder/${to}`)
+    router.push('/')
   }
-  const member = ref<FullWorkspace['member']>()
-  watch(workspace, ws => {
-    member.value = ws?.member
-  }, { immediate: true })
+
+  const member = computed(() => {
+    if (!workspace.value || !userId.value) return undefined
+    return {
+      userId: userId.value,
+      role: workspace.value.role,
+    }
+  })
+
   return {
     id,
     member,
-    members: computed(() => workspace.value?.members),
     workspaces,
     workspacesStatus,
     workspace,
-    status,
-    updateData,
     switchWorkspace,
   }
 })

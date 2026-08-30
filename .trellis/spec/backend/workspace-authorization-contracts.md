@@ -3,10 +3,11 @@
 ## 1. Scope / Trigger
 
 Apply this specification to workspace membership, groups, invitations, folder
-structure, normalized ACLs, folder authorization, platform workspace lifecycle,
-legacy authorization migration, and the temporary Bun/Zero authorization
-bridge. Python is the only mutable workspace/ACL authority. Platform roles never
-imply content membership or folder access.
+structure, normalized ACLs, folder authorization, and platform workspace
+lifecycle. Python is the only mutable workspace/ACL authority. Platform roles never
+imply content membership or folder access. The legacy authorization importer and
+the temporary Bun/Zero authorization bridge were retired by the legacy deletion
+release; `/api/v1/internal/*` stays a terminal public 404.
 
 ## 2. Signatures
 
@@ -14,17 +15,10 @@ imply content membership or folder access.
 GET/POST/PATCH/DELETE /api/v1/workspaces/*
 POST /api/v1/workspace-invitations/{token}/accept
 POST /api/v1/admin/workspaces/{id}/workspace-admin-repair
-POST /api/v1/internal/authorization/decide|batch|member  # private
-
-ima migrate-legacy-authorization plan|apply|verify|report
 
 ima.workspace_members, workspace_invitations
 ima.workspace_groups, workspace_group_members
 ima.folders, folder_closure, folder_acls, folder_acl_entries
-
-PYTHON_API_INTERNAL_URL
-IMA_BRIDGE_TOKEN
-IMA_BRIDGE_TIMEOUT_MS
 ```
 
 Every public operation has a stable OpenAPI operation ID. Internal authorization
@@ -55,13 +49,8 @@ mutable SQL.
 - A workspace always retains one active workspace admin under concurrent role,
   disable, leave, and remove operations. Platform repair uses the same advisory
   lock but grants no folder read.
-- The bridge returns `source=target|legacy|denied`. An existing target record is
-  authoritative, including denial. Only a genuinely unmigrated object may use
-  the documented legacy read fallback. Malformed, partial, timeout, token, or
-  unknown-role results fail closed. Legacy ACL mutation is forbidden.
-- Migration persists per-record failed/complete checkpoints, retries failures,
-  rejects malformed/cyclic/cross-workspace data without guessing, and verifies
-  workspace/member/folder/closure/ACL equivalence without logging names/content.
+- No authorization path reads or falls back to the dropped legacy `public`
+  schema; workspace deletion checks only `ima` content dependencies.
 
 ## 4. Validation & Error Matrix
 
@@ -77,8 +66,7 @@ mutable SQL.
 | SMTP disabled | manual link returned once; safe pending metadata later |
 | Invitation expired/revoked/reused/wrong user | rejected atomically |
 | Archived workspace has content dependency | permanent delete returns 409 |
-| Bridge timeout/partial/malformed response | deny; never legacy-allow target data |
-| Migration failed checkpoint/equivalence mismatch | verify fails safely and apply can resume |
+| Public `/api/v1/internal/*` request | Terminal 404 at the edge; no backend mount |
 
 ## 5. Good / Base / Bad Cases
 
@@ -86,26 +74,21 @@ mutable SQL.
   the folder appears in direct and list checks.
 - Good: moving an inherited subtree changes closure and anchors in one commit;
   an independent descendant keeps its own anchor.
-- Base: an object is not yet migrated; the named read-only legacy compatibility
-  consumer evaluates it and reports `source=legacy`.
 - Bad: combine `ask` from a user grant with `view_content` from a role grant.
 - Bad: authorize rename/delete on the root and mutate an inaccessible child.
-- Bad: treat a missing/partial bridge row as permission to run legacy ACL code.
+- Bad: reintroduce any read or fallback against the dropped legacy `public`
+  authorization tables.
 
 ## 6. Tests Required
 
-1. Unit role/action/dependency, strict legacy parser, OpenAPI/internal absence.
+1. Unit role/action/dependency tests and OpenAPI/internal absence.
 2. Forced PostgreSQL fresh/repeat migration with `IMA_REQUIRE_POSTGRES=1` and
    zero skips; root/ACL seed, role/group/user matrix, hidden reads, immediate
    revoke/archive, and indexed `EXPLAIN` assertions.
 3. Real concurrent final-admin mutations and single-use invitations.
 4. Deep move/reorder/trash/restore/delete closure and anchor invariants.
-5. Migration plan/apply/repeat/verify with malformed/cyclic/cross-workspace
-   fixtures and persisted failed checkpoints.
-6. Bun bridge timeout/token/partial/unknown-role/batch completeness plus target
-   denial and unmigrated fallback tests; public Caddy/OpenAPI absence.
-7. Residue classification for `entityPermission`, `kb_acl_*`, TypeScript ACL,
-   and Zero permission relations until `knowledge-tree-vue-api` removes them.
+5. Contract proof that `/api/v1/internal/*` has no backend mount and the edge
+   answers a terminal 404.
 
 ## 7. Wrong vs Correct
 

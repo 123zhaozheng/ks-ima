@@ -1,7 +1,7 @@
 export function mcpAgentOrigin(browserOrigin = window.location.origin) {
   try {
     const url = new URL(browserOrigin)
-    // Cursor/Claude are native clients. Vite :9015 is a browser proxy; talk to Hono.
+    // Cursor/Claude are native clients; route them at the API origin, not the dev proxy.
     if (url.port === '9015' || url.port === '9016') url.port = '3000'
     // Windows often resolves localhost to ::1 while the API listens on IPv4.
     if (url.hostname === 'localhost') url.hostname = '127.0.0.1'
@@ -12,7 +12,7 @@ export function mcpAgentOrigin(browserOrigin = window.location.origin) {
 }
 
 export function mcpHttpUrl(origin = mcpAgentOrigin()) {
-  return `${origin.replace(/\/$/, '')}/api/mcp`
+  return `${origin.replace(/\/$/, '')}/mcp`
 }
 
 export function cursorMcpConfig(apiKey: string, origin = mcpAgentOrigin()) {
@@ -95,7 +95,7 @@ async function probeOne(apiKey: string, url: string) {
 export async function probeMcpConnection(apiKey: string, preferred = mcpHttpUrl()) {
   const urls = [...new Set([
     preferred,
-    `${window.location.origin.replace(/\/$/, '')}/api/mcp`,
+    `${window.location.origin.replace(/\/$/, '')}/mcp`,
   ])]
   let last: Error | undefined
   for (const url of urls) {

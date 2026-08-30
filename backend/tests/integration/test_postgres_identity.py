@@ -12,7 +12,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from argon2 import PasswordHasher
 from sqlalchemy import text
 
 from ima.application.identity import IdentityError, IdentityService
@@ -46,21 +45,7 @@ def integration_settings() -> Settings:
         session_pepper="session-integration-pepper",
         token_pepper="token-integration-pepper",
         totp_encryption_key="totp-integration-key",
-        bridge_token="bridge-integration-token",
     )
-
-
-async def ensure_legacy_tables(engine: object) -> None:
-    async with engine.begin() as connection:  # type: ignore[attr-defined]
-        for statement in (
-            'CREATE TABLE IF NOT EXISTS public."user" (id text PRIMARY KEY,name text NOT NULL,email text NOT NULL UNIQUE,image text,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now())',
-            'CREATE TABLE IF NOT EXISTS public."userData" (id text PRIMARY KEY,perfs jsonb NOT NULL,data jsonb NOT NULL)',
-            'CREATE TABLE IF NOT EXISTS public."account" (id text PRIMARY KEY,account_id text NOT NULL,provider_id text NOT NULL,user_id text NOT NULL,password text,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now())',
-            'CREATE TABLE IF NOT EXISTS public."two_factor" (id text PRIMARY KEY,secret text NOT NULL,backup_codes text NOT NULL,user_id text NOT NULL)',
-            'CREATE TABLE IF NOT EXISTS public."session" (id text PRIMARY KEY,token text NOT NULL,user_id text NOT NULL,expires_at timestamptz NOT NULL,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now())',
-            'CREATE TABLE IF NOT EXISTS public."workspace" (id varchar(16) PRIMARY KEY,name text NOT NULL)',
-        ):
-            await connection.execute(text(statement))
 
 
 @pytest.mark.postgres
@@ -98,16 +83,7 @@ async def test_identity_schema_repeat_lifecycle_and_security_invariants() -> Non
         with task_app.open():
             task_app.schema_manager.apply_schema()
     try:
-        await ensure_legacy_tables(engine)
         async with engine.begin() as connection:
-            await connection.execute(
-                text(
-                    'DELETE FROM public."userData" WHERE id IN (SELECT id FROM public."user" WHERE email=\'identity@example.test\')'
-                )
-            )
-            await connection.execute(
-                text("DELETE FROM public.\"user\" WHERE email='identity@example.test'")
-            )
             await connection.execute(text("DELETE FROM ima.audit_events"))
             await connection.execute(text("DELETE FROM ima.users"))
         user, _ = await service.create_user(
@@ -158,90 +134,6 @@ async def test_identity_schema_repeat_lifecycle_and_security_invariants() -> Non
                     {"id": user.id},
                 )
                 >= 3
-            )
-        legacy_phc = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=2).hash(
-            "legacy-password"
-        )
-        legacy_totp = pyotp.random_base32()
-        async with engine.begin() as connection:
-            await connection.execute(
-                text(
-                    "INSERT INTO public.\"user\"(id,name,email) VALUES ('legacy-user-01','Legacy Fixture','legacy@example.test') ON CONFLICT DO NOTHING"
-                )
-            )
-            await connection.execute(
-                text(
-                    "INSERT INTO public.\"account\"(id,account_id,provider_id,user_id,password) VALUES ('legacy-account-01','legacy-user-01','credential','legacy-user-01',:phc) ON CONFLICT DO NOTHING"
-                ),
-                {"phc": legacy_phc},
-            )
-            await connection.execute(
-                text(
-                    "INSERT INTO public.\"two_factor\"(id,secret,backup_codes,user_id) VALUES ('legacy-totp-01',:secret,'[]','legacy-user-01') ON CONFLICT DO NOTHING"
-                ),
-                {"secret": legacy_totp},
-            )
-            await connection.execute(
-                text(
-                    "INSERT INTO public.\"session\"(id,token,user_id,expires_at) VALUES ('legacy-session-01','legacy-session-token','legacy-user-01',now()+interval '1 day') ON CONFLICT DO NOTHING"
-                )
-            )
-            await connection.execute(
-                text(
-                    "INSERT INTO public.\"workspace\"(id,name) VALUES ('legacy-ws-01','Legacy Workspace') ON CONFLICT DO NOTHING"
-                )
-            )
-        migration_env = {**os.environ, "IMA_DATABASE_URL": env["IMA_DATABASE_URL"]}
-        subprocess.run(
-            ["uv", "run", "ima", "migrate-legacy-identity", "apply"],
-            cwd=root,
-            env=migration_env,
-            check=True,
-        )  # noqa: ASYNC221
-        subprocess.run(
-            ["uv", "run", "ima", "migrate-legacy-identity", "apply"],
-            cwd=root,
-            env=migration_env,
-            check=True,
-        )  # noqa: ASYNC221
-        subprocess.run(
-            ["uv", "run", "ima", "migrate-legacy-identity", "verify"],
-            cwd=root,
-            env=migration_env,
-            check=True,
-        )  # noqa: ASYNC221
-        async with engine.connect() as connection:
-            assert (
-                await connection.scalar(
-                    text("SELECT password_reset_required FROM ima.users WHERE id='legacy-user-01'")
-                )
-                is False
-            )
-            assert (
-                await connection.scalar(
-                    text(
-                        "SELECT count(*) FROM ima.password_credentials WHERE user_id='legacy-user-01'"
-                    )
-                )
-                == 1
-            )
-            assert (
-                await connection.scalar(
-                    text("SELECT count(*) FROM ima.totp_credentials WHERE user_id='legacy-user-01'")
-                )
-                == 1
-            )
-            assert (
-                await connection.scalar(
-                    text("SELECT count(*) FROM ima.sessions WHERE user_id='legacy-user-01'")
-                )
-                == 0
-            )
-            assert (
-                await connection.scalar(
-                    text("SELECT count(*) FROM ima.workspaces WHERE id='legacy-ws-01'")
-                )
-                == 1
             )
         concurrent_ids = ("concurrent-super-a", "concurrent-super-b")
         async with engine.begin() as connection:
@@ -295,20 +187,10 @@ async def test_identity_rate_limit_and_password_reset_token_is_single_use() -> N
     engine = create_engine(settings)
     service = IdentityService(engine, settings)
     try:
-        await ensure_legacy_tables(engine)
         email = "reset-single-use@example.test"
         async with engine.begin() as connection:
             await connection.execute(
                 text("DELETE FROM ima.users WHERE normalized_email=:email"), {"email": email}
-            )
-            await connection.execute(
-                text(
-                    'DELETE FROM public."userData" WHERE id IN (SELECT id FROM public."user" WHERE email=:email)'
-                ),
-                {"email": email},
-            )
-            await connection.execute(
-                text('DELETE FROM public."user" WHERE email=:email'), {"email": email}
             )
         await service.create_user(email, "Reset Fixture", "password-123456", invite=False)
         token = await service.create_password_token(email, "password_reset")
@@ -327,66 +209,6 @@ async def test_identity_rate_limit_and_password_reset_token_is_single_use() -> N
             return_exceptions=True,
         )
         assert sum(isinstance(outcome, IdentityError) for outcome in outcomes) == 1
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.postgres
-@pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
-@pytest.mark.asyncio
-async def test_identity_projection_has_no_legacy_account_session_or_workspace_side_effect() -> None:
-    settings = integration_settings()
-    engine = create_engine(settings)
-    service = IdentityService(engine, settings)
-    try:
-        await ensure_legacy_tables(engine)
-        async with engine.begin() as connection:
-            await connection.execute(
-                text("DELETE FROM ima.users WHERE normalized_email='projection@example.test'")
-            )
-            await connection.execute(
-                text(
-                    'DELETE FROM public."userData" WHERE id IN (SELECT id FROM public."user" WHERE email=\'projection@example.test\')'
-                )
-            )
-            await connection.execute(
-                text("DELETE FROM public.\"user\" WHERE email='projection@example.test'")
-            )
-        user, _ = await service.create_user(
-            "projection@example.test", "Projection Fixture", "password-123456", invite=False
-        )
-        async with engine.connect() as connection:
-            assert (
-                await connection.scalar(
-                    text('SELECT count(*) FROM public."account" WHERE user_id=:id'), {"id": user.id}
-                )
-                == 0
-            )
-            assert (
-                await connection.scalar(
-                    text('SELECT count(*) FROM public."session" WHERE user_id=:id'), {"id": user.id}
-                )
-                == 0
-            )
-            assert (
-                await connection.scalar(
-                    text('SELECT count(*) FROM public."two_factor" WHERE user_id=:id'),
-                    {"id": user.id},
-                )
-                == 0
-            )
-            assert (
-                await connection.scalar(
-                    text('SELECT count(*) FROM public."workspace" WHERE id=:id'), {"id": user.id}
-                )
-                == 0
-            )
-            assert (
-                await connection.scalar(
-                    text('SELECT count(*) FROM public."user" WHERE id=:id'), {"id": user.id}
-                )
-                == 1
-            )
     finally:
         await engine.dispose()
 
@@ -419,78 +241,6 @@ async def test_invite_is_explicitly_unavailable_without_smtp() -> None:
                     )
                 )
                 == 1
-            )
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.postgres
-@pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
-@pytest.mark.asyncio
-async def test_incompatible_legacy_credentials_force_reset_and_disable_totp() -> None:
-    settings = integration_settings()
-    engine = create_engine(settings)
-    try:
-        await ensure_legacy_tables(engine)
-        async with engine.begin() as connection:
-            await connection.execute(
-                text("DELETE FROM ima.users WHERE id='legacy-incompatible-01'")
-            )
-            await connection.execute(
-                text("DELETE FROM public.\"user\" WHERE id='legacy-incompatible-01'")
-            )
-            await connection.execute(
-                text(
-                    "INSERT INTO public.\"user\"(id,name,email) VALUES ('legacy-incompatible-01','Bad Legacy','legacy-incompatible@example.test') ON CONFLICT DO NOTHING"
-                )
-            )
-            await connection.execute(
-                text(
-                    "INSERT INTO public.\"account\"(id,account_id,provider_id,user_id,password) VALUES ('legacy-incompatible-account','legacy-incompatible-01','credential','legacy-incompatible-01','not-a-phc') ON CONFLICT DO NOTHING"
-                )
-            )
-            await connection.execute(
-                text(
-                    "INSERT INTO public.\"two_factor\"(id,secret,backup_codes,user_id) VALUES ('legacy-incompatible-totp','invalid','[]','legacy-incompatible-01') ON CONFLICT DO NOTHING"
-                )
-            )
-        root = Path(__file__).parents[2]
-        migration_env = {
-            **os.environ,
-            "IMA_DATABASE_URL": DATABASE_URL.replace(
-                "postgresql+asyncpg://", "postgresql+psycopg://"
-            ),
-        }
-        subprocess.run(
-            ["uv", "run", "ima", "migrate-legacy-identity", "apply"],
-            cwd=root,
-            env=migration_env,
-            check=True,
-        )  # noqa: ASYNC221
-        async with engine.connect() as connection:
-            assert (
-                await connection.scalar(
-                    text(
-                        "SELECT password_reset_required FROM ima.users WHERE id='legacy-incompatible-01'"
-                    )
-                )
-                is True
-            )
-            assert (
-                await connection.scalar(
-                    text(
-                        "SELECT count(*) FROM ima.password_credentials WHERE user_id='legacy-incompatible-01'"
-                    )
-                )
-                == 0
-            )
-            assert (
-                await connection.scalar(
-                    text(
-                        "SELECT count(*) FROM ima.totp_credentials WHERE user_id='legacy-incompatible-01'"
-                    )
-                )
-                == 0
             )
     finally:
         await engine.dispose()

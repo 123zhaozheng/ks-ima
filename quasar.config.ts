@@ -100,12 +100,7 @@ export default defineConfig((ctx) => {
       port: 'pwa' in ctx.mode ? 9016 : 9015,
       proxy: {
         '/api': {
-          target: process.env.SERVER_URL,
-        },
-        '/zero-cache': {
-          target: process.env.ZERO_CACHE_URL,
-          rewrite: path => path.replace(/^\/zero-cache/, ''),
-          ws: true,
+          target: process.env.PYTHON_API_URL,
         },
       },
     },

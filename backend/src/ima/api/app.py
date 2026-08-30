@@ -18,8 +18,6 @@ from ima.api.errors import (
     unhandled_exception_handler,
     validation_exception_handler,
 )
-from ima.api.internal.authorization_bridge import router as authorization_bridge_router
-from ima.api.internal.session_bridge import router as bridge_router
 from ima.api.middleware import BodyLimitMiddleware, CorrelationMiddleware, RequestTimingMiddleware
 from ima.api.oauth import admin_router as oauth_admin_router
 from ima.api.oauth import public_router as oauth_public_router
@@ -27,9 +25,6 @@ from ima.api.v1.account import router as account_router
 from ima.api.v1.admin import router as admin_router
 from ima.api.v1.auth import router as auth_router
 from ima.api.v1.knowledge import router as knowledge_router
-from ima.api.v1.model_governance import (
-    internal_router as model_governance_bridge_router,
-)
 from ima.api.v1.model_governance import (
     router as model_governance_router,
 )
@@ -262,13 +257,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.include_router(workspace_router)
     api.include_router(invitation_router)
     api.include_router(workspace_admin_router)
-    # This router is intentionally excluded from the public Caddy matchers and
-    # OpenAPI schema; Bun reaches it only on the private network.
-    api.include_router(bridge_router)
-    api.include_router(authorization_bridge_router)
+    # /api/v1/internal/* is intentionally unmounted; Caddy keeps answering the
+    # retired private bridge space with a public 404 as defense in depth.
     api.include_router(model_governance_router)
     api.include_router(model_workspace_router)
-    api.include_router(model_governance_bridge_router)
     api.include_router(knowledge_router)
     api.include_router(search_router)
     api.include_router(oauth_admin_router)

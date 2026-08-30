@@ -9,14 +9,16 @@ Apply this contract to target workspace search, private conversation/history UI,
 ```text
 src/api/grounded-client.ts
 src/composables/use-grounded-knowledge.ts
-src/pages/GroundedAskPage.vue
-/workspace/ask
+src/pages/AskHome.vue
+src/pages/ConversationView.vue
+/ (composer home)
+/ask/:conversationId
 ```
 
 ## Contracts
 
 - DTOs come from generated OpenAPI types. REST uses the shared IMA transport; SSE uses one bounded typed parser with credentials, Origin/CSRF mutation headers, AbortSignal, stable event names, and no component-local duplicate client.
-- The target Ask page is mounted under `WorkspaceLayout` at `/workspace/ask`; generic legacy Chat remains a separate coexistence surface.
+- Ask lives in the new IA: composer home at `/` (`AskHome.vue`), conversations at `/ask/:conversationId` (`ConversationView.vue`); the active stream is owned by the shell (`AppShell.vue`, `groundedKey`) so it survives navigation. UX-level contracts (composer scope, citation marks/pane, history, save-as-note) live in [UX Design Language](./ux-design-language.md).
 - Search supports target filters/modes and renders safe title/quote/rank projections only. `REINDEX_REQUIRED`, degraded rerank, no hits, access revoked, offline, archived, loading, and retry states are explicit.
 - Ask events are handled in order: conversation/message, citations, delta, terminal completed/knowledge-gap/cancelled/error. Answer deltas never render before the citation event for grounded answers.
 - Conversation queries and all mutations are workspace and owner scoped by the server. The UI supports list/open/rename/archive/delete/retry without assuming administrators can read other owners.
@@ -41,11 +43,11 @@ src/pages/GroundedAskPage.vue
 
 ## Tests Required
 
-1. Vitest mounts the real `GroundedAskPage` with Vue Query and exercises search, SSE citations/deltas, cancellation, no-hit, retry/degraded/error, workspace change, and responsive classes.
+1. Vitest mounts the real `ConversationView`/`AskComposer` with Vue Query and exercises SSE citations/deltas, cancellation, no-hit, retry/degraded/error, workspace change, and responsive classes.
 2. Client tests assert generated paths, credentials/CSRF, SSE framing, AbortSignal, event ordering, and typed errors.
 3. ESLint, `vue-tsc --noEmit`, Vitest, and sequential Quasar builds pass.
 4. Desktop and Pixel-class mobile Playwright exercise target search, grounded answer, citations-before-delta, cancellation, no-hit/degraded states, conversation actions, citation navigation, and overflow/overlap checks. Route fixtures may isolate UI protocol, while PostgreSQL/model fake tests separately prove backend behavior.
-5. Coexistence tests prove target Ask does not call Zero chat mutators, legacy search tools, or public/legacy model fallback.
+5. The Ask surfaces use only the generated knowledge/conversation clients; no legacy or Zero-era chat/search mutators exist in the app anymore.
 
 ## Wrong vs Correct
 

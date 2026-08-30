@@ -1,23 +1,37 @@
 <template>
-  <q-header
-    v-if="$route.meta.title"
-    bg-sur-c-low
-    text-on-sur
-  >
-    <q-toolbar>
-      <q-toolbar-title>{{ $route.meta.title }}</q-toolbar-title>
-    </q-toolbar>
-  </q-header>
   <q-page-container>
     <q-page
-      max-w="500px"
-      mx-a
-      px-3
+      class="auth-page"
       flex="~ col"
-      justify-center
+      flex-center
     >
-      <router-view />
-      <div h="100px" />
+      <div class="tk-card auth-card">
+        <div
+          v-if="$route.meta.title"
+          class="auth-title"
+        >
+          {{ $route.meta.title }}
+        </div>
+        <router-view />
+      </div>
     </q-page>
   </q-page-container>
 </template>
+
+<style scoped>
+.auth-page {
+  padding: var(--tk-space-4);
+}
+
+.auth-card {
+  width: min(92vw, 420px);
+  padding: var(--tk-space-8) var(--tk-space-6);
+}
+
+.auth-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--tk-text);
+  margin-bottom: var(--tk-space-6);
+}
+</style>

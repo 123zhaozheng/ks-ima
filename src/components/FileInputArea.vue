@@ -1,17 +1,17 @@
 <template>
   <div
-    @click="fileInput?.click()"
-    @dragenter.prevent
-    @dragover.prevent
-    @drop.stop.prevent="onDrop"
+    class="file-input-area"
     border="dashed 2px out"
-    h="200px"
     flex
     items-center
     justify-center
     cursor-pointer
+    @click="fileInput?.click()"
+    @dragenter.prevent
+    @dragover.prevent
+    @drop.stop.prevent="onDrop"
   >
-    <div text="xl center out">
+    <div text="center out">
       {{ t('Click to Select {0}', image ? t('Image') : t('File')) }}<br>
       {{ t('Drag here') }}<br>
       {{ t('Or Ctrl+V to Paste') }}
@@ -19,10 +19,10 @@
     <input
       ref="fileInput"
       type="file"
-      :accept="image ? 'image/*' : undefined"
-      @change="onInput"
-      un-hidden
+      hidden
+      :accept="image ? 'image/*' : accept"
       :multiple
+      @change="onInput"
     >
   </div>
 </template>
@@ -34,6 +34,7 @@ import { onUnmounted, useTemplateRef } from 'vue'
 const props = defineProps<{
   image?: boolean
   multiple?: boolean
+  accept?: string
 }>()
 
 const emit = defineEmits<{
@@ -41,25 +42,28 @@ const emit = defineEmits<{
 }>()
 const fileInput = useTemplateRef('fileInput')
 
+function matches(file: File) {
+  return !props.image || file.type.startsWith('image/')
+}
+
 function onInput() {
   if (!fileInput.value?.files) return
   for (const file of fileInput.value.files) {
-    if (!props.image || file.type.startsWith('image/')) {
-      emit('input', file)
-    }
+    if (matches(file)) emit('input', file)
   }
+  fileInput.value.value = ''
 }
-function onDrop({ dataTransfer }) {
-  for (const file of dataTransfer.files) {
-    if (!props.image || file.type.startsWith('image/')) {
+function onDrop(event: DragEvent) {
+  for (const file of event.dataTransfer?.files ?? []) {
+    if (matches(file)) {
       emit('input', file)
       break
     }
   }
 }
-function onPaste({ clipboardData }) {
-  for (const file of clipboardData.files) {
-    if (!props.image || file.type.startsWith('image/')) {
+function onPaste(event: ClipboardEvent) {
+  for (const file of event.clipboardData?.files ?? []) {
+    if (matches(file)) {
       emit('input', file)
       break
     }
@@ -68,3 +72,16 @@ function onPaste({ clipboardData }) {
 addEventListener('paste', onPaste)
 onUnmounted(() => removeEventListener('paste', onPaste))
 </script>
+
+<style scoped>
+.file-input-area {
+  min-height: 160px;
+  border-radius: var(--tk-radius-lg);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.file-input-area:hover {
+  border-color: var(--tk-accent);
+  background-color: var(--tk-accent-soft);
+}
+</style>

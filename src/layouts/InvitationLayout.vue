@@ -1,37 +1,25 @@
 <template>
   <q-page-container>
     <q-page
+      class="invite-page"
       flex="~ col"
-      justify-center
-      items-center
+      flex-center
     >
-      <div
-        text-center
-        px-6
-        style="width: min(92vw, 420px)"
-      >
+      <div class="tk-card invite-card">
         <q-icon
           name="sym_o_mail"
-          size="56px"
+          size="48px"
+          color="primary"
         />
-        <div
-          text="center xl"
-          mt-3
-        >
+        <div class="invite-title">
           {{ t('Join workspace') }}
         </div>
-        <div
-          text-on-sur-var
-          text-caption
-          mt-2
-        >
+        <div class="invite-subtitle">
           {{ t('Accept the invitation to become a member of this workspace.') }}
         </div>
         <div
           v-if="error"
-          text-err
-          text-caption
-          mt-3
+          class="invite-error"
           aria-live="polite"
         >
           {{ error }}
@@ -40,11 +28,10 @@
           color="primary"
           :label="t('Join workspace')"
           :loading="loading"
-          @click="join"
           unelevated
           no-caps
           class="w-full"
-          mt-4
+          @click="join"
         />
       </div>
     </q-page>
@@ -97,3 +84,36 @@ async function join() {
   }
 }
 </script>
+
+<style scoped>
+.invite-page {
+  padding: var(--tk-space-4);
+}
+
+.invite-card {
+  width: min(92vw, 420px);
+  padding: var(--tk-space-8) var(--tk-space-6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--tk-space-3);
+}
+
+.invite-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--tk-text);
+}
+
+.invite-subtitle {
+  font-size: 13px;
+  color: var(--tk-text-secondary);
+  margin-bottom: var(--tk-space-2);
+}
+
+.invite-error {
+  font-size: 13px;
+  color: var(--tk-danger);
+}
+</style>

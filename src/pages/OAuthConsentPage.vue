@@ -249,11 +249,11 @@ watch(
 <style scoped>
 .consent-page { max-width: 760px; margin: 0 auto; padding: 32px 20px; }
 .consent-header { display: flex; gap: 14px; align-items: center; margin-bottom: 24px; }
-h1 { margin: 0; font-size: 26px; line-height: 1.2; } h2 { font-size: 17px; margin: 0 0 8px; }
-p { margin: 4px 0 0; color: var(--q-on-surface-variant); }
-.consent-section { padding: 18px 0; border-top: 1px solid var(--q-outline-variant); }
+h1 { margin: 0; font-size: 26px; line-height: 1.2; color: var(--tk-text); } h2 { font-size: 17px; margin: 0 0 8px; color: var(--tk-text); }
+p { margin: 4px 0 0; color: var(--tk-text-secondary); }
+.consent-section { padding: 18px 0; border-top: 1px solid var(--tk-border); }
 .scope-list { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0 14px; }
-.write-warning, .state-banner { margin: 12px 0; } .mono { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
-.consent-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 18px; border-top: 1px solid var(--q-outline-variant); }
+.write-warning, .state-banner { margin: 12px 0; border-radius: var(--tk-radius); } .mono { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+.consent-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 18px; border-top: 1px solid var(--tk-border); }
 @media (max-width: 600px) { .consent-page { padding: 20px 14px; } .consent-actions { justify-content: stretch; } .consent-actions :deep(.q-btn) { flex: 1; } }
 </style>

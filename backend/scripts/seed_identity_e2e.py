@@ -13,6 +13,7 @@ import psycopg
 import pyotp
 
 from ima.application.identity import new_legacy_id
+from ima.domain.authorization import DEFAULT_ROLE_GRANTS
 from ima.infrastructure.auth.security import digest, encrypt_secret, hash_password
 
 PASSWORD = "E2E-password-123"
@@ -155,6 +156,17 @@ def main() -> None:
                         "INSERT INTO ima.folder_closure(workspace_id,ancestor_id,descendant_id,depth) VALUES (%s,%s,%s,0)",
                         (workspace_id, workspace_id, workspace_id),
                     )
+                    acl_id = uuid4()
+                    cursor.execute(
+                        "INSERT INTO ima.folder_acls(id,folder_id,created_by,updated_by,created_at,updated_at) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (acl_id, workspace_id, user_id, user_id, now, now),
+                    )
+                    for role, actions in DEFAULT_ROLE_GRANTS.items():
+                        for action in sorted(actions):
+                            cursor.execute(
+                                "INSERT INTO ima.folder_acl_entries(acl_id,subject_type,subject_id,action) VALUES (%s,'role',%s,%s)",
+                                (acl_id, role.value, action.value),
+                            )
                     cursor.execute(
                         "INSERT INTO ima.workspace_members(workspace_id,user_id,role,state,granted_by,joined_at,updated_at) VALUES (%s,%s,'workspace_admin','active',%s,%s,%s)",
                         (workspace_id, user_id, user_id, now, now),

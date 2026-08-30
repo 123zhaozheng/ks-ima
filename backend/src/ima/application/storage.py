@@ -472,7 +472,8 @@ class StorageService:
                         fv.version,fv.object_state,fv.object_key,fv.checksum,fv.size_bytes,fv.mime_type,fv.original_filename
                         FROM ima.documents d JOIN ima.document_file_versions fv ON fv.document_id=d.id
                         WHERE d.id=:id AND d.kind='file' AND d.lifecycle='active'
-                        AND (:version IS NULL AND fv.version=d.current_version OR :version IS NOT NULL AND fv.version=:version)
+                        AND (CAST(:version AS integer) IS NULL AND fv.version=d.current_version
+                          OR CAST(:version AS integer) IS NOT NULL AND fv.version=CAST(:version AS integer))
                         LIMIT 1"""
                         + (" FOR UPDATE" if lock else "")
                     ),

@@ -14,6 +14,7 @@ This directory contains guidelines for frontend development. Fill in each file w
 
 | Guide | Description | Status |
 |-------|-------------|--------|
+| [UX Design Language](./ux-design-language.md) | Tokens, rail IA, Ask/citation contracts, Chrome 109 policy, testids | Active |
 | [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
 | [Component Guidelines](./component-guidelines.md) | Component patterns, props, composition | To fill |
 | [Hook Guidelines](./hook-guidelines.md) | Custom hooks, data fetching patterns | To fill |
@@ -24,6 +25,8 @@ This directory contains guidelines for frontend development. Fill in each file w
 | [Identity And Administration](./identity-admin-contracts.md) | Generated identity client, role-aware UI, account security, and E2E | Active |
 | [Workspace Authorization](./workspace-authorization-contracts.md) | Generated workspace/member/group/folder ACL workflows and compatibility UX | Active |
 | [Model Governance](./model-governance-contracts.md) | Central admin model workflows, safe capability projection, and browser cutover | Active |
+| [File Upload And Ingestion](./file-upload-ingestion-contracts.md) | Upload/replace/download/preview, ingestion status, retry/cancel contracts | Active |
+| [Grounded Search And Ask](./grounded-search-ask-contracts.md) | Search/Ask SSE parsing, citations, cancellation/retry, conversation contracts | Active |
 
 ---
 

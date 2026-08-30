@@ -1,65 +1,77 @@
 <template>
-  <q-page p-4>
-    <div
-      flex
-      items-center
-      mb-3
-    >
-      <div text-h6>
-        {{ t('Tags') }}
-      </div>
-      <q-space />
+  <q-header class="tk-header">
+    <q-toolbar>
       <q-btn
+        flat
+        dense
+        round
+        icon="sym_o_menu"
+        @click="uiStateStore.toggleMainDrawer"
+      />
+      <q-toolbar-title>{{ t('Tags') }}</q-toolbar-title>
+      <q-btn
+        unelevated
+        no-caps
         color="primary"
         icon="sym_o_add"
         :label="t('New tag')"
         @click="create"
       />
-    </div>
-    <q-list
-      bordered
-      separator
-    >
-      <q-item
-        v-for="tag in tags"
-        :key="String(tag.id)"
-      >
-        <q-item-section>
-          <q-item-label>{{ tag.name }}</q-item-label>
-          <q-item-label caption>
-            {{ t('{0} documents', tag.count) }}
-          </q-item-label>
-        </q-item-section>
-        <q-item-section side>
-          <q-btn
-            flat
-            dense
-            round
-            icon="sym_o_edit"
-            :title="t('Rename')"
-            @click="rename(tag)"
-          />
-          <q-btn
-            flat
-            dense
-            round
-            icon="sym_o_merge"
-            :title="t('Merge')"
-            @click="merge(tag)"
-          />
-          <q-btn
-            flat
-            dense
-            round
-            icon="sym_o_delete"
-            :title="t('Delete')"
-            @click="remove(tag)"
-          />
-        </q-item-section>
-      </q-item>
-    </q-list>
-    <q-inner-loading :showing="loading" />
-  </q-page>
+    </q-toolbar>
+  </q-header>
+  <q-page-container>
+    <q-page class="tk-page tags-page">
+      <section class="tk-card tags-card">
+        <q-list separator>
+          <q-item
+            v-for="tag in tags"
+            :key="String(tag.id)"
+          >
+            <q-item-section>
+              <q-item-label>{{ tag.name }}</q-item-label>
+              <q-item-label caption>
+                {{ t('{0} documents', tag.count) }}
+              </q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <div class="tags-actions">
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="sym_o_edit"
+                  :title="t('Rename')"
+                  @click="rename(tag)"
+                />
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="sym_o_merge"
+                  :title="t('Merge')"
+                  @click="merge(tag)"
+                />
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="sym_o_delete"
+                  :title="t('Delete')"
+                  @click="remove(tag)"
+                />
+              </div>
+            </q-item-section>
+          </q-item>
+          <q-item v-if="!loading && !tags.length">
+            <q-item-section class="tags-empty">
+              {{ t('No tags') }}
+            </q-item-section>
+          </q-item>
+        </q-list>
+        <q-inner-loading :showing="loading" />
+      </section>
+    </q-page>
+  </q-page-container>
 </template>
 
 <script setup lang="ts">
@@ -67,12 +79,14 @@ import { computed } from 'vue'
 import { useQuasar } from 'quasar'
 import { knowledgeClient } from 'src/api/knowledge-client'
 import { useWorkspaceStore } from 'src/stores/workspace'
+import { useUiStateStore } from 'src/stores/ui-state'
 import { useKnowledgeMutations, useKnowledgeTags } from 'src/composables/use-knowledge'
 import { t } from 'src/utils/i18n'
 import type { components } from 'src/api/generated/schema'
 
 type Tag = components['schemas']['TagResponse']
 const workspace = useWorkspaceStore()
+const uiStateStore = useUiStateStore()
 const $q = useQuasar()
 const tagsQuery = useKnowledgeTags(() => workspace.id)
 const tagMutations = useKnowledgeMutations()
@@ -121,3 +135,18 @@ function merge(tag: Tag) {
   })
 }
 </script>
+
+<style scoped>
+.tags-card {
+  position: relative;
+}
+
+.tags-actions {
+  display: flex;
+  gap: var(--tk-space-1);
+}
+
+.tags-empty {
+  color: var(--tk-text-secondary);
+}
+</style>

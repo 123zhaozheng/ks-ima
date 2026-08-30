@@ -1,4 +1,5 @@
 import { computed, onScopeDispose, ref, watch } from 'vue'
+import type { InjectionKey } from 'vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { components } from 'src/api/generated/schema'
 import { groundedClient } from 'src/api/grounded-client'
@@ -7,6 +8,14 @@ type Citation = components['schemas']['CitationResponse']
 type Conversation = components['schemas']['ConversationDetail']
 type SearchMode = 'keyword' | 'vector' | 'hybrid'
 
+export type GroundedKnowledge = ReturnType<typeof useGroundedKnowledge>
+
+/**
+ * AppShell provides one shared instance so a stream started on the Ask home
+ * keeps running after the router navigates to /ask/:conversationId.
+ */
+export const groundedKey: InjectionKey<GroundedKnowledge> = Symbol('grounded-knowledge')
+
 export function useGroundedKnowledge(workspaceId: () => string | null) {
   const client = useQueryClient()
   const controller = ref<AbortController | null>(null)
@@ -14,6 +23,7 @@ export function useGroundedKnowledge(workspaceId: () => string | null) {
   const citations = ref<Citation[]>([])
   const status = ref<'idle' | 'streaming' | 'completed' | 'knowledge_gap' | 'failed' | 'cancelled'>('idle')
   const conversationId = ref<string | null>(null)
+  const messageId = ref<string | null>(null)
   const workspace = computed(workspaceId)
   const key = computed(() => ['grounded', 'workspace', workspace.value])
 
@@ -31,6 +41,7 @@ export function useGroundedKnowledge(workspaceId: () => string | null) {
 
   function applyEvent(event: string, payload: Record<string, unknown>) {
     if (typeof payload.conversationId === 'string') conversationId.value = payload.conversationId
+    if (typeof payload.messageId === 'string') messageId.value = payload.messageId
     if (event === 'citations' && Array.isArray(payload.citations)) citations.value = payload.citations as Citation[]
     if (event === 'delta' && typeof payload.delta === 'string') answer.value += payload.delta
     if (event === 'completed') status.value = 'completed'
@@ -52,6 +63,7 @@ export function useGroundedKnowledge(workspaceId: () => string | null) {
     cancel()
     answer.value = ''
     citations.value = []
+    messageId.value = null
     status.value = 'streaming'
     const next = new AbortController()
     controller.value = next
@@ -108,6 +120,7 @@ export function useGroundedKnowledge(workspaceId: () => string | null) {
       client.removeQueries({ queryKey: ['grounded', 'workspace', previous] })
     }
     conversationId.value = null
+    messageId.value = null
   }
 
   watch(workspace, (next, previous) => {
@@ -115,5 +128,5 @@ export function useGroundedKnowledge(workspaceId: () => string | null) {
   })
 
   onScopeDispose(cancel)
-  return { answer, archive, ask, cancel, citations, conversation, conversationId, conversations, remove, rename, resetForWorkspaceSwitch, retry, search, status }
+  return { answer, archive, ask, cancel, citations, conversation, conversationId, conversations, messageId, remove, rename, resetForWorkspaceSwitch, retry, search, status }
 }

@@ -9,8 +9,9 @@ Apply this contract to knowledge file upload, immutable replacement, download, p
 ```text
 src/api/knowledge-client.ts
 src/composables/use-knowledge.ts
-src/views/DirView.vue
-src/pages/KnowledgeDocumentPage.vue
+src/components/DocPreview.vue
+src/components/UploadDialog.vue
+src/pages/KnowledgeWorkspace.vue
 frontend/generated/openapi.json
 src/api/generated/schema.ts
 ```

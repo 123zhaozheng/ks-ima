@@ -45,8 +45,12 @@ export function useKnowledgeCapabilities(workspaceId: () => string | null) {
   return useQuery({ queryKey: computed(() => [...knowledgeKeys.all, 'capabilities', workspaceId()]), queryFn: ({ signal }) => knowledgeClient.capabilities(workspaceId()!, signal), enabled: computed(() => Boolean(workspaceId())) })
 }
 
-export function useFolderContents(folderId: () => string | null, options: { kind?: 'folder' | 'file' | 'note', tagId?: string } = {}) {
-  return useQuery({ queryKey: computed(() => knowledgeKeys.contents(folderId()!, options)), queryFn: ({ signal }) => knowledgeClient.contents(folderId()!, { ...options, signal }), enabled: computed(() => Boolean(folderId())) })
+export function useFolderContents(folderId: () => string | null, options: () => { kind?: 'folder' | 'file' | 'note', tagId?: string | null } = () => ({})) {
+  return useQuery({
+    queryKey: computed(() => knowledgeKeys.contents(folderId()!, { kind: options().kind, tagId: options().tagId ?? undefined })),
+    queryFn: ({ signal }) => knowledgeClient.contents(folderId()!, { kind: options().kind, tagId: options().tagId ?? undefined, signal }),
+    enabled: computed(() => Boolean(folderId())),
+  })
 }
 
 export function useKnowledgeDocument(documentId: () => string | null) {
@@ -88,6 +92,14 @@ export function useKnowledgeMutations() {
     if (folderId) client.invalidateQueries({ queryKey: [...knowledgeKeys.all, 'contents', folderId] })
   }
   return {
+    createFolder: useMutation({
+      mutationFn: ({ workspaceId, name, parentId }: { workspaceId: string, name: string, parentId: string }) => knowledgeClient.createFolder(workspaceId, { name, parentId }),
+      onSuccess: folder => invalidate(undefined, folder.workspaceId, folder.parentId ?? undefined),
+    }),
+    createNote: useMutation({
+      mutationFn: ({ folderId, input }: { folderId: string, input: Parameters<typeof knowledgeClient.createNote>[1] }) => knowledgeClient.createNote(folderId, input),
+      onSuccess: document => invalidate(document.id, document.workspaceId, document.folderId),
+    }),
     uploadFile: useMutation({
       mutationFn: async ({ folderId, file, title, onProgress, signal }: {
         folderId: string
@@ -140,7 +152,7 @@ export function useKnowledgeMutations() {
     cancelIngestion: useMutation({ mutationFn: knowledgeClient.cancelIngestion, onSuccess: status => invalidate(status.documentId) }),
     updateDocument: useMutation({ mutationFn: ({ documentId, input }: { documentId: string, input: Parameters<typeof knowledgeClient.updateDocument>[1] }) => knowledgeClient.updateDocument(documentId, input), onSuccess: document => invalidate(document.id, document.workspaceId, document.folderId) }),
     moveDocument: useMutation({ mutationFn: ({ documentId, folderId, expectedVersion }: { documentId: string, folderId: string, expectedVersion: number }) => knowledgeClient.moveDocument(documentId, folderId, expectedVersion), onSuccess: document => invalidate(document.id, document.workspaceId, document.folderId) }),
-    trashDocument: useMutation({ mutationFn: ({ documentId, expectedVersion }: { documentId: string, expectedVersion: number }) => knowledgeClient.trashDocument(documentId, expectedVersion), onSuccess: (_value, variables) => invalidate(variables.documentId) }),
+    trashDocument: useMutation({ mutationFn: ({ documentId, expectedVersion }: { documentId: string, expectedVersion: number, folderId?: string }) => knowledgeClient.trashDocument(documentId, expectedVersion), onSuccess: (_value, variables) => { invalidate(variables.documentId); if (variables.folderId) client.invalidateQueries({ queryKey: [...knowledgeKeys.all, 'contents', variables.folderId] }) } }),
     deleteTag: useMutation({ mutationFn: ({ workspaceId, tagId, expectedVersion }: { workspaceId: string, tagId: string, expectedVersion: number }) => knowledgeClient.deleteTag(workspaceId, tagId, { expectedVersion }), onSuccess: (_value, variables) => client.invalidateQueries({ queryKey: knowledgeKeys.tags(variables.workspaceId) }) }),
     mergeTag: useMutation({ mutationFn: ({ workspaceId, tagId, targetTagId, expectedVersion, expectedTargetVersion }: { workspaceId: string, tagId: string, targetTagId: string, expectedVersion: number, expectedTargetVersion: number }) => knowledgeClient.mergeTag(workspaceId, tagId, { targetTagId, expectedVersion, expectedTargetVersion }), onSuccess: (_value, variables) => client.invalidateQueries({ queryKey: knowledgeKeys.tags(variables.workspaceId) }) }),
   }

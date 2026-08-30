@@ -1,0 +1,103 @@
+/*
+ * Design tokens: Semi-inspired fixed palette for the ima-style workbench.
+ * Light theme only. Chrome 109 policy: no CSS nesting, no color-mix()/oklch(),
+ * no container queries, no unprefixed background-clip: text.
+ */
+
+:root {
+  /* Surfaces */
+  --tk-bg: #ffffff;
+  --tk-surface: #f7f8fa;
+  --tk-surface-deep: #f2f3f5;
+
+  /* Lines and text */
+  --tk-border: rgba(0, 0, 0, 0.08);
+  --tk-border-strong: rgba(0, 0, 0, 0.15);
+  --tk-text: rgba(0, 0, 0, 0.85);
+  --tk-text-secondary: rgba(0, 0, 0, 0.6);
+  --tk-text-tertiary: rgba(0, 0, 0, 0.4);
+
+  /* Accent */
+  --tk-accent: #0077fa;
+  --tk-accent-hover: #3395fb;
+  --tk-accent-active: #005fd6;
+  --tk-accent-soft: rgba(0, 119, 250, 0.08);
+
+  /* Status */
+  --tk-danger: #f93920;
+  --tk-danger-soft: rgba(249, 57, 32, 0.08);
+  --tk-success: #4cbf50;
+  --tk-warning: #ff8800;
+
+  /* Shape */
+  --tk-radius-sm: 4px;
+  --tk-radius: 6px;
+  --tk-radius-lg: 8px;
+
+  /* Spacing scale (4/8pt) */
+  --tk-space-1: 4px;
+  --tk-space-2: 8px;
+  --tk-space-3: 12px;
+  --tk-space-4: 16px;
+  --tk-space-5: 20px;
+  --tk-space-6: 24px;
+  --tk-space-8: 32px;
+
+  /* Shadows */
+  --tk-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --tk-shadow-md: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+body {
+  background-color: var(--tk-bg);
+  color: var(--tk-text);
+}
+
+/*
+ * Shared page scaffolding so every surface reads as one calm product.
+ * The shell has no global top bar: each page owns a .tk-header.
+ */
+.tk-header {
+  background-color: var(--tk-surface);
+  color: var(--tk-text);
+}
+
+.tk-header .q-toolbar__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--tk-text);
+}
+
+.tk-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--tk-space-6) var(--tk-space-4);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Doubled selector so the calm white surface also wins on `q-card.tk-card`. */
+.tk-card.tk-card {
+  background-color: var(--tk-bg);
+  border: 1px solid var(--tk-border);
+  border-radius: var(--tk-radius-lg);
+  box-shadow: var(--tk-shadow-sm);
+}
+
+.tk-card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tk-text);
+}
+
+.tk-card-subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--tk-text-secondary);
+}
+
+.tk-caption {
+  font-size: 13px;
+  color: var(--tk-text-tertiary);
+}

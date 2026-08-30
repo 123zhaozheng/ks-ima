@@ -1,41 +1,41 @@
 body.body--dark,
 body.body--light {
-  background-color: var(--a-sur);
-  color: var(--a-on-sur);
-  --q-primary: var(--a-pri);
-  --q-secondary: var(--a-sec);
-  --q-accent: var(--a-ter);
-  --q-dark: var(--a-sur-c);
-  --q-dark-page: var(--a-sur);
-  --q-negative: var(--a-err);
+  background-color: var(--tk-bg);
+  color: var(--tk-text);
+  --q-primary: var(--tk-accent);
+  --q-secondary: var(--tk-text-secondary);
+  --q-accent: var(--tk-accent);
+  --q-dark: var(--tk-surface);
+  --q-dark-page: var(--tk-bg);
+  --q-negative: var(--tk-danger);
 
   .q-dark,
   .q-item--dark,
   .q-field--dark .q-field__native {
-    color: var(--a-on-sur);
+    color: var(--tk-text);
   }
 
   .q-btn.bg-primary {
-    color: var(--a-on-pri) !important;
+    color: #ffffff !important;
   }
 
   .q-item__label--header {
-    color: var(--a-sec);
+    color: var(--tk-text-secondary);
   }
 
   .q-field--filled .q-field__control {
-    background-color: var(--a-sur-c);
+    background-color: var(--tk-surface);
   }
 
   .q-notification.bg-negative {
-    color: var(--a-on-err) !important;
+    color: #ffffff !important;
   }
 
   .q-chip,
   .q-menu,
   .q-tab-panels {
-    background-color: var(--a-sur-c);
-    color: var(--a-on-sur);
+    background-color: var(--tk-surface);
+    color: var(--tk-text);
   }
 
   .q-tooltip--style {
@@ -43,7 +43,7 @@ body.body--light {
   }
 
   .q-checkbox__svg {
-    color: var(--a-on-pri);
+    color: #ffffff;
   }
 
   .q-toggle {
@@ -66,7 +66,7 @@ body.body--light {
 
       &::after {
         box-shadow: none;
-        background-color: var(--a-sur-c);
+        background-color: var(--tk-surface);
       }
     }
 
@@ -80,7 +80,7 @@ body.body--light {
       }
 
       .q-toggle__thumb::after {
-        background-color: var(--a-on-pri);
+        background-color: #ffffff;
       }
     }
   }
@@ -126,11 +126,11 @@ body.body--light {
 .q-field--dark:not(.q-field--highlighted) .q-field__label,
 .q-field--dark .q-field__marginal,
 .q-field--dark .q-field__bottom {
-  color: var(--a-on-sur-var);
+  color: var(--tk-text-secondary);
 }
 
 .q-item__section--side {
-  color: var(--a-on-sur-var);
+  color: var(--tk-text-secondary);
 }
 
 .q-item__section--avatar {
@@ -138,11 +138,11 @@ body.body--light {
 }
 
 .q-card {
-  background-color: var(--a-sur-c);
+  background-color: var(--tk-surface);
 }
 
 .q-item__label--caption {
-  color: var(--a-on-sur-var);
+  color: var(--tk-text-secondary);
 }
 
 .icon-sm .q-icon,

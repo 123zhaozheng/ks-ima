@@ -3,6 +3,8 @@ import { imaClient } from './ima-client'
 
 type ContentPage = components['schemas']['ContentPage']
 type Document = components['schemas']['DocumentResponse']
+type Folder = components['schemas']['Folder']
+type FolderCreate = components['schemas']['FolderCreateRequest']
 type Capabilities = components['schemas']['KnowledgeCapabilities']
 type NoteInput = components['schemas']['NoteCreateRequest']
 type DocumentPatch = components['schemas']['DocumentPatchRequest']
@@ -24,6 +26,7 @@ const path = (value: string) => encodeURIComponent(value)
 
 export const knowledgeClient = {
   capabilities: (workspaceId: string, signal?: AbortSignal) => imaClient.request<Capabilities>(`/api/v1/workspaces/${path(workspaceId)}/knowledge-capabilities`, { signal }),
+  createFolder: (workspaceId: string, input: FolderCreate) => imaClient.request<Folder>(`/api/v1/workspaces/${path(workspaceId)}/folders`, { method: 'POST', body: JSON.stringify(input) }),
   uploadTicket: (folderId: string, input: UploadTicketInput) => imaClient.request<UploadTicket>(`/api/v1/folders/${path(folderId)}/files/upload-ticket`, { method: 'POST', body: JSON.stringify(input) }),
   replacementUploadTicket: (documentId: string, input: ReplaceFileInput) => imaClient.request<UploadTicket>(`/api/v1/documents/${path(documentId)}/file-versions/upload-ticket`, { method: 'POST', body: JSON.stringify(input) }),
   fileVersions: (documentId: string, signal?: AbortSignal) => imaClient.request<FileVersions>(`/api/v1/documents/${path(documentId)}/file-versions`, { signal }),

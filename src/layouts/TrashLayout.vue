@@ -1,8 +1,5 @@
 <template>
-  <q-header
-    bg-sur-c-low
-    text-on-sur
-  >
+  <q-header class="tk-header">
     <q-toolbar>
       <q-btn
         flat
@@ -12,16 +9,20 @@
         @click="uiStateStore.toggleMainDrawer"
       />
       <q-toolbar-title>{{ t('Trash') }}</q-toolbar-title>
-      <q-space />
     </q-toolbar>
   </q-header>
   <q-page-container>
-    <q-page :style-fn="pageFhStyle">
-      <trash-list
-        v-if="workspaceStore.id"
-        :workspace-id="workspaceStore.id"
-        h-full
-      />
+    <q-page
+      class="trash-page"
+      :style-fn="pageFhStyle"
+    >
+      <div class="tk-card trash-card">
+        <trash-list
+          v-if="workspaceStore.id"
+          :workspace-id="workspaceStore.id"
+          h-full
+        />
+      </div>
     </q-page>
   </q-page-container>
 </template>
@@ -39,3 +40,23 @@ useRequireLogin()
 const uiStateStore = useUiStateStore()
 const workspaceStore = useWorkspaceStore()
 </script>
+
+<style scoped>
+.trash-page {
+  display: flex;
+  flex-direction: column;
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+  padding: var(--tk-space-4);
+  box-sizing: border-box;
+}
+
+.trash-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+</style>

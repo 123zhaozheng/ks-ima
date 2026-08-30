@@ -7,6 +7,7 @@ const workspaceState = reactive({ id: 'w1' as string | null })
 const principal = { id: 'p1', workspaceId: 'w1', folderRootId: null, displayName: 'Indexer', purpose: 'Nightly indexing', ownerUserId: 'u1', scopes: ['mcp:knowledge:read'], state: 'active', expiresAt: '2030-01-01T00:00:00Z', rateLimit: 10, concurrencyLimit: 2, cidrAllowlist: [] }
 const credential = { id: 'c1', principalId: 'p1', credentialId: 'key1', secretPrefix: 'mcpsc_', expiresAt: '2030-01-01T00:00:00Z', createdAt: '', revokedAt: null, lastUsedAt: null }
 vi.mock('src/stores/workspace', () => ({ useWorkspaceStore: () => workspaceState }))
+vi.mock('src/stores/ui-state', () => ({ useUiStateStore: () => ({ toggleMainDrawer: () => undefined }) }))
 vi.mock('quasar', () => ({
   copyToClipboard: vi.fn(),
   useQuasar: () => ({ notify: vi.fn() }),

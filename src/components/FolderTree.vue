@@ -1,5 +1,6 @@
 <template>
   <div
+    class="kb-tree"
     flex="~ col"
     min-h-0
     flex-1
@@ -10,13 +11,14 @@
   >
     <q-item
       clickable
-      item-rd
+      class="kb-tree-item"
+      :class="{ 'kb-tree-item-active': currentFolderId === workspaceStore.id }"
       role="treeitem"
       tabindex="0"
       min-h="36px"
       py-0
       px-2
-      :to="workspaceStore.id ? '/' : undefined"
+      :to="workspaceStore.id ? '/kb' : undefined"
       :active="currentFolderId === workspaceStore.id"
       @keydown.enter.prevent="activate(workspaceStore.id!)"
       @keydown.space.prevent="activate(workspaceStore.id!)"
@@ -42,14 +44,15 @@
       v-for="row in visibleRows"
       :key="row.folder.id"
       clickable
-      item-rd
+      class="kb-tree-item"
+      :class="{ 'kb-tree-item-active': currentFolderId === row.folder.id }"
       role="treeitem"
       tabindex="0"
       min-h="36px"
       py-0
       pr-2
       :style="{ paddingLeft: `${8 + row.depth * 16}px` }"
-      :to="{ path: '/', query: { folderId: row.folder.id } }"
+      :to="{ path: '/kb', query: { folderId: row.folder.id } }"
       :active="currentFolderId === row.folder.id"
       :aria-expanded="row.hasChildren ? expanded.has(row.folder.id) : undefined"
       @keydown.enter.prevent="activate(row.folder.id)"
@@ -157,8 +160,8 @@ function activate(id: string) {
   if (folder) {
     toggle(id)
   }
-  if (id === workspaceStore.id) router.push('/')
-  else router.push({ path: '/', query: { folderId: id } })
+  if (id === workspaceStore.id) router.push('/kb')
+  else router.push({ path: '/kb', query: { folderId: id } })
 }
 
 async function loadChildren(parentId: string) {
@@ -175,9 +178,36 @@ async function loadChildren(parentId: string) {
   }
 }
 
+// Re-read a folder's children after folder creation; expands the parent so
+// the new folder is immediately visible.
+async function refresh(parentId?: string) {
+  const target = parentId || workspaceStore.id
+  if (!target) return
+  if (target !== workspaceStore.id) expanded.add(target)
+  await loadChildren(target)
+}
+
+defineExpose({ refresh })
+
 watch(() => workspaceStore.id, id => {
   byParent.value = new Map()
   expanded.clear()
   if (id) loadChildren(id).catch(() => undefined)
 }, { immediate: true })
 </script>
+
+<style scoped>
+.kb-tree-item {
+  border-radius: var(--tk-radius);
+  color: var(--tk-text);
+}
+
+.kb-tree-item:hover {
+  background-color: var(--tk-surface-deep);
+}
+
+.kb-tree-item-active {
+  background-color: var(--tk-accent-soft);
+  color: var(--tk-accent);
+}
+</style>

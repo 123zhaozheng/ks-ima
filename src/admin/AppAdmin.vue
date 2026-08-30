@@ -5,15 +5,14 @@
 </template>
 
 <script setup lang="ts">
-import { useSetTheme } from 'src/composables/set-theme'
 import { watch } from 'vue'
-import { DEFAULT_HUE } from 'src/utils/config'
 import { session } from 'src/utils/identity-client'
 import { useRouter } from 'vue-router'
-import { useQuasar } from 'quasar'
+import { Dark, useQuasar } from 'quasar'
 import { t } from 'src/utils/i18n'
 
-useSetTheme(DEFAULT_HUE)
+// Fixed light palette: tokens live in src/styles/tokens.css.
+Dark.set(false)
 
 const router = useRouter()
 const $q = useQuasar()

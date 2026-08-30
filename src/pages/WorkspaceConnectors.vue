@@ -1,52 +1,82 @@
 <template>
+  <q-header class="tk-header">
+    <q-toolbar>
+      <q-btn
+        flat
+        dense
+        round
+        icon="sym_o_menu"
+        @click="uiStateStore.toggleMainDrawer"
+      />
+      <q-toolbar-title>{{ t('Connectors') }}</q-toolbar-title>
+    </q-toolbar>
+  </q-header>
   <q-page-container>
     <q-page
       v-if="workspaceStore.id"
-      class="access-page"
+      class="tk-page connectors-page"
     >
-      <section class="band">
-        <header>
+      <section class="tk-card connectors-card">
+        <header class="connectors-card-head">
           <q-icon
             name="sym_o_link"
-            size="24px"
-          /><div><h1>{{ t('Agent access') }}</h1><p>{{ t('Interactive connections') }}</p></div>
+            size="22px"
+            color="primary"
+          />
+          <div>
+            <h1 class="tk-card-title">
+              {{ t('Agent access') }}
+            </h1>
+            <p class="tk-card-subtitle">
+              {{ t('Interactive connections') }}
+            </p>
+          </div>
         </header>
         <q-list separator>
           <q-item>
             <q-item-section>
-              <q-item-label>{{ t('MCP resource') }}</q-item-label><q-item-label
+              <q-item-label>{{ t('MCP resource') }}</q-item-label>
+              <q-item-label
                 caption
                 class="mono"
               >
                 {{ mcpUrl }}
               </q-item-label>
-            </q-item-section><q-item-section side>
+            </q-item-section>
+            <q-item-section side>
               <q-btn
                 flat
                 round
+                dense
                 icon="sym_o_content_copy"
                 :title="t('Copy')"
                 @click="copy(mcpUrl)"
               />
             </q-item-section>
-          </q-item><q-item v-if="!grants.length">
+          </q-item>
+          <q-item v-if="!grants.length">
             <q-item-section>
-              <q-item-label>{{ t('Connected agents') }}</q-item-label><q-item-label caption>
+              <q-item-label>{{ t('Connected agents') }}</q-item-label>
+              <q-item-label caption>
                 {{ t('No interactive grants are available.') }}
               </q-item-label>
             </q-item-section>
-          </q-item><q-item
+          </q-item>
+          <q-item
             v-for="grant in grants"
             :key="grant.id"
           >
             <q-item-section>
-              <q-item-label>{{ grant.clientName }}</q-item-label><q-item-label caption>
+              <q-item-label>{{ grant.clientName }}</q-item-label>
+              <q-item-label caption>
                 {{ grant.scopes.map(scopeLabel).join(' · ') }} · {{ formatTime(grant.expiresAt) }}
               </q-item-label>
-            </q-item-section><q-item-section side>
+            </q-item-section>
+            <q-item-section side>
               <q-btn
                 flat
                 round
+                dense
                 color="negative"
                 icon="sym_o_link_off"
                 :title="t('Revoke')"
@@ -56,34 +86,50 @@
           </q-item>
         </q-list>
       </section>
-      <section class="band">
-        <header>
+      <section class="tk-card connectors-card">
+        <header class="connectors-card-head">
           <q-icon
             name="sym_o_key"
-            size="24px"
-          /><div><h2>{{ t('Service access') }}</h2><p>{{ t('Unattended agents') }}</p></div>
+            size="22px"
+            color="primary"
+          />
+          <div>
+            <h2 class="tk-card-title">
+              {{ t('Service access') }}
+            </h2>
+            <p class="tk-card-subtitle">
+              {{ t('Unattended agents') }}
+            </p>
+          </div>
         </header>
         <q-banner
           v-if="error"
-          class="text-negative"
+          rounded
+          class="connectors-banner"
           aria-live="polite"
         >
           {{ error }}
         </q-banner>
         <q-banner
           v-if="oneTime"
-          class="secret"
+          rounded
+          class="connectors-secret"
         >
-          <strong>{{ t('One-time credential') }}</strong><code>{{ oneTime.secret }}</code><template #action>
+          <strong>{{ t('One-time credential') }}</strong>
+          <code class="mono">{{ oneTime.secret }}</code>
+          <template #action>
             <q-btn
               flat
               round
+              dense
               icon="sym_o_content_copy"
               :title="t('Copy')"
               @click="copy(oneTime.secret)"
-            /><q-btn
+            />
+            <q-btn
               flat
               round
+              dense
               icon="sym_o_close"
               :title="t('Dismiss')"
               @click="oneTime = null"
@@ -99,22 +145,26 @@
             outlined
             dense
             :label="t('Name')"
-          /><q-input
+          />
+          <q-input
             v-model="form.purpose"
             outlined
             dense
             :label="t('Purpose')"
-          /><q-input
+          />
+          <q-input
             v-model="form.ownerUserId"
             outlined
             dense
             :label="t('Owner user ID')"
-          /><q-input
+          />
+          <q-input
             v-model="form.folderRootId"
             outlined
             dense
             :label="t('Folder root (optional)')"
-          /><q-input
+          />
+          <q-input
             v-model.number="form.expiresDays"
             outlined
             dense
@@ -148,16 +198,20 @@
           </q-item>
           <q-item v-if="loading">
             <q-item-section>{{ t('Loading service access…') }}</q-item-section>
-          </q-item><q-item v-else-if="isAdmin && !principals.length">
+          </q-item>
+          <q-item v-else-if="isAdmin && !principals.length">
             <q-item-section>{{ t('No service principals') }}</q-item-section>
-          </q-item><q-item
+          </q-item>
+          <q-item
             v-for="principal in principals"
             :key="principal.id"
           >
             <q-item-section>
-              <q-item-label>{{ principal.displayName }}</q-item-label><q-item-label caption>
+              <q-item-label>{{ principal.displayName }}</q-item-label>
+              <q-item-label caption>
                 {{ principal.purpose }} · {{ principal.state }} · {{ formatTime(principal.expiresAt) }}
-              </q-item-label><q-item-label caption>
+              </q-item-label>
+              <q-item-label caption>
                 {{ principal.scopes.map(scopeLabel).join(' · ') }}<span v-if="principal.folderRootId"> · {{ t('Folder-scoped') }}</span>
               </q-item-label>
               <div
@@ -166,18 +220,20 @@
                 class="credential-row"
               >
                 <span class="mono">{{ credential.secretPrefix }}...</span>
-                <span>{{ formatTime(credential.expiresAt) }}</span>
+                <span class="connectors-credential-time">{{ formatTime(credential.expiresAt) }}</span>
                 <q-btn
                   v-if="!credential.revokedAt"
                   flat
                   round
+                  dense
                   color="negative"
                   icon="sym_o_key_off"
                   :title="t('Revoke credential')"
                   @click="revokeCredential(principal.id, credential.credentialId)"
                 />
               </div>
-            </q-item-section><q-item-section
+            </q-item-section>
+            <q-item-section
               v-if="isAdmin"
               side
             >
@@ -186,12 +242,15 @@
                   v-if="activeCredential(principal.id)"
                   flat
                   round
+                  dense
                   icon="sym_o_refresh"
                   :title="t('Rotate')"
                   @click="rotateFirstCredential(principal)"
-                /><q-btn
+                />
+                <q-btn
                   flat
                   round
+                  dense
                   color="negative"
                   icon="sym_o_delete"
                   :title="t('Revoke')"
@@ -211,6 +270,7 @@ import type { components } from 'src/api/generated/schema'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { copyToClipboard, useQuasar } from 'quasar'
 import { useWorkspaceStore } from 'src/stores/workspace'
+import { useUiStateStore } from 'src/stores/ui-state'
 import { identityClient, session } from 'src/utils/identity-client'
 import { t } from 'src/utils/i18n'
 
@@ -226,6 +286,7 @@ const scopeOptions = [
   'mcp:knowledge:search',
 ]
 const workspaceStore = useWorkspaceStore()
+const uiStateStore = useUiStateStore()
 const $q = useQuasar()
 const principals = ref<ServicePrincipal[]>([])
 const grants = ref<ConnectedGrant[]>([])
@@ -404,5 +465,86 @@ onBeforeUnmount(() => { oneTime.value = null })
 </script>
 
 <style scoped>
-.access-page{max-width:900px;margin:0 auto;padding:20px}.band{padding:18px 0 28px;border-bottom:1px solid var(--q-outline-variant)}header{display:flex;align-items:center;gap:12px;margin-bottom:14px}h1,h2{margin:0;font-size:20px}p{margin:2px 0 0;color:var(--q-on-surface-variant)}.mono,code{font-family:ui-monospace,monospace;overflow-wrap:anywhere}.secret{margin:12px 0}.secret strong,.secret code{display:block;margin-bottom:6px}.create-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}.scopes{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 14px}.credential-row{display:grid;grid-template-columns:minmax(100px,1fr) minmax(140px,auto) 40px;align-items:center;gap:8px;margin-top:8px}@media(max-width:640px){.access-page{padding:12px}.create-grid{grid-template-columns:1fr}.scopes{grid-column:auto;flex-direction:column}.credential-row{grid-template-columns:1fr 40px}.credential-row span:nth-child(2){grid-column:1}}
+.connectors-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tk-space-4);
+}
+
+.connectors-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--tk-space-3);
+  padding: var(--tk-space-4) var(--tk-space-4) var(--tk-space-2);
+}
+
+.connectors-banner {
+  margin: var(--tk-space-2) var(--tk-space-4) 0;
+  background-color: var(--tk-danger-soft);
+  color: var(--tk-danger);
+}
+
+.connectors-secret {
+  margin: var(--tk-space-2) var(--tk-space-4) 0;
+  background-color: var(--tk-accent-soft);
+  color: var(--tk-text);
+}
+
+.connectors-secret strong,
+.connectors-secret code {
+  display: block;
+  margin-bottom: var(--tk-space-1);
+}
+
+.mono,
+code {
+  font-family: ui-monospace, monospace;
+  overflow-wrap: anywhere;
+}
+
+.create-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--tk-space-3);
+  padding: var(--tk-space-4) var(--tk-space-4) 0;
+}
+
+.scopes {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tk-space-1) 14px;
+}
+
+.credential-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(140px, auto) 40px;
+  align-items: center;
+  gap: var(--tk-space-2);
+  margin-top: var(--tk-space-2);
+}
+
+.connectors-credential-time {
+  color: var(--tk-text-secondary);
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .create-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scopes {
+    grid-column: auto;
+    flex-direction: column;
+  }
+
+  .credential-row {
+    grid-template-columns: 1fr 40px;
+  }
+
+  .credential-row span:nth-child(2) {
+    grid-column: 1;
+  }
+}
 </style>

@@ -221,7 +221,15 @@ class KnowledgeService:
                 ).encode()
             return {
                 "items": [
-                    {**row, "orderKey": row.pop("order_key"), "fileState": row.pop("file_state")}
+                    {
+                        "id": row["id"],
+                        "kind": row["kind"],
+                        "title": row["title"],
+                        "orderKey": row["order_key"],
+                        "version": row["version"],
+                        "lifecycle": row["lifecycle"],
+                        "fileState": row["file_state"],
+                    }
                     for row in payload
                 ],
                 "nextCursor": next_cursor,
@@ -445,7 +453,17 @@ class KnowledgeService:
                 .mappings()
                 .all()
             )
-            return [dict(row) for row in rows]
+            return [
+                {
+                    "documentId": row["document_id"],
+                    "version": row["version"],
+                    "kind": row["kind"],
+                    "markdown": row["markdown"],
+                    "digest": row["digest"],
+                    "createdAt": row["created_at"],
+                }
+                for row in rows
+            ]
 
     async def restore_version(
         self, actor: str, document_id: UUID, version: int, expected_version: int
@@ -811,10 +829,13 @@ class KnowledgeService:
             return {
                 "items": [
                     {
-                        **row,
-                        "orderKey": row.pop("order_key"),
-                        "fileState": row.pop("file_state"),
-                        "trashedAt": row.pop("trashed_at"),
+                        "id": row["id"],
+                        "kind": row["kind"],
+                        "title": row["title"],
+                        "orderKey": row["order_key"],
+                        "version": row["version"],
+                        "lifecycle": row["lifecycle"],
+                        "fileState": row["file_state"],
                     }
                     for row in payload
                 ],

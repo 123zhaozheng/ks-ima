@@ -1,8 +1,5 @@
 <template>
-  <q-header
-    bg-sur-c-low
-    text-on-sur
-  >
+  <q-header class="tk-header">
     <q-toolbar>
       <q-btn
         flat
@@ -10,43 +7,44 @@
         round
         icon="sym_o_menu"
         @click="uiStateStore.toggleMainDrawer"
-      /><q-toolbar-title>Account</q-toolbar-title>
+      />
+      <q-toolbar-title>{{ t('Account') }}</q-toolbar-title>
     </q-toolbar>
   </q-header>
   <q-page-container>
     <q-page
       v-if="user"
-      max-w="800px"
-      mx-a
-      py-2
+      class="tk-page account-page"
     >
-      <q-list>
-        <common-item label="Name">
-          <a-input
-            :model-value="user.displayName"
-            @change="updateName"
-            dense
-            filled
-          />
-        </common-item>
-        <common-item label="Email">
-          {{ user.email }}
-        </common-item>
-        <common-item
-          label="Security and sessions"
-          clickable
-          @click="$router.push('/account/security')"
-        >
-          <q-icon name="sym_o_security" />
-        </common-item>
-        <common-item
-          label="Change password"
-          clickable
-          @click="changePassword"
-        >
-          <q-icon name="sym_o_chevron_right" />
-        </common-item>
-      </q-list>
+      <section class="tk-card account-card">
+        <q-list>
+          <common-item :label="t('Name')">
+            <a-input
+              :model-value="user.displayName"
+              @change="updateName"
+              dense
+              filled
+            />
+          </common-item>
+          <common-item :label="t('Email')">
+            {{ user.email }}
+          </common-item>
+          <common-item
+            :label="t('Security and sessions')"
+            clickable
+            @click="$router.push('/account/security')"
+          >
+            <q-icon name="sym_o_security" />
+          </common-item>
+          <common-item
+            :label="t('Change password')"
+            clickable
+            @click="changePassword"
+          >
+            <q-icon name="sym_o_chevron_right" />
+          </common-item>
+        </q-list>
+      </section>
     </q-page>
     <q-page
       v-else-if="loading"
@@ -62,7 +60,9 @@
       items-center
       justify-center
     >
-      <q-banner>Account session expired or unavailable.</q-banner>
+      <q-banner class="account-expired">
+        {{ t('Account session expired or unavailable.') }}
+      </q-banner>
     </q-page>
   </q-page-container>
 </template>
@@ -75,6 +75,10 @@ import ChangePasswordDialog from 'src/components/ChangePasswordDialog.vue'
 import { useUiStateStore } from 'src/stores/ui-state'
 import { identityClient, session } from 'src/utils/identity-client'
 import { useQuasar } from 'quasar'
+import { t } from 'src/utils/i18n'
+import { useRequireLogin } from 'src/composables/require-login'
+
+useRequireLogin()
 
 const uiStateStore = useUiStateStore()
 const $q = useQuasar()
@@ -89,3 +93,15 @@ async function updateName(displayName: string) {
 }
 function changePassword() { $q.dialog({ component: ChangePasswordDialog }) }
 </script>
+
+<style scoped>
+.account-page {
+  max-width: 720px;
+}
+
+.account-expired {
+  border-radius: var(--tk-radius-lg);
+  background-color: var(--tk-surface);
+  color: var(--tk-text-secondary);
+}
+</style>

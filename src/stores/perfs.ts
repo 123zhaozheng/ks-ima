@@ -1,18 +1,14 @@
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { usePerfsState } from 'src/composables/perfs-state'
-import { computed, watchEffect } from 'vue'
+import { computed } from 'vue'
 import { localReactive } from 'src/composables/local-reactive'
 import type { ShortcutKey, Writable } from 'src/utils/types'
-import { Dark } from 'quasar'
 import { useUserDataStore } from './user-data'
 import { useWorkspaceStore } from './workspace'
-import { DEFAULT_HUE } from 'src/utils/config'
 
 const StorageKey = 'perfs'
 
 export const DefaultPerfs = {
-  darkMode: 'auto' as boolean | 'auto',
-  themeHue: DEFAULT_HUE,
   mdPreviewTheme: 'vuepress',
   mdCodeTheme: 'atom',
   mdNoMermaid: false,
@@ -45,10 +41,6 @@ export const usePerfsStore = defineStore('perfsStore', () => {
   )
   const localPerfs = localReactive<Partial<Writable<Perfs>>>(StorageKey, {})
   const { perfs } = usePerfsState(computed(() => [userPerfs.value, workspacePerfs.value, localPerfs]), DefaultPerfs)
-
-  watchEffect(() => {
-    Dark.set(perfs.value.darkMode)
-  })
 
   function update({ updates, deletes, scope }: {
     updates?: Partial<Perfs>

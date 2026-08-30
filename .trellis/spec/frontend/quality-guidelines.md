@@ -17,7 +17,11 @@ Questions to answer:
 -->
 
 The retained Vue 3/TypeScript frontend uses Quasar and TanStack Vue Query. Run
-`bun test`, `bun run lint`, and the relevant Quasar build before handoff.
+`bun test`, `bun run lint`, and the relevant Quasar build before handoff. The
+release matrix is: `bun run lint` (0 errors/0 warnings), `bun test`,
+`bun run test:unit`, `bun run build:front`, `bun run build:admin`,
+`bun run test:e2e` (against the isolated Postgres, default port override
+`IMA_E2E_POSTGRES_PORT`), and `bun run test:caddy-routing`.
 
 ---
 
@@ -27,6 +31,12 @@ The retained Vue 3/TypeScript frontend uses Quasar and TanStack Vue Query. Run
 
 Do not hand-edit generated OpenAPI files, duplicate API clients, or migrate
 product state into Vue Query during the foundation phase.
+
+Chrome 109 is the hard build target (`build.target.browser: ['chrome109']` in
+`quasar.config.ts`): never use `toSorted`/`toReversed`/`toSpliced`, CSS
+nesting, `color-mix()`, `oklch()`, container queries, or unprefixed
+`background-clip: text` in app code. Full policy in
+[UX Design Language](./ux-design-language.md) §5.
 
 ---
 

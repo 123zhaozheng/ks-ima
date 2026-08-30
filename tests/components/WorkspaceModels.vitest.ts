@@ -5,6 +5,7 @@ import WorkspaceModels from '../../src/pages/WorkspaceModels.vue'
 
 const workspaceState = { id: 'w1' as string | null }
 vi.mock('src/stores/workspace', () => ({ useWorkspaceStore: () => workspaceState }))
+vi.mock('src/stores/ui-state', () => ({ useUiStateStore: () => ({ toggleMainDrawer: () => undefined }) }))
 
 const Stub = defineComponent({ template: '<div><slot /></div>' })
 const Item = defineComponent({ template: '<div><slot /></div>' })

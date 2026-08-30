@@ -25,6 +25,8 @@ export default defineConfig((ctx) => {
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
     css: [
+      // Resolved relative to src/css/, so climb out to src/styles/.
+      '../styles/tokens.css',
       'app.scss',
     ],
 
@@ -45,7 +47,9 @@ export default defineConfig((ctx) => {
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#build
     build: {
       target: {
-        browser: ['es2022', 'firefox115', 'chrome115', 'safari15'],
+        // Chrome 109 compatibility contract: the built apps must run on
+        // early-2023 Chromium. Applies to both TARGET_APP builds.
+        browser: ['chrome109'],
         node: 'node20',
       },
 
@@ -107,7 +111,12 @@ export default defineConfig((ctx) => {
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#framework
     framework: {
-      config: {},
+      config: {
+        // Brand primary comes from the accent token in src/styles/tokens.css.
+        brand: {
+          primary: '#0077fa',
+        },
+      },
 
       iconSet: 'material-symbols-outlined', // Quasar icon set
       // lang: 'en-US', // Quasar language pack

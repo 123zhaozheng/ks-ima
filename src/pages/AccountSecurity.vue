@@ -1,130 +1,138 @@
 <template>
+  <q-header class="tk-header">
+    <q-toolbar>
+      <q-btn
+        flat
+        dense
+        round
+        icon="sym_o_menu"
+        @click="uiStateStore.toggleMainDrawer"
+      />
+      <q-toolbar-title>{{ t('Account Security') }}</q-toolbar-title>
+    </q-toolbar>
+  </q-header>
   <q-page-container>
-    <q-page
-      max-w="900px"
-      mx-a
-      p-4
-    >
+    <q-page class="tk-page security-page">
       <q-banner
         v-if="error"
         rounded
-        bg-err-c
-        text-on-err-c
-        mb-4
+        class="security-error"
       >
         {{ error }}
       </q-banner>
-      <q-card
-        flat
-        bordered
-        mb-4
-      >
-        <q-card-section>
-          <div class="text-h6">
-            Account profile
-          </div>
-        </q-card-section>
-        <q-card-section>
+      <section class="tk-card security-card">
+        <div class="security-card-head">
+          <h2 class="tk-card-title">
+            {{ t('Account profile') }}
+          </h2>
+        </div>
+        <div class="security-card-body">
           <q-input
             v-model="displayName"
-            label="Display name"
+            dense
+            outlined
+            :label="t('Display name')"
             :loading="loading"
           />
           <q-btn
-            label="Save profile"
+            unelevated
+            no-caps
             color="primary"
-            mt-3
+            :label="t('Save profile')"
             :loading="loading"
             @click="saveProfile"
           />
-        </q-card-section>
-      </q-card>
-      <q-card
-        flat
-        bordered
-        mb-4
-      >
-        <q-card-section class="row items-center">
+        </div>
+      </section>
+      <section class="tk-card security-card">
+        <div class="security-card-head">
           <div>
-            <div class="text-h6">
-              Two-factor authentication
-            </div>
-            <div class="text-caption">
-              Use an authenticator app or a recovery code at sign-in.
-            </div>
+            <h2 class="tk-card-title">
+              {{ t('Two-factor authentication') }}
+            </h2>
+            <p class="tk-card-subtitle">
+              {{ t('Use an authenticator app or a recovery code at sign-in.') }}
+            </p>
           </div>
           <q-space />
           <q-btn
             v-if="!totpUri"
-            label="Set up TOTP"
+            unelevated
+            no-caps
             color="primary"
+            :label="t('Set up TOTP')"
             :loading="loading"
             @click="startTotp"
           />
           <q-btn
             v-else
-            label="Disable TOTP"
-            color="negative"
             flat
+            no-caps
+            color="negative"
+            :label="t('Disable TOTP')"
             :loading="loading"
             @click="disableTotp"
           />
-        </q-card-section>
-        <q-card-section v-if="totpUri">
+        </div>
+        <div
+          v-if="totpUri"
+          class="security-card-body"
+        >
           <q-input
             :model-value="totpUri"
             readonly
             type="textarea"
-            label="Authenticator setup URI"
+            outlined
+            :label="t('Authenticator setup URI')"
           />
           <q-input
             v-model="totpCode"
-            label="Verification code"
+            outlined
             inputmode="numeric"
-            mt-3
+            :label="t('Verification code')"
           />
           <q-btn
-            label="Confirm and show recovery codes"
+            unelevated
+            no-caps
             color="primary"
-            mt-3
+            :label="t('Confirm and show recovery codes')"
             :loading="loading"
             @click="confirmTotp"
           />
-        </q-card-section>
-        <q-card-section
+        </div>
+        <div
           v-if="recoveryCodes.length"
-          bg-warning
-          text-dark
+          class="security-codes"
         >
-          <div class="text-subtitle1">
-            Save these recovery codes now
+          <div class="security-codes-title">
+            {{ t('Save these recovery codes now') }}
           </div>
           <pre>{{ recoveryCodes.join('\n') }}</pre>
           <q-btn
-            label="Download recovery codes"
-            icon="download"
             flat
+            dense
+            no-caps
+            icon="sym_o_download"
+            :label="t('Download recovery codes')"
             @click="downloadCodes"
           />
-        </q-card-section>
-      </q-card>
-      <q-card
-        flat
-        bordered
-      >
-        <q-card-section class="row items-center">
-          <div class="text-h6">
-            Active sessions
-          </div>
+        </div>
+      </section>
+      <section class="tk-card security-card">
+        <div class="security-card-head">
+          <h2 class="tk-card-title">
+            {{ t('Active sessions') }}
+          </h2>
           <q-space />
           <q-btn
-            label="Revoke all"
-            color="negative"
             flat
+            no-caps
+            color="negative"
+            :label="t('Revoke all')"
             :loading="loading"
             @click="revokeAll"
           />
-        </q-card-section>
+        </div>
         <q-list separator>
           <q-item
             v-for="item in sessions"
@@ -132,32 +140,37 @@
           >
             <q-item-section>
               <q-item-label>
-                {{ item.userAgent || 'Unknown browser' }} <q-badge
+                {{ item.userAgent || t('Unknown browser') }}
+                <q-badge
                   v-if="item.current"
                   color="primary"
                 >
-                  Current
+                  {{ t('Current') }}
                 </q-badge>
               </q-item-label>
               <q-item-label caption>
-                Last active {{ new Date(item.lastActivityAt).toLocaleString() }}; expires {{ new Date(item.expiresAt).toLocaleString() }}
+                {{ t('Last active {0}; expires {1}', new Date(item.lastActivityAt).toLocaleString(), new Date(item.expiresAt).toLocaleString()) }}
               </q-item-label>
             </q-item-section>
             <q-item-section side>
               <q-btn
                 v-if="!item.current"
-                icon="logout"
+                icon="sym_o_logout"
                 flat
                 round
+                dense
+                :title="t('Revoke')"
                 @click="revoke(item.id)"
               />
             </q-item-section>
           </q-item>
           <q-item v-if="!sessions.length">
-            <q-item-section>No other active sessions.</q-item-section>
+            <q-item-section class="security-empty">
+              {{ t('No other active sessions.') }}
+            </q-item-section>
           </q-item>
         </q-list>
-      </q-card>
+      </section>
     </q-page>
   </q-page-container>
 </template>
@@ -165,7 +178,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { identityClient, session } from 'src/utils/identity-client'
+import { useUiStateStore } from 'src/stores/ui-state'
+import { t } from 'src/utils/i18n'
 import type { components } from 'src/api/generated/schema'
+
+const uiStateStore = useUiStateStore()
 
 type SessionInfo = components['schemas']['SessionInfo']
 const displayName = ref('')
@@ -221,3 +238,54 @@ function downloadCodes() {
 }
 onMounted(load)
 </script>
+
+<style scoped>
+.security-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tk-space-4);
+  max-width: 800px;
+}
+
+.security-error {
+  background-color: var(--tk-danger-soft);
+  color: var(--tk-danger);
+}
+
+.security-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--tk-space-3);
+  padding: var(--tk-space-4) var(--tk-space-4) var(--tk-space-2);
+}
+
+.security-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tk-space-3);
+  padding: var(--tk-space-2) var(--tk-space-4) var(--tk-space-4);
+}
+
+.security-codes {
+  margin: 0 var(--tk-space-4) var(--tk-space-4);
+  padding: var(--tk-space-3);
+  border-radius: var(--tk-radius);
+  background-color: var(--tk-surface);
+  border: 1px solid var(--tk-border);
+}
+
+.security-codes-title {
+  font-weight: 600;
+  margin-bottom: var(--tk-space-2);
+}
+
+.security-codes pre {
+  margin: 0 0 var(--tk-space-2);
+  font-family: ui-monospace, monospace;
+  white-space: pre-wrap;
+}
+
+.security-empty {
+  color: var(--tk-text-secondary);
+}
+</style>

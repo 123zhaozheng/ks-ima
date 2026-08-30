@@ -10,6 +10,7 @@ const workspaceState = {
 }
 
 vi.mock('src/stores/workspace', () => ({ useWorkspaceStore: () => workspaceState }))
+vi.mock('src/stores/ui-state', () => ({ useUiStateStore: () => ({ toggleMainDrawer: () => undefined }) }))
 vi.mock('quasar', async () => {
   const actual = await vi.importActual<typeof import('quasar')>('quasar')
   return { ...actual, useQuasar: () => ({ dialog: vi.fn() }) }

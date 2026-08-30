@@ -7,6 +7,8 @@ const originalFetch = globalThis.fetch
 const Stub = defineComponent({ template: '<div><slot /></div>' })
 const ButtonStub = defineComponent({ props: { label: { type: String, default: '' } }, emits: ['click'], template: '<button @click="$emit(\'click\')">{{ label }}<slot /></button>' })
 
+vi.mock('src/stores/ui-state', () => ({ useUiStateStore: () => ({ toggleMainDrawer: () => undefined }) }))
+
 describe('AccountSecurity', () => {
   beforeEach(() => {
     globalThis.fetch = vi.fn((input: RequestInfo | URL) => {

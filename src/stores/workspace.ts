@@ -17,7 +17,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     queryFn: async () => {
       const result = await identityClient.listMemberWorkspaces()
       if (result.error) throw new Error(result.error.message)
-      return result.data!.items
+      return result.data!
     },
     enabled: computed(() => Boolean(userId.value)),
   })

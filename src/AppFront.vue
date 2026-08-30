@@ -1,20 +1,15 @@
 <template>
-  <q-layout view="lHr Lpr lFf">
-    <main-drawer />
-    <router-view />
-  </q-layout>
+  <app-shell />
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import MainDrawer from './components/MainDrawer.vue'
-import { useSetTheme } from './composables/set-theme'
-import { usePerfsStore } from './stores/perfs'
+import { Dark } from 'quasar'
+import AppShell from './layouts/AppShell.vue'
 import { useRouter } from 'vue-router'
 import { waitingWorker } from 'app/src-pwa/register-service-worker'
 
-const perfsStore = usePerfsStore()
-useSetTheme(computed(() => perfsStore.perfs.themeHue))
+// Fixed light palette: tokens live in src/styles/tokens.css.
+Dark.set(false)
 
 const router = useRouter()
 router.beforeEach((to, from) => {

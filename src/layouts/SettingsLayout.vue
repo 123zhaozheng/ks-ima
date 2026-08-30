@@ -1,29 +1,21 @@
 <template>
-  <q-header
-    bg-sur-c-low
-    text-on-sur
-  >
+  <q-header class="tk-header">
     <q-toolbar>
       <q-btn
-        v-if="!uiStateStore.mainDrawerAbove"
         flat
         dense
         round
         icon="sym_o_menu"
         @click="uiStateStore.toggleMainDrawer"
-        text-on-sur-var
       />
-      <q-toolbar-title>
-        {{ t('Personal Settings') }}
-      </q-toolbar-title>
+      <q-toolbar-title>{{ t('Personal Settings') }}</q-toolbar-title>
     </q-toolbar>
   </q-header>
   <q-page-container>
-    <q-page
-      max-w="800px"
-      mx-a
-    >
-      <settings-list />
+    <q-page class="tk-page settings-page">
+      <section class="tk-card settings-card">
+        <settings-list />
+      </section>
     </q-page>
   </q-page-container>
 </template>
@@ -38,3 +30,9 @@ useRequireLogin()
 
 const uiStateStore = useUiStateStore()
 </script>
+
+<style scoped>
+.settings-page {
+  max-width: 720px;
+}
+</style>

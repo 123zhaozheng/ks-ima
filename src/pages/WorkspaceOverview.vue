@@ -1,280 +1,271 @@
 <template>
-  <q-page-container>
-    <q-page
-      v-if="workspaceStore.id"
-      class="workspace-admin-page"
-      padding
-    >
-      <div class="row items-center q-col-gutter-md q-mb-md">
-        <div class="col">
-          <div class="text-h6">
-            {{ workspaceName }}
-          </div>
-          <div class="text-caption text-grey-7">
-            {{ t('Workspace administration') }}
-          </div>
-        </div>
-        <q-btn
-          flat
-          round
-          icon="refresh"
-          :loading="loading"
-          :title="t('Refresh')"
-          @click="loadAll"
-        />
-        <q-btn
-          v-if="!canAdmin"
-          flat
-          round
-          icon="logout"
-          :title="t('Leave workspace')"
-          @click="leaveWorkspace"
-        />
-      </div>
-      <q-tabs
-        v-model="tab"
+  <q-header class="tk-header">
+    <q-toolbar>
+      <q-btn
+        flat
         dense
-        align="left"
-        active-color="primary"
-        indicator-color="primary"
-      >
-        <q-tab
-          name="members"
-          icon="group"
-          :label="t('Members')"
-        />
-        <q-tab
-          name="groups"
-          icon="group_work"
-          :label="t('Groups')"
-        />
-        <q-tab
-          name="folders"
-          icon="folder_tree"
-          :label="t('Directory permissions')"
-        />
-      </q-tabs>
-      <q-separator />
-      <q-tab-panels
-        v-model="tab"
-        animated
-      >
-        <q-tab-panel
-          name="members"
-          class="q-px-none"
-        >
-          <div class="row q-col-gutter-sm q-mb-md">
-            <div class="col">
-              <q-input
-                v-model="memberSearch"
-                dense
-                outlined
-                clearable
-                :label="t('Search members')"
-                @keyup.enter="loadMembers"
-              />
-            </div>
-            <div class="col-auto">
-              <q-btn
-                v-if="canAdmin"
-                color="primary"
-                icon="person_add"
-                :label="t('Add member')"
-                :disable="!canAdmin"
-                @click="addMember"
-              />
-              <q-btn
-                v-if="canAdmin"
-                flat
-                icon="mail"
-                :label="t('Invite')"
-                @click="inviteMember"
-              />
-            </div>
+        round
+        icon="sym_o_menu"
+        @click="uiStateStore.toggleMainDrawer"
+      />
+      <div class="overview-head">
+        <q-toolbar-title>{{ workspaceName }}</q-toolbar-title>
+        <div class="overview-head-sub">
+          {{ t('Workspace administration') }}
+        </div>
+      </div>
+      <q-space />
+      <q-btn
+        flat
+        round
+        dense
+        icon="sym_o_refresh"
+        :loading="loading"
+        :title="t('Refresh')"
+        @click="loadAll"
+      />
+      <q-btn
+        v-if="!canAdmin"
+        flat
+        round
+        dense
+        icon="sym_o_logout"
+        :title="t('Leave workspace')"
+        @click="leaveWorkspace"
+      />
+    </q-toolbar>
+  </q-header>
+  <q-page-container v-if="workspaceStore.id">
+    <q-page class="tk-page overview-page">
+      <section class="tk-card overview-section">
+        <div class="overview-section-head">
+          <div>
+            <h2 class="tk-card-title">
+              {{ t('Members') }}
+            </h2>
           </div>
-          <q-banner
-            v-if="error"
-            class="bg-red-1 text-red-9 q-mb-md"
-            rounded
-          >
-            {{ error }}<template #action>
-              <q-btn
-                flat
-                :label="t('Retry')"
-                @click="loadAll"
-              />
-            </template>
-          </q-banner>
-          <q-table
-            flat
-            bordered
-            row-key="userId"
-            :rows="members"
-            :columns="memberColumns"
-            :loading="loading"
-            :no-data-label="t('No members')"
-          >
-            <template #body-cell-user="props">
-              <q-td :props="props">
-                <div>{{ props.row.displayName || props.row.email || props.row.userId }}</div><div class="text-caption text-grey-7">
-                  {{ props.row.email }}
-                </div>
-              </q-td>
-            </template>
-            <template #body-cell-actions="props">
-              <q-td :props="props">
-                <q-btn
-                  v-if="canAdmin"
-                  flat
-                  round
-                  dense
-                  icon="more_vert"
-                  :title="t('Member actions')"
-                >
-                  <q-menu>
-                    <q-list dense>
-                      <q-item
-                        clickable
-                        v-close-popup
-                        @click="changeRole(props.row)"
-                      >
-                        <q-item-section>{{ t('Change role') }}</q-item-section>
-                      </q-item><q-item
-                        clickable
-                        v-close-popup
-                        @click="toggleMember(props.row)"
-                      >
-                        <q-item-section>{{ props.row.state === 'active' ? t('Disable') : t('Restore') }}</q-item-section>
-                      </q-item><q-item
-                        clickable
-                        v-close-popup
-                        class="text-negative"
-                        @click="removeMember(props.row)"
-                      >
-                        <q-item-section>{{ t('Remove') }}</q-item-section>
-                      </q-item>
-                    </q-list>
-                  </q-menu>
-                </q-btn>
-              </q-td>
-            </template>
-          </q-table>
-          <q-list
-            v-if="canAdmin && invitations.length"
-            bordered
-            separator
-            class="q-mt-md"
-          >
-            <q-item
-              v-for="invitation in invitations"
-              :key="invitation.id"
-            >
-              <q-item-section>
-                <q-item-label>{{ invitation.userId }}</q-item-label>
-                <q-item-label caption>
-                  {{ invitation.delivery ?? t('Pending') }} · {{ invitation.role }}
-                </q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <q-btn
-                  flat
-                  round
-                  dense
-                  icon="cancel"
-                  :title="t('Revoke invitation')"
-                  @click="revokeInvitation(invitation)"
-                />
-              </q-item-section>
-            </q-item>
-          </q-list>
-        </q-tab-panel>
-        <q-tab-panel
-          name="groups"
-          class="q-px-none"
-        >
-          <div class="row justify-end q-mb-md">
+          <div class="overview-section-actions">
+            <q-input
+              v-model="memberSearch"
+              dense
+              outlined
+              clearable
+              class="overview-search"
+              :label="t('Search members')"
+              @keyup.enter="loadMembers"
+            />
             <q-btn
               v-if="canAdmin"
+              unelevated
+              no-caps
               color="primary"
-              icon="group_add"
+              icon="sym_o_person_add"
+              :label="t('Add member')"
+              @click="addMember"
+            />
+            <q-btn
+              v-if="canAdmin"
+              flat
+              no-caps
+              icon="sym_o_mail"
+              :label="t('Invite')"
+              @click="inviteMember"
+            />
+          </div>
+        </div>
+        <q-banner
+          v-if="error"
+          rounded
+          class="overview-error"
+        >
+          {{ error }}
+          <template #action>
+            <q-btn
+              flat
+              dense
+              :label="t('Retry')"
+              @click="loadAll"
+            />
+          </template>
+        </q-banner>
+        <q-table
+          flat
+          bordered
+          row-key="userId"
+          class="overview-table"
+          :rows="members"
+          :columns="memberColumns"
+          :loading="loading"
+          :no-data-label="t('No members')"
+        >
+          <template #body-cell-user="props">
+            <q-td :props="props">
+              <div>{{ props.row.displayName || props.row.email || props.row.userId }}</div>
+              <div class="tk-caption">
+                {{ props.row.email }}
+              </div>
+            </q-td>
+          </template>
+          <template #body-cell-actions="props">
+            <q-td :props="props">
+              <q-btn
+                v-if="canAdmin"
+                flat
+                round
+                dense
+                icon="sym_o_more_vert"
+                :title="t('Member actions')"
+              >
+                <q-menu>
+                  <q-list dense>
+                    <q-item
+                      clickable
+                      v-close-popup
+                      @click="changeRole(props.row)"
+                    >
+                      <q-item-section>{{ t('Change role') }}</q-item-section>
+                    </q-item>
+                    <q-item
+                      clickable
+                      v-close-popup
+                      @click="toggleMember(props.row)"
+                    >
+                      <q-item-section>{{ props.row.state === 'active' ? t('Disable') : t('Restore') }}</q-item-section>
+                    </q-item>
+                    <q-item
+                      clickable
+                      v-close-popup
+                      class="text-negative"
+                      @click="removeMember(props.row)"
+                    >
+                      <q-item-section>{{ t('Remove') }}</q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
+              </q-btn>
+            </q-td>
+          </template>
+        </q-table>
+        <q-list
+          v-if="canAdmin && invitations.length"
+          separator
+          class="overview-invitations"
+        >
+          <q-item
+            v-for="invitation in invitations"
+            :key="invitation.id"
+          >
+            <q-item-section>
+              <q-item-label>{{ invitation.userId }}</q-item-label>
+              <q-item-label caption>
+                {{ invitation.delivery ?? t('Pending') }} · {{ invitation.role }}
+              </q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <q-btn
+                flat
+                round
+                dense
+                icon="sym_o_cancel"
+                :title="t('Revoke invitation')"
+                @click="revokeInvitation(invitation)"
+              />
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </section>
+      <section class="tk-card overview-section">
+        <div class="overview-section-head">
+          <h2 class="tk-card-title">
+            {{ t('Groups') }}
+          </h2>
+          <div class="overview-section-actions">
+            <q-btn
+              v-if="canAdmin"
+              unelevated
+              no-caps
+              color="primary"
+              icon="sym_o_group_add"
               :label="t('Create group')"
-              :disable="!canAdmin"
               @click="createGroup"
             />
           </div>
-          <q-list
-            bordered
-            separator
+        </div>
+        <q-list separator>
+          <q-item
+            v-for="group in groups"
+            :key="group.id"
           >
-            <q-item
-              v-for="group in groups"
-              :key="group.id"
+            <q-item-section>
+              <q-item-label>{{ group.name }}</q-item-label>
+              <q-item-label caption>
+                {{ group.memberCount }} {{ t('members') }}
+              </q-item-label>
+            </q-item-section>
+            <q-item-section
+              v-if="canAdmin"
+              side
             >
-              <q-item-section>
-                <q-item-label>{{ group.name }}</q-item-label><q-item-label caption>
-                  {{ group.memberCount }} {{ t('members') }}
-                </q-item-label>
-              </q-item-section><q-item-section
-                v-if="canAdmin"
-                side
-              >
-                <q-btn
-                  v-if="canAdmin"
-                  flat
-                  round
-                  dense
-                  icon="delete"
-                  color="negative"
-                  :title="t('Delete group')"
-                  @click="deleteGroup(group)"
-                />
-              </q-item-section>
-            </q-item><q-item v-if="!groups.length">
-              <q-item-section class="text-grey-7">
-                {{ t('No groups') }}
-              </q-item-section>
-            </q-item>
-          </q-list>
-        </q-tab-panel>
-        <q-tab-panel
-          name="folders"
-          class="q-px-none"
+              <q-btn
+                flat
+                round
+                dense
+                icon="sym_o_delete"
+                color="negative"
+                :title="t('Delete group')"
+                @click="deleteGroup(group)"
+              />
+            </q-item-section>
+          </q-item>
+          <q-item v-if="!groups.length">
+            <q-item-section class="overview-empty">
+              {{ t('No groups') }}
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </section>
+      <section class="tk-card overview-section">
+        <div class="overview-section-head">
+          <h2 class="tk-card-title">
+            {{ t('Directory permissions') }}
+          </h2>
+        </div>
+        <q-banner
+          v-if="!folders.length"
+          class="overview-empty-banner"
         >
-          <q-banner
-            v-if="!folders.length"
-            class="bg-grey-2"
+          {{ t('No accessible folders') }}
+        </q-banner>
+        <q-list
+          v-else
+          separator
+        >
+          <q-item
+            v-for="folder in folders"
+            :key="folder.id"
           >
-            {{ t('No accessible folders') }}
-          </q-banner>
-          <q-list
-            v-else
-            bordered
-            separator
-          >
-            <q-item
-              v-for="folder in folders"
-              :key="folder.id"
-            >
-              <q-item-section avatar>
-                <q-icon :name="folder.isRoot ? 'home' : 'folder'" />
-              </q-item-section><q-item-section>
-                <q-item-label>{{ folder.name }}</q-item-label><q-item-label caption>
-                  {{ folder.lifecycle }}
-                </q-item-label>
-              </q-item-section><q-item-section side>
-                <q-btn
-                  flat
-                  round
-                  dense
-                  icon="lock"
-                  :title="t('Edit permissions')"
-                  @click="editAcl(folder)"
-                />
-              </q-item-section>
-            </q-item>
-          </q-list>
-        </q-tab-panel>
-      </q-tab-panels>
+            <q-item-section avatar>
+              <q-icon :name="folder.isRoot ? 'sym_o_home' : 'sym_o_folder'" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>{{ folder.name }}</q-item-label>
+              <q-item-label caption>
+                {{ folder.lifecycle }}
+              </q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <q-btn
+                flat
+                round
+                dense
+                icon="sym_o_lock"
+                :title="t('Edit permissions')"
+                @click="editAcl(folder)"
+              />
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </section>
     </q-page>
   </q-page-container>
 </template>
@@ -284,6 +275,7 @@ import { computed, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { identityClient } from 'src/utils/identity-client'
 import { useWorkspaceStore } from 'src/stores/workspace'
+import { useUiStateStore } from 'src/stores/ui-state'
 import { queryClient } from 'src/boot/vue-query'
 import { t } from 'src/utils/i18n'
 import type { components } from 'src/api/generated/schema'
@@ -295,8 +287,8 @@ type Folder = components['schemas']['Folder']
 type Invitation = components['schemas']['Invitation']
 type WorkspaceRole = components['schemas']['WorkspaceMember']['role']
 const workspaceStore = useWorkspaceStore()
+const uiStateStore = useUiStateStore()
 const $q = useQuasar()
-const tab = ref('members')
 const members = ref<Member[]>([])
 const groups = ref<Group[]>([])
 const folders = ref<Folder[]>([])
@@ -392,3 +384,67 @@ function editAcl(folder: Folder) {
 }
 watch(() => workspaceStore.id, loadAll, { immediate: true })
 </script>
+
+<style scoped>
+.overview-head {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.overview-head-sub {
+  font-size: 12px;
+  color: var(--tk-text-tertiary);
+  margin-top: -2px;
+}
+
+.overview-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tk-space-4);
+}
+
+.overview-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--tk-space-2);
+  padding: var(--tk-space-4) var(--tk-space-4) var(--tk-space-2);
+}
+
+.overview-section-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--tk-space-2);
+  flex-wrap: wrap;
+}
+
+.overview-search {
+  width: 220px;
+}
+
+.overview-error {
+  margin: 0 var(--tk-space-4);
+  background-color: var(--tk-danger-soft);
+  color: var(--tk-danger);
+}
+
+.overview-table {
+  margin: var(--tk-space-2) var(--tk-space-4) var(--tk-space-4);
+  border-radius: var(--tk-radius);
+}
+
+.overview-invitations {
+  border-top: 1px solid var(--tk-border);
+}
+
+.overview-empty,
+.overview-empty-banner {
+  color: var(--tk-text-secondary);
+}
+
+.overview-empty-banner {
+  background-color: var(--tk-surface);
+}
+</style>

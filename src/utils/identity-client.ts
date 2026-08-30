@@ -140,7 +140,7 @@ export const identityClient = {
   getSettings: () => request<PlatformSettings>('/admin/settings'),
   updateSettings: (input: SettingPatch) => request<PlatformSettings>('/admin/settings', { method: 'PATCH', body: JSON.stringify(input) }),
   listAudit: (limit = 100) => request<AuditEventList>(`/admin/audit-events?limit=${limit}`),
-  listMemberWorkspaces: () => request<WorkspaceList>('/workspaces'),
+  listMemberWorkspaces: () => request<MemberWorkspace[]>('/workspaces'),
   getMemberWorkspace: (workspaceId: string) => request<MemberWorkspace>(`/workspaces/${encodeURIComponent(workspaceId)}`),
   listWorkspaceMembers: (workspaceId: string, q = '') => request<WorkspaceMember[]>(`/workspaces/${encodeURIComponent(workspaceId)}/members?q=${encodeURIComponent(q)}`),
   searchWorkspaceUsers: (workspaceId: string, q: string) => request<UserSearchResult[]>(`/workspaces/${encodeURIComponent(workspaceId)}/members/search?q=${encodeURIComponent(q)}`),

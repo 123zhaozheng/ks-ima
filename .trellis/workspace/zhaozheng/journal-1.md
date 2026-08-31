@@ -522,3 +522,28 @@ Session summary was not supplied.
 ### Next Steps
 
 - User self-testing in browser; address any further feedback, then archive 08-30-frontend-ux-overhaul
+
+
+## Session 15: 移除工作区概念，知识库一等公民与极简UX重构
+
+**Date**: 2026-08-31
+**Task**: 移除工作区概念，知识库一等公民与极简UX重构
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+全栈移除工作区概念：数据库/后端/前端改名知识库，角色简化为 owner/editor/viewer，删除邀请/用户组/文件夹ACL/标签/回收站；新增分享链接体系（只读/读写）；MCP 改用户级授权可枚举全部知识库；模型配置仅管理员可见；设置与账户合并为单页。并发子智能体分波实施：后端 245 测试、前端 37 测试、双目标构建、真实冒烟（含 OAuth+MCP 链路）全部通过；修复拒绝审计随事务回滚丢失的缺陷。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c24ed33` | (see git log) |
+| `15e2753` | (see git log) |
+| `7bfb99c` | (see git log) |
+| `afd3f84` | (see git log) |
+| `080dc07` | (see git log) |
+
+### Status
+
+[OK] **Completed**

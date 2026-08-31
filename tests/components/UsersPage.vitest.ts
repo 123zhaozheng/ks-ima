@@ -17,7 +17,7 @@ describe('UsersPage', () => {
     const wrapper = mount(UsersPage, { global: { stubs } })
     await flushPromises()
     expect(wrapper.text()).toContain('user@test')
-    expect(wrapper.text()).toContain('Super administrator role management enabled.')
+    expect(wrapper.text()).toContain('超级管理员角色管理已启用。')
   })
 
   test('mounts lower-role view without granting role controls', async () => {
@@ -26,6 +26,6 @@ describe('UsersPage', () => {
     const wrapper = mount(UsersPage, { global: { stubs } })
     await flushPromises()
     expect(wrapper.text()).toContain('user@test')
-    expect(wrapper.text()).not.toContain('Super administrator role management enabled.')
+    expect(wrapper.text()).not.toContain('超级管理员角色管理已启用。')
   })
 })

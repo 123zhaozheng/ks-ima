@@ -15,7 +15,7 @@
           <q-icon name="sym_o_group" />
         </q-item-section>
         <q-item-section>
-          {{ t('Users') }}
+          用户
         </q-item-section>
       </q-item>
       <q-item
@@ -26,7 +26,7 @@
           <q-icon name="sym_o_deployed_code" />
         </q-item-section>
         <q-item-section>
-          {{ t('Knowledge bases') }}
+          知识库
         </q-item-section>
       </q-item>
       <q-item
@@ -38,7 +38,7 @@
           <q-icon name="sym_o_neurology" />
         </q-item-section>
         <q-item-section>
-          {{ t('Models') }}
+          模型配置
         </q-item-section>
       </q-item>
       <q-item
@@ -48,7 +48,7 @@
         <q-item-section avatar>
           <q-icon name="sym_o_history" />
         </q-item-section>
-        <q-item-section>{{ t('Audit') }}</q-item-section>
+        <q-item-section>审计</q-item-section>
       </q-item>
       <q-item
         v-if="canManageSettings"
@@ -60,7 +60,7 @@
           <q-icon name="sym_o_settings" />
         </q-item-section>
         <q-item-section>
-          {{ t('Settings') }}
+          设置
         </q-item-section>
       </q-item>
     </q-list>
@@ -74,7 +74,7 @@
           <q-icon name="sym_o_logout" />
         </q-item-section>
         <q-item-section>
-          {{ t('Sign Out') }}
+          退出登录
         </q-item-section>
       </q-item>
     </q-list>
@@ -84,7 +84,6 @@
 <script setup lang="ts">
 import { useQuasar } from 'quasar'
 import { identityClient, session } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 import { useRouter } from 'vue-router'
 import UpdateSettingsDialog from './UpdateSettingsDialog.vue'
 import { computed } from 'vue'

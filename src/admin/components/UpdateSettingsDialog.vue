@@ -6,44 +6,44 @@
     <q-card style="width: min(90vw, 520px)">
       <q-card-section>
         <div class="text-h6">
-          Platform security settings
+          平台安全设置
         </div>
       </q-card-section>
       <q-card-section>
         <q-toggle
           v-model="form.allowRegistration"
-          label="Allow open registration"
+          label="允许公开注册"
         />
         <q-input
           v-model.number="form.sessionIdleSeconds"
           type="number"
-          label="Session idle seconds"
+          label="会话空闲时长（秒）"
         />
         <q-input
           v-model.number="form.sessionAbsoluteSeconds"
           type="number"
-          label="Session absolute seconds"
+          label="会话最长时长（秒）"
         />
         <q-input
           v-model.number="form.recentAuthSeconds"
           type="number"
-          label="Recent authentication window"
+          label="敏感操作验证窗口（秒）"
         />
         <q-banner
           mt-3
           dense
         >
-          SMTP delivery is {{ smtpEnabled ? 'configured' : 'unavailable' }}.
+          邮件发送（SMTP）：{{ smtpEnabled ? '已配置' : '未配置' }}
         </q-banner>
       </q-card-section>
       <q-card-actions align="right">
         <q-btn
           flat
-          label="Cancel"
+          label="取消"
           @click="onDialogCancel"
         /><q-btn
           color="primary"
-          label="Save"
+          label="保存"
           :loading="loading"
           @click="save"
         />
@@ -70,7 +70,7 @@ onMounted(async () => {
 async function save() {
   loading.value = true
   const result = await identityClient.updateSettings(form)
-  if (result.error) $q.notify({ type: 'negative', message: result.error.message })
+  if (result.error) $q.notify({ type: 'negative', message: `保存失败：${result.error.message}` })
   else onDialogOK()
   loading.value = false
 }

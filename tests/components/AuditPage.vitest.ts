@@ -10,7 +10,7 @@ describe('AuditPage', () => {
   test('renders the read-only audit table with typed events', async () => {
     const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(new Response(JSON.stringify({ items: [{ id: 1, action: 'user.created', result: 'success', metadata: {}, createdAt: new Date().toISOString() }] }), { status: 200 })))
     globalThis.fetch = fetchMock as unknown as typeof fetch
-    const wrapper = mount(AuditPage, { global: { stubs: { 'q-page-container': Stub, 'q-page': Stub, 'q-table': Stub } } })
+    const wrapper = mount(AuditPage, { global: { stubs: { 'q-page-container': Stub, 'q-page': Stub, 'q-table': Stub, 'q-select': Stub, 'q-btn': Stub, 'q-badge': Stub } } })
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(wrapper.exists()).toBe(true)
     expect(fetchMock).toHaveBeenCalled()

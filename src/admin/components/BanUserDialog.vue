@@ -7,12 +7,12 @@
     <q-card style="width: min(90vw, 400px)">
       <q-card-section>
         <div class="text-h6">
-          {{ t('Ban User') }}
+          封禁用户
         </div>
       </q-card-section>
       <q-card-section p-0>
         <q-list>
-          <common-item :label="t('Ban Reason')">
+          <common-item label="封禁原因">
             <q-input
               v-model="reason"
               dense
@@ -20,12 +20,12 @@
               min-w="120px"
             />
           </common-item>
-          <common-item :label="t('Ban Period')">
+          <common-item label="封禁时长">
             <q-input
               v-model.number="periodDays"
               type="number"
-              :placeholder="t('Forever')"
-              :suffix="t('Days')"
+              placeholder="永久"
+              suffix="天"
               dense
               class="w-120px"
             />
@@ -36,13 +36,13 @@
         <q-btn
           flat
           color="primary"
-          :label="t('Cancel')"
+          label="取消"
           @click="onDialogCancel"
         />
         <q-btn
           flat
           color="primary"
-          :label="t('Ban')"
+          label="封禁"
           @click="banUser"
           :loading
         />
@@ -53,7 +53,6 @@
 
 <script setup lang="ts">
 import { useDialogPluginComponent, useQuasar } from 'quasar'
-import { t } from 'src/utils/i18n'
 import { ref } from 'vue'
 import CommonItem from '../../components/CommonItem.vue'
 import { identityClient } from 'src/utils/identity-client'
@@ -82,7 +81,7 @@ async function banUser() {
     onDialogOK()
   } else {
     $q.notify({
-      message: t('Failed to ban user: {0}', result.error.message),
+      message: `未能封禁用户：${result.error.message}`,
       color: 'negative',
     })
   }

@@ -8,22 +8,22 @@
         <q-input
           v-model="searchValue"
           :debounce="200"
-          :placeholder="t('Search users')"
+          placeholder="搜索用户"
           dense
         >
           <template #append>
             <q-btn-dropdown
               flat
               dense
-              :label="searchField"
+              :label="searchFieldLabel"
             >
               <q-list>
                 <menu-item
-                  label="Email"
+                  label="邮箱"
                   @click="searchField = 'email'"
                 />
                 <menu-item
-                  label="Name"
+                  label="名称"
                   @click="searchField = 'name'"
                 />
               </q-list>
@@ -33,7 +33,7 @@
         <q-btn
           v-if="canManageUsers"
           icon="sym_o_add"
-          :label="t('Create User')"
+          label="创建用户"
           @click="createUser"
           unelevated
           bg-pri-c
@@ -48,7 +48,7 @@
         dense
         mt-2
       >
-        Super administrator role management enabled.
+        超级管理员角色管理已启用。
       </q-banner>
       <q-banner
         v-if="errorMessage"
@@ -85,7 +85,7 @@
             <template v-if="canManageUsers">
               <q-btn
                 icon="sym_o_edit"
-                :title="t('Edit Info')"
+                title="编辑信息"
                 flat
                 round
                 size="sm"
@@ -93,7 +93,7 @@
               />
               <q-btn
                 icon="sym_o_more_vert"
-                :title="t('Actions')"
+                title="操作"
                 flat
                 round
                 size="sm"
@@ -101,52 +101,52 @@
                 <q-menu>
                   <q-list>
                     <menu-item
-                      :label="t('View knowledge bases')"
+                      label="查看知识库"
                       :to="`/knowledge-bases?ownerId=${props.row.id}`"
                     />
                     <menu-item
-                      :label="t('Reset Password')"
+                      label="重置密码"
                       @click="resetPassword(props.row)"
                     />
                     <menu-item
-                      :label="t('Revoke Sessions')"
+                      label="撤销会话"
                       @click="revokeSessions(props.row)"
                     />
                     <menu-item
                       v-if="props.row.isActive"
-                      :label="t('Disable User')"
+                      label="停用用户"
                       @click="banUser(props.row)"
                     />
                     <menu-item
                       v-else
-                      :label="t('Restore User')"
+                      label="恢复用户"
                       @click="identityClient.restoreUser(props.row.id).then(refresh)"
                     />
                     <menu-item
-                      :label="t('Reset TOTP')"
+                      label="重置 TOTP"
                       @click="resetTotp(props.row)"
                     />
                     <template v-if="session.data?.user.platformRoles.includes('super_admin')">
                       <q-separator />
                       <menu-item
-                        label="Grant platform admin"
+                        label="授予平台管理员"
                         @click="identityClient.grantRole(props.row.id, 'platform_admin').then(refresh)"
                       />
                       <menu-item
-                        label="Grant security auditor"
+                        label="授予安全审计员"
                         @click="identityClient.grantRole(props.row.id, 'security_auditor').then(refresh)"
                       />
                       <menu-item
-                        label="Revoke platform admin"
+                        label="撤销平台管理员"
                         @click="identityClient.revokeRole(props.row.id, 'platform_admin').then(refresh)"
                       />
                       <menu-item
-                        label="Revoke security auditor"
+                        label="撤销安全审计员"
                         @click="identityClient.revokeRole(props.row.id, 'security_auditor').then(refresh)"
                       />
                     </template>
                     <menu-item
-                      :label="t('Delete User')"
+                      label="删除用户"
                       @click="deleteUser(props.row)"
                       hover:text-err
                     />
@@ -165,7 +165,6 @@
 import type { QTableColumn, QTableProps } from 'quasar'
 import { useQuasar } from 'quasar'
 import { identityClient, session } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import UpdateUserDialog from '../components/UpdateUserDialog.vue'
 import MenuItem from 'src/components/MenuItem.vue'
@@ -176,16 +175,17 @@ import type { components } from 'src/api/generated/schema'
 type UserWithRole = components['schemas']['IdentityUser']
 
 const columns: QTableColumn[] = [
-  { name: 'id', label: t('ID'), field: 'id', sortable: true, align: 'left' },
-  { name: 'name', label: t('Name'), field: 'displayName', sortable: true },
-  { name: 'email', label: t('Email'), field: 'email', sortable: true },
-  { name: 'roles', label: t('Roles'), field: row => row.platformRoles.join(', '), sortable: true },
-  { name: 'actions', label: t('Actions'), field: () => null },
+  { name: 'id', label: 'ID', field: 'id', sortable: true, align: 'left' },
+  { name: 'name', label: '姓名', field: 'displayName', sortable: true },
+  { name: 'email', label: '邮箱', field: 'email', sortable: true },
+  { name: 'roles', label: '角色', field: row => row.platformRoles.join(', '), sortable: true },
+  { name: 'actions', label: '操作', field: () => null },
 ]
 
 const rows = ref<UserWithRole[]>([])
 const searchValue = ref('')
 const searchField = ref<('email' | 'name')>('email')
+const searchFieldLabel = computed(() => searchField.value === 'email' ? '邮箱' : '名称')
 const loading = ref(false)
 const errorMessage = ref('')
 const canManageUsers = computed(() => session.value.data?.user.platformRoles.some(role => role === 'super_admin' || role === 'platform_admin') ?? false)
@@ -207,7 +207,7 @@ const onRequest: QTableProps['onRequest'] = async ({
     errorMessage.value = error.message
     console.error(error)
     $q.notify({
-      message: t('Failed to fetch users: {0}', error.message),
+      message: `无法获取用户：${error.message}`,
       color: 'negative',
     })
     return
@@ -243,8 +243,8 @@ function editUser(user: UserWithRole) {
 }
 function resetPassword({ id, displayName }: UserWithRole) {
   $q.dialog({
-    title: t('Reset Password'),
-    message: t('Set new password for user "{0}":', displayName),
+    title: '重置密码',
+    message: `为用户“${displayName}”设置新密码：`,
     prompt: {
       model: '',
       type: 'password',
@@ -254,7 +254,7 @@ function resetPassword({ id, displayName }: UserWithRole) {
     identityClient.setPassword(id, newPassword).catch(err => {
       console.error(err)
       $q.notify({
-        message: t('Failed to reset password: {0}', err.message),
+        message: `重置密码失败：${err.message}`,
         color: 'negative',
       })
     })
@@ -265,15 +265,15 @@ function resetTotp({ id }: UserWithRole) {
 }
 function revokeSessions({ id, displayName }: UserWithRole) {
   $q.dialog({
-    title: t('Revoke Sessions'),
-    message: t('Are you sure you want to revoke all sessions for "{0}"?', displayName),
+    title: '撤销会话',
+    message: `您确定要撤销“${displayName}”的所有会话吗？`,
     cancel: true,
-    ok: t('Revoke'),
+    ok: '撤销',
   }).onOk(() => {
     identityClient.revokeSessions(id).catch(err => {
       console.error(err)
       $q.notify({
-        message: t('Failed to revoke sessions: {0}', err.message),
+        message: `无法撤销会话：${err.message}`,
         color: 'negative',
       })
     })
@@ -289,11 +289,11 @@ function banUser(user: UserWithRole) {
 }
 function deleteUser({ id, displayName }: UserWithRole) {
   $q.dialog({
-    title: t('Delete User'),
-    message: t('Are you sure you want to delete user "{0}"? Note that you must delete all knowledge bases created by this user before you can delete the user.', displayName),
+    title: '删除用户',
+    message: `确定要删除用户"${displayName}"吗？注意：必须先删除该用户创建的所有知识库，才能删除该用户。`,
     cancel: true,
     ok: {
-      label: t('Delete'),
+      label: '删除',
       color: 'negative',
       flat: true,
     },
@@ -301,7 +301,7 @@ function deleteUser({ id, displayName }: UserWithRole) {
     identityClient.deleteUser(id).then(refresh).catch(err => {
       console.error(err)
       $q.notify({
-        message: t('Failed to delete user: {0}', err.message),
+        message: `无法删除用户：${err.message}`,
         color: 'negative',
       })
     })

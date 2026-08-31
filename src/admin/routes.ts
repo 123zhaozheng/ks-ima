@@ -1,7 +1,6 @@
 import Admin from './AppAdmin.vue'
 import type { RouteRecordRaw } from 'vue-router'
 import UsersPage from './pages/UsersPage.vue'
-import { t } from 'src/utils/i18n'
 import EmptyPage from './pages/EmptyPage.vue'
 import NotFoundPage from 'src/pages/NotFoundPage.vue'
 import MainLayout from 'src/admin/layouts/MainLayout.vue'
@@ -28,27 +27,27 @@ const routes: RouteRecordRaw[] = [
             path: '/users',
             component: UsersPage,
             meta: {
-              title: t('Users'),
+              title: '用户',
             },
           },
           {
             path: '/knowledge-bases',
             component: KnowledgeBasesPage,
             meta: {
-              title: t('Knowledge bases'),
+              title: '知识库',
             },
           },
           {
             path: '/models',
             component: ModelsPage,
             meta: {
-              title: t('Models'),
+              title: '模型配置',
             },
           },
           {
             path: '/audit',
             component: AuditPage,
-            meta: { title: t('Audit') },
+            meta: { title: '审计' },
           },
           {
             path: '/:catchAll(.*)*',

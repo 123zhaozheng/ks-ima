@@ -9,20 +9,20 @@
           v-model="search"
           dense
           outlined
-          :label="t('Search knowledge bases')"
+          label="搜索知识库"
         />
         <template v-if="canManage">
           <q-input
             v-model="newName"
             dense
             outlined
-            :label="t('New knowledge base')"
+            label="新建知识库"
           />
           <q-input
             v-model="newOwnerUserId"
             dense
             outlined
-            :label="t('Initial owner user ID')"
+            label="初始所有者用户 ID"
           />
           <q-btn
             icon="add"
@@ -87,7 +87,6 @@ import { computed, ref } from 'vue'
 import type { QTableColumn } from 'quasar'
 import type { components } from 'src/api/generated/schema'
 import { identityClient, session } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 
 type KnowledgeBaseInfo = components['schemas']['KnowledgeBaseInfo']
 const rows = ref<KnowledgeBaseInfo[]>([])
@@ -98,10 +97,10 @@ const loading = ref(false)
 const error = ref('')
 const canManage = computed(() => session.value.data?.user.platformRoles?.some(role => role === 'super_admin' || role === 'platform_admin') ?? false)
 const columns: QTableColumn[] = [
-  { name: 'name', label: t('Name'), field: 'name', align: 'left' },
-  { name: 'status', label: t('Status'), field: row => row.isActive ? t('Active') : t('Archived') },
-  { name: 'created', label: t('Created'), field: row => new Date(row.createdAt).toLocaleString() },
-  { name: 'actions', label: t('Actions'), field: 'id' },
+  { name: 'name', label: '名称', field: 'name', align: 'left' },
+  { name: 'status', label: '状态', field: row => row.isActive ? '启用' : '已归档' },
+  { name: 'created', label: '创建时间', field: row => new Date(row.createdAt).toLocaleString() },
+  { name: 'actions', label: '操作', field: 'id' },
 ]
 
 async function create() {

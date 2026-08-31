@@ -101,7 +101,7 @@ export default defineConfig((ctx) => {
     devServer: {
       // https: true,
       open: false, // opens browser window automatically
-      port: 'pwa' in ctx.mode ? 9016 : 9015,
+      port: process.env.TARGET_APP === 'admin' ? 9017 : 'pwa' in ctx.mode ? 9016 : 9015,
       proxy: {
         '/api': {
           target: process.env.PYTHON_API_URL,
@@ -119,7 +119,7 @@ export default defineConfig((ctx) => {
       },
 
       iconSet: 'material-symbols-outlined', // Quasar icon set
-      // lang: 'en-US', // Quasar language pack
+      lang: 'zh-CN', // Quasar language pack
 
       // For special cases outside of where the auto-import strategy can have an impact
       // (like functional components as one of the examples),

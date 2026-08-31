@@ -7,29 +7,29 @@
     <q-card style="width: min(90vw, 400px)">
       <q-card-section>
         <div class="text-h6">
-          {{ t('Create User') }}
+          创建用户
         </div>
       </q-card-section>
       <q-card-section p-0>
         <q-list>
-          <common-item :label="t('Name')">
+          <common-item label="姓名">
             <q-input
               v-model="model.name"
               dense
             />
           </common-item>
-          <common-item :label="t('Email')">
+          <common-item label="邮箱">
             <q-input
               v-model="model.email"
               type="email"
               dense
             />
           </common-item>
-          <common-item :label="t('Password')">
+          <common-item label="密码">
             <q-input
               v-model="model.password"
               type="password"
-              :rules="[val => val.length >= 12 || t('Password must be at least 12 characters long')]"
+              :rules="[val => val.length >= 12 || '密码长度必须至少为 12 个字符']"
               dense
             />
           </common-item>
@@ -39,13 +39,13 @@
         <q-btn
           flat
           color="primary"
-          :label="t('Cancel')"
+          label="取消"
           @click="onDialogCancel"
         />
         <q-btn
           flat
           color="primary"
-          :label="t('Create')"
+          label="创建"
           @click="createUser"
           :disable="!model.name || !model.email || model.password.length < 12"
           :loading
@@ -57,7 +57,6 @@
 
 <script setup lang="ts">
 import { useDialogPluginComponent, useQuasar } from 'quasar'
-import { t } from 'src/utils/i18n'
 import { reactive, ref } from 'vue'
 import { identityClient } from 'src/utils/identity-client'
 import CommonItem from '../../components/CommonItem.vue'
@@ -88,7 +87,7 @@ async function createUser() {
     onDialogOK()
   } else {
     $q.notify({
-      message: t('Failed to create user: {0}', result.error.message),
+      message: `无法创建用户：${result.error.message}`,
       color: 'negative',
     })
   }

@@ -9,7 +9,6 @@ import { watch } from 'vue'
 import { session } from 'src/utils/identity-client'
 import { useRouter } from 'vue-router'
 import { Dark, useQuasar } from 'quasar'
-import { t } from 'src/utils/i18n'
 
 // Fixed light palette: tokens live in src/styles/tokens.css.
 Dark.set(false)
@@ -25,7 +24,7 @@ watch(() => [session.value.isPending, session.value.data?.user.id] as const, () 
   }
   if (!data.user.platformRoles?.some(role => role === 'super_admin' || role === 'platform_admin' || role === 'security_auditor')) {
     $q.notify({
-      message: t('You need to be an admin to access this page'),
+      message: '您需要成为管理员才能访问此页面',
       color: 'negative',
     })
     router.replace('/auth/sign-in')

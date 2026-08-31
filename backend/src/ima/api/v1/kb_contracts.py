@@ -30,6 +30,7 @@ class KnowledgeBase(IdentityModel):
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
     role: KbRoleLiteral
+    owned: bool = False
 
 
 class KbMember(IdentityModel):

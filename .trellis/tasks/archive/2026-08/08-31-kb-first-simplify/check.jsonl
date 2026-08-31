@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/08-31-kb-first-simplify/prd.md", "reason": "验收标准对照"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端质量门"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量门"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "类型检查要求"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "错误处理规范"}

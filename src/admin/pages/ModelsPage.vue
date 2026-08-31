@@ -828,7 +828,10 @@ import { useQuasar } from 'quasar'
 import type { QTableColumn } from 'quasar'
 import type { components } from 'src/api/generated/schema'
 import { identityClient, session } from 'src/utils/identity-client'
+import { apiErrorCode, apiErrorMessage } from 'src/utils/api-error'
 import ModelAvatar from '../components/ModelAvatar.vue'
+import ReauthDialog from '../components/ReauthDialog.vue'
+import VerifyTotpDialog from 'src/components/VerifyTotpDialog.vue'
 import { CAPABILITY_LABELS, KNOWN_DIMENSIONS, guessCapability } from 'src/admin/model-catalog'
 import type { Capability } from 'src/admin/model-catalog'
 
@@ -896,6 +899,33 @@ function maskedUrl(url: string | null | undefined) {
   }
 }
 
+// ---------- 敏感操作的近期认证 ----------
+type MutationResult<T> = { data?: T, error?: { code?: string, message: string } }
+
+function reauthenticate(): Promise<boolean> {
+  return new Promise(resolve => {
+    $q.dialog({ component: ReauthDialog, persistent: true })
+      .onOk((challenge?: string) => {
+        if (!challenge) {
+          resolve(true)
+          return
+        }
+        $q.dialog({ component: VerifyTotpDialog, componentProps: { challenge }, persistent: true })
+          .onOk(() => resolve(true))
+          .onCancel(() => resolve(false))
+      })
+      .onCancel(() => resolve(false))
+  })
+}
+
+async function withRecentAuth<T>(action: () => Promise<MutationResult<T>>): Promise<MutationResult<T>> {
+  let result = await action()
+  if (result.error && apiErrorCode(result.error) === 'HTTP_401' && await reauthenticate()) {
+    result = await action()
+  }
+  return result
+}
+
 // ---------- 服务商 ----------
 const gatewayDialog = reactive({ show: false, editId: '', saving: false })
 const gatewayForm = reactive({ name: '', baseUrl: '', secret: '', insecurePrivate: false })
@@ -929,8 +959,8 @@ async function saveGateway() {
     }
   }
   const result = editing
-    ? await identityClient.updateModelGateway(editing.id, { name: gatewayForm.name, baseUrl: gatewayForm.baseUrl, insecurePrivate: gatewayForm.insecurePrivate, expectedVersion: editing.version })
-    : await identityClient.createModelGateway({ name: gatewayForm.name, baseUrl: gatewayForm.baseUrl, allowedCapabilities: ['chat', 'embedding', 'rerank'], insecurePrivate: gatewayForm.insecurePrivate, allowedHosts, allowedCidrs: [], connectTimeoutMs: 5000, readTimeoutMs: 30000, writeTimeoutMs: 30000, poolTimeoutMs: 5000, maxResponseBytes: 8388608, secret: gatewayForm.secret || undefined })
+    ? await withRecentAuth(() => identityClient.updateModelGateway(editing.id, { name: gatewayForm.name, baseUrl: gatewayForm.baseUrl, insecurePrivate: gatewayForm.insecurePrivate, expectedVersion: editing.version }))
+    : await withRecentAuth(() => identityClient.createModelGateway({ name: gatewayForm.name, baseUrl: gatewayForm.baseUrl, allowedCapabilities: ['chat', 'embedding', 'rerank'], insecurePrivate: gatewayForm.insecurePrivate, allowedHosts, allowedCidrs: [], connectTimeoutMs: 5000, readTimeoutMs: 30000, writeTimeoutMs: 30000, poolTimeoutMs: 5000, maxResponseBytes: 8388608, secret: gatewayForm.secret || undefined }))
   gatewayDialog.saving = false
   if (result.error) {
     notify(`保存失败：${result.error.message}`, 'negative')
@@ -942,9 +972,9 @@ async function saveGateway() {
 
 async function toggleGateway(gateway: Gateway, enabled: boolean) {
   const result = enabled
-    ? await identityClient.enableModelGateway(gateway.id, { expectedVersion: gateway.version })
-    : await identityClient.disableModelGateway(gateway.id, { expectedVersion: gateway.version })
-  if (result.error) notify(`操作失败：${result.error.message}`, 'negative')
+    ? await withRecentAuth(() => identityClient.enableModelGateway(gateway.id, { expectedVersion: gateway.version }))
+    : await withRecentAuth(() => identityClient.disableModelGateway(gateway.id, { expectedVersion: gateway.version }))
+  if (result.error) notify(`操作失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
   else await refresh()
 }
 
@@ -955,8 +985,8 @@ function deleteGateway(gateway: Gateway) {
     cancel: { label: '取消', flat: true },
     ok: { label: '删除', color: 'negative', unelevated: true },
   }).onOk(async () => {
-    const result = await identityClient.deleteModelGateway(gateway.id)
-    if (result.error) notify(`删除失败：${result.error.message}`, 'negative')
+    const result = await withRecentAuth(() => identityClient.deleteModelGateway(gateway.id))
+    if (result.error) notify(`删除失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
     else await refresh()
   })
 }
@@ -969,9 +999,9 @@ const HEALTH_LABELS: Record<string, string> = {
 }
 
 async function health(id: string) {
-  const result = await identityClient.checkModelGatewayHealth(id)
+  const result = await withRecentAuth(() => identityClient.checkModelGatewayHealth(id))
   if (result.error) {
-    notify(`健康检查失败：${result.error.message}`, 'negative')
+    notify(`健康检查失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
     return
   }
   const items = result.data ?? []
@@ -1017,10 +1047,10 @@ async function openDiscover(gateway: Gateway) {
   discoverDialog.error = ''
   discoverDialog.items = []
   discoverDialog.show = true
-  const result = await identityClient.discoverModelGateway(gateway.id)
+  const result = await withRecentAuth(() => identityClient.discoverModelGateway(gateway.id))
   discoverDialog.loading = false
   if (result.error) {
-    discoverDialog.error = `拉取失败：${result.error.message}`
+    discoverDialog.error = `拉取失败：${apiErrorMessage(result.error, '请稍后重试')}`
     return
   }
   const names = result.data?.names ?? []
@@ -1049,21 +1079,22 @@ async function importSelected() {
   let pending = 0
   const failures: string[] = []
   for (const item of chosen) {
-    const created = await identityClient.createGovernedModel({
+    const created = await withRecentAuth(() => identityClient.createGovernedModel({
       gatewayId: gateway.id,
       remoteName: item.name,
       businessLabel: item.name,
       capability: item.capability,
       embeddingDimension: item.capability === 'embedding' ? (item.dimension ?? undefined) : undefined,
-    })
+    }))
     if (created.error || !created.data) {
-      failures.push(`${item.name}：${created.error?.message ?? '创建失败'}`)
+      failures.push(`${item.name}：${apiErrorMessage(created.error, '创建失败')}`)
+      if (apiErrorCode(created.error) === 'HTTP_401') break
       continue
     }
     // 尽力验证并启用，让导入的模型开箱可用；失败则保留为草稿
-    const validated = await identityClient.validateGovernedModel(created.data.id)
+    const validated = await withRecentAuth(() => identityClient.validateGovernedModel(created.data!.id))
     if (validated.data?.validated) {
-      await identityClient.enableGovernedModel(created.data.id)
+      await withRecentAuth(() => identityClient.enableGovernedModel(created.data!.id))
     } else {
       pending += 1
     }
@@ -1089,9 +1120,9 @@ function modelOptions(capability: Capability) {
 }
 
 async function validateModel(model: GovernedModel) {
-  const result = await identityClient.validateGovernedModel(model.id, { expectedVersion: model.version })
+  const result = await withRecentAuth(() => identityClient.validateGovernedModel(model.id, { expectedVersion: model.version }))
   if (result.error) {
-    notify(`验证失败：${result.error.message}`, 'negative')
+    notify(`验证失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
     return
   }
   if (result.data?.validated) notify(`「${model.businessLabel}」验证通过`)
@@ -1101,9 +1132,9 @@ async function validateModel(model: GovernedModel) {
 
 async function toggleModel(model: GovernedModel, enabled: boolean) {
   const result = enabled
-    ? await identityClient.enableGovernedModel(model.id, { expectedVersion: model.version })
-    : await identityClient.disableGovernedModel(model.id, { expectedVersion: model.version })
-  if (result.error) notify(`操作失败：${result.error.message}`, 'negative')
+    ? await withRecentAuth(() => identityClient.enableGovernedModel(model.id, { expectedVersion: model.version }))
+    : await withRecentAuth(() => identityClient.disableGovernedModel(model.id, { expectedVersion: model.version }))
+  if (result.error) notify(`操作失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
   else await refresh()
 }
 
@@ -1114,8 +1145,8 @@ function deleteModel(model: GovernedModel) {
     cancel: { label: '取消', flat: true },
     ok: { label: '删除', color: 'negative', unelevated: true },
   }).onOk(async () => {
-    const result = await identityClient.deleteGovernedModel(model.id)
-    if (result.error) notify(`删除失败：${result.error.message}`, 'negative')
+    const result = await withRecentAuth(() => identityClient.deleteGovernedModel(model.id))
+    if (result.error) notify(`删除失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
     else await refresh()
   })
 }
@@ -1275,9 +1306,9 @@ async function saveDraft(workflow: Workflow) {
   const state = sceneState[workflow]
   if (!state.profileId) return
   const config = buildConfig(workflow, state)
-  const result = await identityClient.patchCapabilityProfileDraft(state.profileId, { config, expectedDraftVersion: state.draftVersion })
+  const result = await withRecentAuth(() => identityClient.patchCapabilityProfileDraft(state.profileId, { config, expectedDraftVersion: state.draftVersion }))
   if (result.error) {
-    notify(`保存失败：${result.error.message}`, 'negative')
+    notify(`保存失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
     return
   }
   state.draftVersion += 1
@@ -1290,16 +1321,16 @@ async function validateScene(workflow: Workflow) {
   if (!state.profileId) return
   // 先把当前表单写入草稿，保证验证的就是页面上的内容
   const config = buildConfig(workflow, state)
-  const patched = await identityClient.patchCapabilityProfileDraft(state.profileId, { config, expectedDraftVersion: state.draftVersion })
+  const patched = await withRecentAuth(() => identityClient.patchCapabilityProfileDraft(state.profileId, { config, expectedDraftVersion: state.draftVersion }))
   if (patched.error) {
-    notify(`保存失败：${patched.error.message}`, 'negative')
+    notify(`保存失败：${apiErrorMessage(patched.error, '请稍后重试')}`, 'negative')
     return
   }
   state.draftVersion += 1
   state.configText = JSON.stringify(config, null, 2)
-  const result = await identityClient.validateCapabilityProfile(state.profileId)
+  const result = await withRecentAuth(() => identityClient.validateCapabilityProfile(state.profileId))
   if (result.error) {
-    notify(`验证失败：${result.error.message}`, 'negative')
+    notify(`验证失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
     return
   }
   const data = result.data as { ok?: boolean, reasonCode?: string | null } | undefined
@@ -1311,15 +1342,17 @@ async function publishScene(workflow: Workflow) {
   const state = sceneState[workflow]
   if (!state.profileId) return
   const config = buildConfig(workflow, state)
-  const patched = await identityClient.patchCapabilityProfileDraft(state.profileId, { config, expectedDraftVersion: state.draftVersion })
+  const patched = await withRecentAuth(() => identityClient.patchCapabilityProfileDraft(state.profileId, { config, expectedDraftVersion: state.draftVersion }))
   if (patched.error) {
-    notify(`保存失败：${patched.error.message}`, 'negative')
+    notify(`保存失败：${apiErrorMessage(patched.error, '请稍后重试')}`, 'negative')
     return
   }
   const nextDraftVersion = state.draftVersion + 1
-  const published = await identityClient.publishCapabilityProfile(state.profileId, { config, expectedDraftVersion: nextDraftVersion })
+  const published = await withRecentAuth(() => identityClient.publishCapabilityProfile(state.profileId, { config, expectedDraftVersion: nextDraftVersion }))
   if (published.error) {
-    const reason = published.error.code ? profileReasonLabel(published.error.code) : published.error.message
+    const reason = published.error.code && PROFILE_REASON_LABELS[published.error.code]
+      ? profileReasonLabel(published.error.code)
+      : apiErrorMessage(published.error, '请稍后重试')
     notify(`发布失败：${reason}`, 'negative')
     return
   }
@@ -1331,9 +1364,9 @@ async function toggleScene(workflow: Workflow) {
   const profile = sceneProfile(workflow)
   if (!profile) return
   const result = profile.lifecycle === 'disabled'
-    ? await identityClient.restoreCapabilityProfile(profile.id)
-    : await identityClient.disableCapabilityProfile(profile.id)
-  if (result.error) notify(`操作失败：${result.error.message}`, 'negative')
+    ? await withRecentAuth(() => identityClient.restoreCapabilityProfile(profile.id))
+    : await withRecentAuth(() => identityClient.disableCapabilityProfile(profile.id))
+  if (result.error) notify(`操作失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
   else await refresh()
 }
 
@@ -1348,9 +1381,9 @@ function defaultConfig(workflow: Workflow): Record<string, unknown> {
 async function createSceneProfile(workflow: Workflow) {
   const scene = SCENES.find(item => item.id === workflow)
   if (!scene) return
-  const result = await identityClient.createCapabilityProfile({ workflow, businessAlias: scene.name, description: scene.desc, config: defaultConfig(workflow) })
+  const result = await withRecentAuth(() => identityClient.createCapabilityProfile({ workflow, businessAlias: scene.name, description: scene.desc, config: defaultConfig(workflow) }))
   if (result.error) {
-    notify(`创建失败：${result.error.message}`, 'negative')
+    notify(`创建失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
     return
   }
   await refresh()
@@ -1378,10 +1411,11 @@ async function saveAssignments(kbId: string) {
     const existing = current.find(assignment => assignment.workflow === workflow)
     if (selected === null || selected === undefined) {
       if (existing) {
-        const result = await identityClient.removeCapabilityProfile(kbId, workflow, existing.version)
+        const result = await withRecentAuth(() => identityClient.removeCapabilityProfile(kbId, workflow, existing.version))
         if (result.error) {
           failed += 1
-          notify(`${scene.name}：移除失败（${result.error.message}）`, 'negative')
+          notify(`${scene.name}：移除失败（${apiErrorMessage(result.error, '请稍后重试')}）`, 'negative')
+          if (apiErrorCode(result.error) === 'HTTP_401') return
         }
       }
       continue
@@ -1389,10 +1423,11 @@ async function saveAssignments(kbId: string) {
     if (existing?.profileId === selected) continue
     const profile = profiles.value.find(item => item.id === selected)
     if (!profile) continue
-    const result = await identityClient.assignCapabilityProfile(kbId, workflow, { workflow, profileId: selected, profileVersion: profile.currentVersion, expectedVersion: existing?.version })
+    const result = await withRecentAuth(() => identityClient.assignCapabilityProfile(kbId, workflow, { workflow, profileId: selected, profileVersion: profile.currentVersion, expectedVersion: existing?.version }))
     if (result.error) {
       failed += 1
-      notify(`${scene.name}：分配失败（${result.error.message}）`, 'negative')
+      notify(`${scene.name}：分配失败（${apiErrorMessage(result.error, '请稍后重试')}）`, 'negative')
+      if (apiErrorCode(result.error) === 'HTTP_401') return
     }
   }
   await loadAssignments(kbId)

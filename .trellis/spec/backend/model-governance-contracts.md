@@ -35,11 +35,15 @@ secret to the browser.
   may read safe health state, stable reason code, latency, and timestamps.
   Knowledge base members receive business alias, description, exact version,
   and safe availability only.
-- Gateway URLs allow only known root paths. Every save and every call uses the
-  persisted gateway allowlist, timeout, body limit, TLS/CA policy, and the
-  deployment allowlist. DNS answers are checked before the call; httpx uses
-  `trust_env=False` and `follow_redirects=False`. Redirects, public/mixed,
-  rebinding, malformed, oversized, timeout, and proxy paths fail closed.
+- Gateway URLs accept an optional API path prefix (for example `/v1`); only
+  `..` segments, credentials, queries, and fragments are rejected. Every save
+  and every call uses the persisted gateway allowlist, timeout, body limit,
+  TLS/CA policy, and the deployment allowlist. Without any operator allowlist,
+  public addresses are reachable by default and non-global addresses fail
+  closed; once hosts or CIDRs are configured, strict allowlist mode applies.
+  DNS answers are checked before the call; httpx uses `trust_env=False` and
+  `follow_redirects=False`. Redirects, mixed DNS, rebinding, malformed,
+  oversized, timeout, and proxy paths fail closed.
 - Credentials are AES-GCM envelopes with per-record AAD, versioned key ring,
   and HMAC fingerprint. Rotation is transactional and idempotent. Plaintext,
   ciphertext, authorization headers, URLs with secrets, and upstream bodies

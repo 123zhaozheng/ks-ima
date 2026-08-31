@@ -920,9 +920,17 @@ async function saveGateway() {
   }
   gatewayDialog.saving = true
   const editing = gateways.value.find(gateway => gateway.id === gatewayDialog.editId)
+  let allowedHosts: string[] = []
+  if (gatewayForm.insecurePrivate) {
+    try {
+      allowedHosts = [new URL(gatewayForm.baseUrl.trim()).hostname]
+    } catch {
+      allowedHosts = []
+    }
+  }
   const result = editing
     ? await identityClient.updateModelGateway(editing.id, { name: gatewayForm.name, baseUrl: gatewayForm.baseUrl, insecurePrivate: gatewayForm.insecurePrivate, expectedVersion: editing.version })
-    : await identityClient.createModelGateway({ name: gatewayForm.name, baseUrl: gatewayForm.baseUrl, allowedCapabilities: ['chat', 'embedding', 'rerank'], insecurePrivate: gatewayForm.insecurePrivate, allowedHosts: [], allowedCidrs: [], connectTimeoutMs: 5000, readTimeoutMs: 30000, writeTimeoutMs: 30000, poolTimeoutMs: 5000, maxResponseBytes: 8388608, secret: gatewayForm.secret || undefined })
+    : await identityClient.createModelGateway({ name: gatewayForm.name, baseUrl: gatewayForm.baseUrl, allowedCapabilities: ['chat', 'embedding', 'rerank'], insecurePrivate: gatewayForm.insecurePrivate, allowedHosts, allowedCidrs: [], connectTimeoutMs: 5000, readTimeoutMs: 30000, writeTimeoutMs: 30000, poolTimeoutMs: 5000, maxResponseBytes: 8388608, secret: gatewayForm.secret || undefined })
   gatewayDialog.saving = false
   if (result.error) {
     notify(`保存失败：${result.error.message}`, 'negative')

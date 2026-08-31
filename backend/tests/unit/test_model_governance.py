@@ -71,12 +71,37 @@ def test_profile_contracts_are_typed_and_canonical() -> None:
 def test_egress_rejects_unsafe_url_shapes() -> None:
     with pytest.raises(GatewayError):
         validate_base_url("https://user:pass@example.invalid")
+    assert validate_base_url("https://example.invalid/v1/") == "https://example.invalid/v1"
     with pytest.raises(GatewayError):
-        validate_base_url("https://example.invalid/path")
+        validate_base_url("https://example.invalid/a/../v1")
     with pytest.raises(GatewayError):
         validate_base_url("http://example.invalid")
     policy = EgressPolicy(allowed_hosts=("gateway.internal",))
     assert policy.allowed_hosts == ("gateway.internal",)
+
+
+@pytest.mark.asyncio
+async def test_dns_default_posture_allows_public_and_blocks_private(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def public_dns(
+        *_args: object, **_kwargs: object
+    ) -> list[tuple[object, object, object, object, tuple[str, int]]]:
+        return [(0, 0, 0, "", ("93.184.216.34", 443))]
+
+    monkeypatch.setattr(egress.socket, "getaddrinfo", public_dns)
+    addresses = await egress.resolve_allowed_addresses("api.example.com", EgressPolicy(), 443)
+    assert addresses == ("93.184.216.34",)
+
+    def private_dns(
+        *_args: object, **_kwargs: object
+    ) -> list[tuple[object, object, object, object, tuple[str, int]]]:
+        return [(0, 0, 0, "", ("10.0.0.5", 443))]
+
+    monkeypatch.setattr(egress.socket, "getaddrinfo", private_dns)
+    with pytest.raises(GatewayError) as private_error:
+        await egress.resolve_allowed_addresses("gateway.internal", EgressPolicy(), 443)
+    assert private_error.value.code == "PRIVATE_ADDRESS_REJECTED"
 
 
 @pytest.mark.asyncio

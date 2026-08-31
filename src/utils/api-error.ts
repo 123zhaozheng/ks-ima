@@ -40,6 +40,7 @@ const CODE_MESSAGES: Record<string, string> = {
   VALIDATION_ERROR: '请求无效，请检查输入内容。',
   IDENTITY_ERROR: '登录已失效，请重新登录。',
   INTERNAL_ERROR: '服务端出了点问题，请重试。',
+  HTTP_401: '登录已失效，或该操作需要重新登录验证，请登录后重试。',
   HTTP_403: '你没有权限执行此操作。',
   HTTP_404: '该操作当前不可用。',
   HTTP_409: '请求与当前状态冲突，请刷新后重试。',

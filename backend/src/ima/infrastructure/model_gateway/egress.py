@@ -68,7 +68,7 @@ def validate_base_url(value: str, *, insecure_private: bool = False) -> str:
         raise GatewayError("INVALID_BASE_URL")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise GatewayError("INVALID_BASE_URL")
-    if parsed.path not in {"", "/"}:
+    if ".." in parsed.path.split("/"):
         raise GatewayError("INVALID_BASE_URL")
     if parsed.scheme == "http" and not insecure_private:
         raise GatewayError("INSECURE_GATEWAY")
@@ -78,7 +78,9 @@ def validate_base_url(value: str, *, insecure_private: bool = False) -> str:
         raise GatewayError("INVALID_BASE_URL") from exc
     if port is not None and not 1 <= port <= 65535:
         raise GatewayError("INVALID_BASE_URL")
-    return urlunparse((parsed.scheme, parsed.netloc, "", "", "", "")).rstrip("/")
+    return urlunparse(
+        (parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", "", "")
+    ).rstrip("/")
 
 
 def capability_url(base_url: str, capability: str) -> str:
@@ -118,11 +120,19 @@ async def resolve_allowed_addresses(
     if not addresses:
         raise GatewayError("DNS_EMPTY")
     allowed_hosts = {value.rstrip(".").lower() for value in policy.allowed_hosts}
-    if host.rstrip(".").lower() not in allowed_hosts and not policy.networks:
+    host_key = host.rstrip(".").lower()
+    if not allowed_hosts and not policy.networks:
+        # No operator allowlist: public gateways are reachable by default,
+        # while anything resolving to a non-global address fails closed.
+        for value in addresses:
+            if not ipaddress.ip_address(value).is_global:
+                raise GatewayError("PRIVATE_ADDRESS_REJECTED")
+        return addresses
+    if host_key not in allowed_hosts and not policy.networks:
         raise GatewayError("HOST_NOT_ALLOWLISTED")
     for value in addresses:
         ip = ipaddress.ip_address(value)
-        explicitly_allowed = host.rstrip(".").lower() in allowed_hosts or any(
+        explicitly_allowed = host_key in allowed_hosts or any(
             ip in network for network in policy.networks
         )
         if (
@@ -132,7 +142,7 @@ async def resolve_allowed_addresses(
         if policy.networks and not any(ip in network for network in policy.networks):
             raise GatewayError("ADDRESS_NOT_ALLOWLISTED")
         if ip.is_global and not (
-            (literal_target and host.rstrip(".").lower() in allowed_hosts)
+            (literal_target and host_key in allowed_hosts)
             or any(ip in network for network in policy.networks)
         ):
             raise GatewayError("PUBLIC_ADDRESS_REJECTED")

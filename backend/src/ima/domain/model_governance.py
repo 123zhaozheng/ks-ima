@@ -78,8 +78,8 @@ class ModelGatewayInput(BaseModel):
             raise ValueError("baseUrl must be an absolute HTTP(S) URL")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("baseUrl cannot contain credentials, query, or fragment")
-        if parsed.path not in {"", "/"}:
-            raise ValueError("baseUrl must not contain a path")
+        if ".." in parsed.path.split("/"):
+            raise ValueError("baseUrl path must not contain '..' segments")
         if parsed.scheme == "https" and self.insecure_private:
             raise ValueError("insecurePrivate is only valid for HTTP gateways")
         if parsed.scheme == "http" and not self.insecure_private:

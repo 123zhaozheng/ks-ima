@@ -143,6 +143,19 @@ async def test_kb_role_matrix_hidden_membership_and_archive() -> None:
         # Non-members cannot even see the knowledge base.
         with pytest.raises(KbError, match="Knowledge base not found"):
             await service.folders(JOINER_ID, kb_id)
+        # Denial audits survive the rolled-back caller transactions.
+        async with engine.connect() as conn:
+            denied = (
+                await conn.execute(
+                    text(
+                        "SELECT actor_id, reason_code FROM ima.audit_events "
+                        "WHERE action = 'kb.authorization.denied' AND result = 'failure' "
+                        "AND actor_id IN (:viewer, :joiner)"
+                    ),
+                    {"viewer": viewer_id, "joiner": JOINER_ID},
+                )
+            ).all()
+        assert {row.actor_id for row in denied} == {viewer_id, JOINER_ID}
         # Only the owner manages members, and the owner role is protected.
         with pytest.raises(KbError, match="owner access is required"):
             await service.update_member_role(viewer_id, kb_id, viewer_id, "editor")

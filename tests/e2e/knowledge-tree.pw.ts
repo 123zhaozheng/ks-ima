@@ -2,14 +2,15 @@ import { expect, test, type Page } from '@playwright/test'
 import { frontOrigin } from './environment'
 
 /**
- * Three-pane knowledge workspace journey (new IA): folder tree | item list |
- * preview pane. Everything runs against the real API; each Playwright project
- * uses its own seeded OAuth account and workspace so runs stay isolated.
+ * Three-pane knowledge base journey: folder tree | item list | preview pane.
+ * Everything runs against the real API; each Playwright project uses its own
+ * seeded OAuth account and knowledge base so runs stay isolated. Deleting a
+ * note is immediate (no trash): confirm once and it is gone.
  */
 
 const projectAccounts = {
-  chromium: { email: 'e2e-oauth-chromium@example.com', workspaceId: 'e2e-oauth-chromium-ws' },
-  'mobile-chromium': { email: 'e2e-oauth-mobile-chromium@example.com', workspaceId: 'e2e-oauth-mobile-chromium-ws' },
+  chromium: { email: 'e2e-oauth-chromium@example.com', kbId: 'e2e-oauth-chromium-kb' },
+  'mobile-chromium': { email: 'e2e-oauth-mobile-chromium@example.com', kbId: 'e2e-oauth-mobile-chromium-kb' },
 } as const
 type ProjectName = keyof typeof projectAccounts
 
@@ -27,8 +28,8 @@ async function signIn(page: Page, email: string) {
   expect(response.ok()).toBeTruthy()
 }
 
-test.describe('knowledge workspace desktop/mobile journey (new IA)', () => {
-  test('creates a folder and a note, previews and edits the note, and pre-scopes Ask', async ({ page }, testInfo) => {
+test.describe('knowledge base desktop/mobile journey', () => {
+  test('creates a folder and a note, previews, edits, pre-scopes Ask, and deletes the note', async ({ page }, testInfo) => {
     const account = accountFor(testInfo.project.name)
     await signIn(page, account.email)
     const suffix = Date.now()
@@ -52,6 +53,8 @@ test.describe('knowledge workspace desktop/mobile journey (new IA)', () => {
     await page.getByTestId('folder-name-input').fill(folderName)
     await page.getByTestId('folder-create-button').click()
     await expect(page).toHaveURL(/folderId=/)
+    const folderId = new URL(page.url()).searchParams.get('folderId')
+    expect(folderId).toBeTruthy()
     await expect(page.getByRole('treeitem', { name: folderName })).toBeVisible()
     await expect(page.getByText('Folder created')).toBeVisible()
 
@@ -89,6 +92,17 @@ test.describe('knowledge workspace desktop/mobile journey (new IA)', () => {
     await expect(page.getByTestId('upload-dropzone')).toBeVisible()
     await page.getByRole('button', { name: 'Close', exact: true }).last().click()
 
+    // Deletion is immediate: the list row menu confirms and removes the note.
+    await page.goto(`/kb?folderId=${folderId}`)
+    const row = page.locator('.kb-row').filter({ hasText: noteName })
+    await expect(row).toBeVisible()
+    await row.hover()
+    await row.locator('.kb-row-menu').click()
+    await page.getByTestId('row-delete-action').click()
+    await page.getByRole('button', { name: 'Delete', exact: true }).click()
+    await expect(page.getByText('Deleted')).toBeVisible()
+    await expect(row).toHaveCount(0)
+
     if (isDesktop) {
       // Desktop rail navigation drives the same pages the drawer used to own.
       await expect(page.getByTestId('rail-nav-ask')).toBeVisible()
@@ -97,7 +111,7 @@ test.describe('knowledge workspace desktop/mobile journey (new IA)', () => {
       await expect(page.getByTestId('ask-composer')).toBeVisible()
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
       expect(overflow).toBe(true)
-      await page.screenshot({ path: testInfo.outputPath('knowledge-workspace.png'), fullPage: true })
+      await page.screenshot({ path: testInfo.outputPath('knowledge-base.png'), fullPage: true })
     }
   })
 })

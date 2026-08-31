@@ -110,20 +110,24 @@ class KbService:
         reason: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        await conn.execute(
-            text("""INSERT INTO ima.audit_events(actor_id,action,target_type,target_id,result,reason_code,metadata,created_at)
-          VALUES (:actor,:action,:target_type,:target,:result,:reason,CAST(:metadata AS jsonb),:created)"""),
-            {
-                "actor": actor,
-                "action": action,
-                "target_type": "knowledge_base" if kb else None,
-                "target": target or kb,
-                "result": result,
-                "reason": reason,
-                "metadata": json.dumps({"kbId": kb, **(metadata or {})}),
-                "created": now(),
-            },
-        )
+        payload = {
+            "actor": actor,
+            "action": action,
+            "target_type": "knowledge_base" if kb else None,
+            "target": target or kb,
+            "result": result,
+            "reason": reason,
+            "metadata": json.dumps({"kbId": kb, **(metadata or {})}),
+            "created": now(),
+        }
+        sql = text("""INSERT INTO ima.audit_events(actor_id,action,target_type,target_id,result,reason_code,metadata,created_at)
+          VALUES (:actor,:action,:target_type,:target,:result,:reason,CAST(:metadata AS jsonb),:created)""")
+        if result == "failure":
+            # Denials must survive the caller's rolled-back transaction.
+            async with self.engine.begin() as own:
+                await own.execute(sql, payload)
+            return
+        await conn.execute(sql, payload)
 
     async def _assert_writes_allowed(self, conn: AsyncConnection) -> None:
         """Maintenance write-freeze gate (same setting read as the freeze service)."""

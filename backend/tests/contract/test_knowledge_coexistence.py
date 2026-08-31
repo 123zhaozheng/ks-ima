@@ -12,7 +12,7 @@ def read_source(relative: str) -> str:
 def test_knowledge_client_is_python_only_without_zero_or_bun_fallback() -> None:
     client = read_source("src/api/knowledge-client.ts")
     composable = read_source("src/composables/use-knowledge.ts")
-    layout = read_source("src/layouts/TrashLayout.vue")
+    page = read_source("src/pages/KnowledgeBase.vue")
 
     assert "imaClient" in client
     assert "/api/v1/" in client
@@ -21,7 +21,10 @@ def test_knowledge_client_is_python_only_without_zero_or_bun_fallback() -> None:
     assert "src-server" not in client
     assert "zero-session" not in composable
     assert "knowledge-upload" not in composable
-    assert "KnowledgeTrashList.vue" in layout
+    assert "trash" not in client.casefold()
+    assert not (ROOT / "src/layouts/TrashLayout.vue").exists()
+    assert not (ROOT / "src/components/KnowledgeTrashList.vue").exists()
+    assert page
 
 
 def test_python_knowledge_router_is_the_only_knowledge_backend() -> None:

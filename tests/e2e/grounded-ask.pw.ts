@@ -4,16 +4,26 @@ import { frontOrigin } from './environment'
 /**
  * The e2e environment has no model gateway and no grounded-Ask capability
  * profile, so the real `/ask` endpoint answers 409 NO_ASSIGNMENT. Like the
- * previous suite, this one drives the REAL app shell but mocks the workspace
- * ask/conversation endpoints at the network edge (`page.route`) using the
- * backend's SSE protocol (conversation/message/citations/delta/completed/
- * knowledge_gap/error frames). Citation previews still load REAL notes
- * created through the real API, so the highlight path runs on real data.
+ * previous suite, this one drives the REAL app shell but mocks the knowledge
+ * base ask/conversation endpoints at the network edge (`page.route`) using
+ * the backend's SSE protocol (conversation/message/citations/delta/completed/
+ * knowledge_gap/error frames). History is user-level now: the list endpoint
+ * is `/conversations` and every row carries the knowledge base it lives in.
+ * Citation previews still load REAL notes created through the real API, so
+ * the highlight path runs on real data.
  */
 
 const projectAccounts = {
-  chromium: { email: 'e2e-oauth-chromium@example.com', workspaceId: 'e2e-oauth-chromium-ws' },
-  'mobile-chromium': { email: 'e2e-oauth-mobile-chromium@example.com', workspaceId: 'e2e-oauth-mobile-chromium-ws' },
+  chromium: {
+    email: 'e2e-oauth-chromium@example.com',
+    kbId: 'e2e-oauth-chromium-kb',
+    kbName: 'OAuth Knowledge Base (chromium)',
+  },
+  'mobile-chromium': {
+    email: 'e2e-oauth-mobile-chromium@example.com',
+    kbId: 'e2e-oauth-mobile-chromium-kb',
+    kbName: 'OAuth Knowledge Base (mobile-chromium)',
+  },
 } as const
 type ProjectName = keyof typeof projectAccounts
 
@@ -69,10 +79,11 @@ function messageRow(conversationId: string, message: MockMessage, createdAt: str
   }
 }
 
-function conversationDetail(workspaceId: string, conversation: MockConversation, createdAt: string) {
+function conversationDetail(kbId: string, kbName: string, conversation: MockConversation, createdAt: string) {
   return {
     id: conversation.id,
-    workspaceId,
+    kbId,
+    kbName,
     title: conversation.title,
     lifecycle: 'active',
     version: 1,
@@ -87,17 +98,18 @@ function conversationDetail(workspaceId: string, conversation: MockConversation,
  *   `fail:` — citations resolve but generation errors (covers retry)
  *   `gap:`  — the knowledge base has no answer (knowledge_gap event)
  */
-async function installAskMock(page: Page, workspaceId: string, citation: { documentId: string, quote: string }) {
-  const base = frontOrigin.replace(/\./g, '\\.') + `/api/v1/workspaces/${workspaceId}`
+async function installAskMock(page: Page, kbId: string, kbName: string, citation: { documentId: string, quote: string }) {
+  const base = frontOrigin.replace(/\./g, '\\.') + `/api/v1/knowledge-bases/${kbId}`
   const createdAt = new Date().toISOString()
   const conversations = new Map<string, MockConversation>()
   let nextId = 1
-  const id = (prefix: string) => `${prefix}-${workspaceId}-${nextId++}`
+  const id = (prefix: string) => `${prefix}-${kbId}-${nextId++}`
 
   function conversationRow(conversation: MockConversation) {
     return {
       id: conversation.id,
-      workspaceId,
+      kbId,
+      kbName,
       title: conversation.title,
       lifecycle: 'active',
       version: 1,
@@ -154,7 +166,7 @@ async function installAskMock(page: Page, workspaceId: string, citation: { docum
       sequence: conversation.messages.length + 1,
     }
     const answer = mode === 'complete'
-      ? `The workspace policy requires two reviewers. [1]||Saved by the E2E suite.`
+      ? `The knowledge base policy requires two reviewers. [1]||Saved by the E2E suite.`
       : mode === 'gap'
         ? 'I could not find relevant information in your accessible knowledge.'
         : ''
@@ -169,7 +181,7 @@ async function installAskMock(page: Page, workspaceId: string, citation: { docum
     return { conversation, user, assistant }
   }
 
-  await page.route(`${frontOrigin}/api/v1/workspaces/${workspaceId}/ask`, async (route: Route) => {
+  await page.route(`${frontOrigin}/api/v1/knowledge-bases/${kbId}/ask`, async (route: Route) => {
     const body = route.request().postDataJSON() as { question?: string, conversationId?: string | null }
     const question = (body.question ?? '').trim()
     const mode = question.startsWith('fail:') ? 'fail' : question.startsWith('gap:') ? 'gap' : 'complete'
@@ -189,7 +201,8 @@ async function installAskMock(page: Page, workspaceId: string, citation: { docum
     await route.fulfill({ contentType: 'text/event-stream', body: streamEvents(conversation, assistant, 'complete') })
   })
 
-  await page.route(`${frontOrigin}/api/v1/workspaces/${workspaceId}/conversations`, (route: Route) => {
+  // User-level history: one list across every knowledge base of the user.
+  await page.route(`${frontOrigin}/api/v1/conversations`, (route: Route) => {
     const items = [...conversations.values()].map(conversationRow)
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ items }) })
   })
@@ -198,7 +211,7 @@ async function installAskMock(page: Page, workspaceId: string, citation: { docum
     const conversationId = new URL(route.request().url()).pathname.split('/').at(-1) ?? ''
     const conversation = conversations.get(conversationId)
     if (!conversation) return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' })
-    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(conversationDetail(workspaceId, conversation, createdAt)) })
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(conversationDetail(kbId, kbName, conversation, createdAt)) })
   })
 
   await page.route(new RegExp(`^${base}/messages/[^/]+/citations/\\d+$`), (route: Route) => {
@@ -225,29 +238,29 @@ function composer(page: Page) {
 }
 
 async function askFromHome(page: Page, question: string) {
-  const workspacesLoaded = page.waitForResponse(response =>
-    response.url().endsWith('/api/v1/workspaces') && response.request().method() === 'GET')
+  const kbsLoaded = page.waitForResponse(response =>
+    response.url().endsWith('/api/v1/knowledge-bases') && response.request().method() === 'GET')
   await page.goto('/')
   await expect(page.getByTestId('ask-composer')).toBeVisible()
-  await workspacesLoaded
+  await kbsLoaded
   await composer(page).fill(question)
   await page.getByTestId('ask-send').click()
 }
 
-test.describe('grounded Ask desktop/mobile journey (new IA)', () => {
+test.describe('grounded Ask desktop/mobile journey', () => {
   test('streams an answer from the home composer, opens the cited note, and saves it', async ({ page }, testInfo) => {
     const account = accountFor(testInfo.project.name)
     await signIn(page, account.email)
     const headers = await csrfHeaders(page)
     const noteTitle = `E2E Cited Note ${Date.now()}`
     const quote = 'The policy requires two independent reviewers.'
-    const created = await page.request.post(`/api/v1/folders/${account.workspaceId}/notes`, {
+    const created = await page.request.post(`/api/v1/folders/${account.kbId}/notes`, {
       data: { title: noteTitle, markdown: `# Policy\n\n${quote}\n\nNothing else matters here.` },
       headers,
     })
     expect(created.ok()).toBeTruthy()
     const note = await created.json() as { id: string }
-    await installAskMock(page, account.workspaceId, { documentId: note.id, quote })
+    await installAskMock(page, account.kbId, account.kbName, { documentId: note.id, quote })
 
     const question = `E2E question ${Date.now()}`
     await askFromHome(page, question)
@@ -257,7 +270,7 @@ test.describe('grounded Ask desktop/mobile journey (new IA)', () => {
     await expect(page.getByTestId('conversation-title')).toHaveText(question)
     await expect(page.getByText(question, { exact: true }).first()).toBeVisible()
     const answer = page.getByTestId('assistant-answer').last()
-    await expect(answer).toContainText('The workspace policy requires two reviewers.')
+    await expect(answer).toContainText('The knowledge base policy requires two reviewers.')
     const mark = page.getByTestId('citation-mark').last()
     await expect(mark).toBeVisible()
     await expect(mark).toHaveText('1')
@@ -270,32 +283,32 @@ test.describe('grounded Ask desktop/mobile journey (new IA)', () => {
     await expect(pane.locator('.md-body h1')).toHaveText('Policy')
     await expect(pane.locator('mark')).toHaveText(quote)
 
-    // Save the answer as a note into the workspace root folder.
+    // Save the answer as a note into the knowledge base root folder.
     await page.getByTestId('save-as-note').last().click()
     const dialog = page.getByTestId('save-as-note-dialog')
     await expect(dialog).toBeVisible()
-    await dialog.getByRole('option', { name: 'Whole workspace' }).click()
+    await dialog.getByRole('option', { name: 'Whole knowledge base' }).click()
     await dialog.getByTestId('save-as-note-confirm').click()
     await expect(page.getByText('Note saved')).toBeVisible()
 
-    // The saved note appears in the knowledge workspace list.
+    // The saved note appears in the knowledge base list.
     await page.goto('/kb')
-    await expect(page.locator('.kb-row').filter({ hasText: 'The workspace policy requires two reviewers.' }).first()).toBeVisible()
+    await expect(page.locator('.kb-row').filter({ hasText: 'The knowledge base policy requires two reviewers.' }).first()).toBeVisible()
   })
 
-  test('failed answers offer retry and the conversation lands in history', async ({ page }, testInfo) => {
+  test('failed answers offer retry and the conversation lands in history with its knowledge base', async ({ page }, testInfo) => {
     const account = accountFor(testInfo.project.name)
     await signIn(page, account.email)
     const headers = await csrfHeaders(page)
     const noteTitle = `E2E Retry Note ${Date.now()}`
     const quote = 'Retry evidence kept in the cited note.'
-    const created = await page.request.post(`/api/v1/folders/${account.workspaceId}/notes`, {
+    const created = await page.request.post(`/api/v1/folders/${account.kbId}/notes`, {
       data: { title: noteTitle, markdown: quote },
       headers,
     })
     expect(created.ok()).toBeTruthy()
     const note = await created.json() as { id: string }
-    await installAskMock(page, account.workspaceId, { documentId: note.id, quote })
+    await installAskMock(page, account.kbId, account.kbName, { documentId: note.id, quote })
 
     const question = `fail: E2E failing question ${Date.now()}`
     await askFromHome(page, question)
@@ -306,12 +319,13 @@ test.describe('grounded Ask desktop/mobile journey (new IA)', () => {
     await page.getByTestId('answer-retry').first().click()
     await expect(page.getByTestId('assistant-answer').last()).toContainText('Recovered after retry.')
 
-    // History lists the conversation and reopens the full thread.
+    // History lists the conversation with its knowledge base and reopens it.
     await page.goto('/history')
     const list = page.getByTestId('history-list')
     await expect(list).toBeVisible()
     const item = page.getByTestId('history-item').filter({ hasText: question }).first()
     await expect(item).toBeVisible()
+    await expect(item).toContainText(account.kbName)
     await item.click()
     await expect(page).toHaveURL(/\/ask\/conversation-/)
     await expect(page.getByText(question, { exact: true }).first()).toBeVisible()
@@ -322,13 +336,13 @@ test.describe('grounded Ask desktop/mobile journey (new IA)', () => {
     const account = accountFor(testInfo.project.name)
     await signIn(page, account.email)
     const headers = await csrfHeaders(page)
-    const created = await page.request.post(`/api/v1/folders/${account.workspaceId}/notes`, {
+    const created = await page.request.post(`/api/v1/folders/${account.kbId}/notes`, {
       data: { title: `E2E Gap Note ${Date.now()}`, markdown: 'Unrelated content.' },
       headers,
     })
     expect(created.ok()).toBeTruthy()
     const note = await created.json() as { id: string }
-    await installAskMock(page, account.workspaceId, { documentId: note.id, quote: 'unused' })
+    await installAskMock(page, account.kbId, account.kbName, { documentId: note.id, quote: 'unused' })
 
     await askFromHome(page, `gap: E2E gap question ${Date.now()}`)
     await expect(page).toHaveURL(/\/ask\/conversation-/)

@@ -41,7 +41,7 @@ export const knowledgeClient = {
   createNote: (folderId: string, input: NoteInput) => imaClient.request<Document>(`/api/v1/folders/${path(folderId)}/notes`, { method: 'POST', body: JSON.stringify(input) }),
   updateDocument: (documentId: string, input: DocumentPatch) => imaClient.request<Document>(`/api/v1/documents/${path(documentId)}`, { method: 'PATCH', body: JSON.stringify(input) }),
   moveDocument: (documentId: string, folderId: string, expectedVersion: number) => imaClient.request<Document>(`/api/v1/documents/${path(documentId)}/move`, { method: 'POST', body: JSON.stringify({ folderId, expectedVersion }) }),
-  // Deletion is immediate and irreversible; the trash lifecycle was removed.
+  // Deletion is immediate and irreversible.
   deleteDocument: (documentId: string) => imaClient.request<void>(`/api/v1/documents/${path(documentId)}`, { method: 'DELETE' }),
   versions: (documentId: string, signal?: AbortSignal) => imaClient.request<Version[]>(`/api/v1/documents/${path(documentId)}/versions`, { signal }),
   restoreVersion: (documentId: string, version: number, expectedVersion: number) => imaClient.request<Document>(`/api/v1/documents/${path(documentId)}/versions/${version}/restore`, { method: 'POST', body: JSON.stringify({ expectedVersion }) }),

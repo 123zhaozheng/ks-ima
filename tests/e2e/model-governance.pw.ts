@@ -27,7 +27,7 @@ test.describe('central model governance boundary', () => {
     expect((await page.request.get('/api/v1/admin/model-gateways')).status()).toBe(403)
     const execution = await page.request.post('/api/v1/internal/model-governance/execute/chat', {
       data: {
-        workspaceId: 'unassigned-model-workspace',
+        kbId: 'unassigned-model-kb',
         workflow: 'grounded_ask',
         messages: [{ role: 'user', content: 'secret?' }],
       },
@@ -55,7 +55,7 @@ test.describe('central model governance boundary', () => {
     expect([404, 405]).toContain((await page.request.get('/api/v1/internal/model-governance/resolve')).status())
     expect((await page.request.post('/api/v1/internal/model-governance/execute/chat', {
       data: {
-        workspaceId: 'unassigned-model-workspace',
+        kbId: 'unassigned-model-kb',
         workflow: 'grounded_ask',
         messages: [],
       },

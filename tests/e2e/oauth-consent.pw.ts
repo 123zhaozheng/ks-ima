@@ -16,11 +16,15 @@ function fixture(projectName: string) {
     clientId: `e2e-oauth-${name}`,
     clientName: `E2E OAuth Client (${name})`,
     email: `e2e-oauth-${name}@example.com`,
-    workspaceId: `e2e-oauth-${name}-ws`,
     redirectUri: `${frontOrigin}/oauth/callback/${name}`,
   }
 }
 
+/**
+ * Grants are user-level now: the authorization request carries no knowledge
+ * base or folder selection, only PKCE + scopes. The consent page previews
+ * exactly what the server will grant.
+ */
 function authorizationRequest(projectName: string, state: string, scope: string) {
   const value = fixture(projectName)
   const verifier = `e2e-${projectName}-pkce-verifier-${'x'.repeat(64)}`
@@ -30,7 +34,6 @@ function authorizationRequest(projectName: string, state: string, scope: string)
     client_id: value.clientId,
     redirect_uri: value.redirectUri,
     resource: `${frontOrigin}/mcp`,
-    workspace_id: value.workspaceId,
     scope,
     state,
     code_challenge: challenge,
@@ -67,15 +70,16 @@ test.describe('real OAuth consent desktop/mobile journey', () => {
     const denied = authorizationRequest(
       testInfo.project.name,
       `deny-${testInfo.project.name}`,
-      'mcp:workspaces:read',
+      'mcp:knowledge-bases:read',
     )
     await page.goto(denied.url)
     await expect(page).toHaveURL(/\/oauth\/consent\?/)
     await expect(page.getByRole('heading', { name: 'Connect agent' })).toBeVisible()
     await expect(page.getByText(project.clientName, { exact: true }).first()).toBeVisible()
     await expect(page.getByText(`${frontOrigin}/mcp`, { exact: true })).toBeVisible()
-    await expect(page.getByText(project.redirectUri, { exact: true })).toBeVisible()
-    await expect(page.getByText(project.workspaceId, { exact: true })).toBeVisible()
+    // Scope badges render without any knowledge base / folder selection.
+    await expect(page.getByText('knowledge-bases · read', { exact: true })).toBeVisible()
+    await expect(page.getByText('This connection can change knowledge content.')).toHaveCount(0)
     await page.getByRole('button', { name: 'Deny', exact: true }).click()
     await expect(page).toHaveURL(new RegExp(`oauth/callback/${project.clientId.replace('e2e-oauth-', '')}`))
     let callback = new URL(page.url())
@@ -85,7 +89,7 @@ test.describe('real OAuth consent desktop/mobile journey', () => {
     const approved = authorizationRequest(
       testInfo.project.name,
       `approve-${testInfo.project.name}`,
-      'mcp:workspaces:read mcp:knowledge:read mcp:knowledge:write',
+      'mcp:knowledge-bases:read mcp:knowledge:read mcp:knowledge:write',
     )
     await page.goto(approved.url)
     const approvalLocation = new URL(page.url())
@@ -95,8 +99,10 @@ test.describe('real OAuth consent desktop/mobile journey', () => {
       )
     }
     await expect(page).toHaveURL(/\/oauth\/consent\?/)
+    await expect(page.getByText('knowledge-bases · read', { exact: true })).toBeVisible()
+    await expect(page.getByText('knowledge · read', { exact: true })).toBeVisible()
+    await expect(page.getByText('knowledge · write', { exact: true })).toBeVisible()
     await expect(page.getByText('This connection can change knowledge content.')).toBeVisible()
-    await expect(page.getByText('Rotating refresh enabled')).toBeVisible()
     await page.getByRole('button', { name: 'Approve', exact: true }).click()
     await expect(page).toHaveURL(new RegExp(`oauth/callback/${testInfo.project.name}`))
     callback = new URL(page.url())
@@ -141,7 +147,7 @@ test.describe('real OAuth consent desktop/mobile journey', () => {
     const request = authorizationRequest(
       testInfo.project.name,
       `expired-${testInfo.project.name}`,
-      'mcp:workspaces:read',
+      'mcp:knowledge-bases:read',
     )
     await page.goto(request.url.replace('/oauth/authorize?', '/oauth/consent?'))
     await expect(page.getByText('Your session expired. Sign in to continue.')).toBeVisible()

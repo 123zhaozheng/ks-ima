@@ -547,3 +547,29 @@ Session summary was not supplied.
 ### Status
 
 [OK] **Completed**
+
+
+## Session 16: 管理后台中文化与模型一键接入
+
+**Date**: 2026-08-31
+**Task**: 管理后台中文化与模型一键接入
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+删除 i18n 全面中文化；模型配置重写为服务商卡片+一键拉取/导入（真实厂商logo、能力识别、维度校验）；审计页中文分组；知识库切换即时刷新并暴露分享入口；本地 mock OpenAI 网关全链路实测通过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `80a93e2` | (see git log) |
+| `fbb2361` | (see git log) |
+| `0e12c53` | (see git log) |
+| `fe26ff3` | (see git log) |
+| `b3f861d` | (see git log) |
+| `9cc63af` | (see git log) |
+
+### Status
+
+[OK] **Completed**

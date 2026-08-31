@@ -8,14 +8,14 @@
         icon="sym_o_menu"
         @click="uiStateStore.toggleMainDrawer"
       />
-      <q-toolbar-title>{{ kbStore.kb?.name ?? t('Knowledge base') }}</q-toolbar-title>
+      <q-toolbar-title>{{ kbStore.current?.name ?? '知识库' }}</q-toolbar-title>
       <q-badge
         v-if="isViewer"
         outline
         color="primary"
         class="kb-role-badge"
       >
-        {{ t('Read only') }}
+        只读
       </q-badge>
       <q-badge
         v-if="isArchived"
@@ -23,17 +23,17 @@
         color="warning"
         class="kb-role-badge"
       >
-        {{ t('Archived') }}
+        已归档
       </q-badge>
       <q-btn
-        v-if="kbStore.kb"
+        v-if="kbStore.isOwner"
         flat
         dense
-        round
-        icon="sym_o_group"
-        :title="t('Members and sharing')"
+        no-caps
+        icon="sym_o_ios_share"
+        label="分享"
         data-testid="kb-manage"
-        @click="showManage = true"
+        @click="kbStore.openManage('share')"
       />
     </q-toolbar>
   </q-header>
@@ -60,17 +60,17 @@
           class="tk-empty-icon"
         />
         <div class="tk-empty-title">
-          {{ t('Create your first knowledge base') }}
+          创建你的第一个知识库
         </div>
         <div class="tk-empty-subtitle">
-          {{ t('Create a knowledge base to collect notes and files, or join one shared with you.') }}
+          创建一个知识库，收集笔记和文件；也可以通过分享链接加入别人的知识库。
         </div>
         <div class="tk-empty-actions">
           <q-btn
             unelevated
             no-caps
             class="tk-cta"
-            :label="t('Create knowledge base')"
+            label="新建知识库"
             data-testid="kb-create"
             @click="showCreateKb = true"
           />
@@ -78,7 +78,7 @@
             flat
             no-caps
             class="tk-cta-secondary"
-            :label="t('Join with a link')"
+            label="通过链接加入"
             data-testid="kb-join"
             @click="joinWithLink"
           />
@@ -94,13 +94,13 @@
         v-if="isViewer"
         class="kb-banner"
       >
-        {{ t('Your role is read-only; you can browse the content in this knowledge base but cannot make changes.') }}
+        你的角色为只读，只能浏览此知识库的内容，无法修改。
       </div>
       <div
         v-if="isArchived"
         class="kb-banner"
       >
-        {{ t('This knowledge base is archived and can no longer be changed.') }}
+        该知识库已归档，无法再更改。
       </div>
       <div class="kb-page-body">
         <aside
@@ -108,14 +108,14 @@
           data-testid="kb-tree-pane"
         >
           <div class="kb-pane-header">
-            <span class="kb-pane-title">{{ t('Folders') }}</span>
+            <span class="kb-pane-title">文件夹</span>
             <q-btn
               v-if="canWrite"
               flat
               dense
               round
               icon="sym_o_create_new_folder"
-              :title="t('New folder')"
+              title="新建文件夹"
               data-testid="kb-new-folder"
               @click="activeDialog = 'folder'"
             />
@@ -129,7 +129,7 @@
               flat
               dense
               icon="sym_o_note_add"
-              :label="t('New note')"
+              label="新建笔记"
               :disable="!folderId"
               data-testid="kb-new-note"
               @click="activeDialog = 'note'"
@@ -139,7 +139,7 @@
               flat
               dense
               icon="sym_o_upload_file"
-              :label="t('Upload')"
+              label="上传"
               :disable="!folderId"
               data-testid="kb-upload"
               @click="activeDialog = 'upload'"
@@ -178,14 +178,14 @@
               name="sym_o_visibility"
               size="40px"
             />
-            <div>{{ t('Select a document to preview') }}</div>
+            <div>选择一篇文档以预览</div>
           </div>
         </section>
         <div
           v-else
           class="kb-preview-reopen"
           role="button"
-          :title="t('Preview')"
+          title="预览"
           data-testid="kb-preview-reopen"
           @click="previewCollapsed = false"
         >
@@ -212,42 +212,37 @@
     :folder-id="folderId"
     @update:model-value="open => (activeDialog = open ? 'upload' : null)"
   />
-  <kb-manage-dialog
-    v-if="kbStore.kb"
-    v-model="showManage"
-    :kb="kbStore.kb"
-  />
   <q-dialog
     v-model="showCreateKb"
     @hide="newKbName = ''"
   >
     <q-card min-w="360px">
       <q-card-section class="text-h6">
-        {{ t('Create knowledge base') }}
+        新建知识库
       </q-card-section>
       <q-card-section>
         <q-input
           v-model="newKbName"
           outlined
           autofocus
-          :label="t('Knowledge base name')"
+          label="知识库名称"
           data-testid="kb-name-input"
           @keyup.enter="createKb"
         />
         <div class="tk-caption q-mt-sm">
-          {{ t('You will become the owner of the new knowledge base.') }}
+          你将成为新知识库的所有者。
         </div>
       </q-card-section>
       <q-card-actions align="right">
         <q-btn
           v-close-popup
           flat
-          :label="t('Cancel')"
+          label="取消"
         />
         <q-btn
           flat
           color="primary"
-          :label="t('Create')"
+          label="创建"
           :loading="creatingKb"
           :disable="!newKbName.trim()"
           data-testid="kb-create-button"
@@ -267,7 +262,6 @@ import { useRoute, useRouter } from 'vue-router'
 import CreateNoteDialog from 'src/components/CreateNoteDialog.vue'
 import DocPreview from 'src/components/DocPreview.vue'
 import FolderTree from 'src/components/FolderTree.vue'
-import KbManageDialog from 'src/components/KbManageDialog.vue'
 import KnowledgeList from 'src/components/KnowledgeList.vue'
 import NewFolderDialog from 'src/components/NewFolderDialog.vue'
 import UploadDialog from 'src/components/UploadDialog.vue'
@@ -277,7 +271,6 @@ import { useUiStateStore } from 'src/stores/ui-state'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { pageFhStyle } from 'src/utils/functions'
 import { identityClient, session } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 
 type Folder = components['schemas']['Folder']
 type Document = components['schemas']['DocumentResponse']
@@ -297,7 +290,7 @@ const listReady = computed(() => kbStore.kbsStatus === 'success')
 // Viewers can browse but never write; archived knowledge bases freeze writes
 // for everyone until restored.
 const isViewer = computed(() => kbStore.myRole === 'viewer')
-const isArchived = computed(() => Boolean(kbStore.kb?.archivedAt))
+const isArchived = computed(() => Boolean(kbStore.current?.archivedAt))
 const canWrite = computed(() => Boolean(kbStore.id) && !isViewer.value && !isArchived.value)
 
 // The knowledge base root folder is the knowledge base itself; subfolders and
@@ -314,7 +307,6 @@ const documentId = computed(() => {
 const treeRef = useTemplateRef<InstanceType<typeof FolderTree>>('treeRef')
 // Only one KB dialog may be open at a time; they previously stacked.
 const activeDialog = ref<'folder' | 'note' | 'upload' | null>(null)
-const showManage = ref(false)
 const showCreateKb = ref(false)
 const newKbName = ref('')
 const creatingKb = ref(false)
@@ -324,10 +316,10 @@ const editDocId = ref<string>()
 
 function joinWithLink() {
   $q.dialog({
-    title: t('Join knowledge base'),
+    title: '加入知识库',
     prompt: {
       model: '',
-      label: t('Share link'),
+      label: '分享链接',
     },
     cancel: true,
   }).onOk((link: string) => {
@@ -343,16 +335,16 @@ async function createKb() {
   try {
     const { data, error } = await identityClient.createKnowledgeBase({ name })
     if (error || !data) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Create failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(error, '创建失败') })
       return
     }
-    Notify.create({ type: 'positive', message: t('Knowledge base created') })
+    Notify.create({ type: 'positive', message: '知识库已创建' })
     showCreateKb.value = false
     await queryClient.invalidateQueries({ queryKey: ['knowledge-bases', 'member'] })
     kbStore.switchKb(data.id)
     router.replace('/kb')
   } catch (error) {
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Create failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '创建失败') })
   } finally {
     creatingKb.value = false
   }

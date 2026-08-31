@@ -34,7 +34,7 @@
             v-if="item.kind === 'file'"
             caption
           >
-            {{ item.fileState === 'pending' ? t('Storage migration pending') : item.fileState }}
+            {{ item.fileState === 'pending' ? '存储迁移待完成' : item.fileState }}
           </q-item-label>
         </q-item-section>
         <q-item-section
@@ -43,7 +43,7 @@
         >
           <q-icon
             name="sym_o_lock"
-            :title="t('File actions are unavailable until storage migration is complete')"
+            title="存储迁移完成前，文件操作不可用"
           />
         </q-item-section>
         <q-item-section
@@ -55,7 +55,7 @@
             dense
             round
             icon="sym_o_more_vert"
-            :aria-label="t('More')"
+            aria-label="更多"
             class="kb-row-menu"
             @click.prevent.stop
           >
@@ -73,7 +73,7 @@
                   >
                     <q-icon name="sym_o_delete" />
                   </q-item-section>
-                  <q-item-section>{{ t('Delete') }}</q-item-section>
+                  <q-item-section>删除</q-item-section>
                 </q-item>
               </q-list>
             </q-menu>
@@ -85,7 +85,7 @@
         clickable
         @click="loadMore"
       >
-        <q-item-section>{{ t('Load more') }}</q-item-section>
+        <q-item-section>加载更多</q-item-section>
       </q-item>
     </q-list>
     <div
@@ -108,7 +108,7 @@
       <q-btn
         flat
         icon="sym_o_refresh"
-        :label="t('Retry')"
+        label="重试"
         @click="query.refetch()"
       />
     </div>
@@ -121,7 +121,7 @@
       text-on-sur-var
     >
       <slot name="empty">
-        {{ t('No items') }}
+        没有项目
       </slot>
     </div>
   </div>
@@ -135,7 +135,6 @@ import { knowledgeClient } from 'src/api/knowledge-client'
 import { IMAApiError } from 'src/api/ima-client'
 import { useFolderContents, useKnowledgeMutations } from 'src/composables/use-knowledge'
 import { apiErrorMessage } from 'src/utils/api-error'
-import { t } from 'src/utils/i18n'
 
 type ContentRow = components['schemas']['ContentRow']
 
@@ -187,11 +186,11 @@ async function loadMore() {
 
 function confirmDelete(item: ContentRow) {
   $q.dialog({
-    title: t('Delete'),
-    message: `${t('Are you sure you want to delete "{0}"?', item.title)} ${t('This cannot be undone.')}`,
+    title: '删除',
+    message: `确定要删除“${item.title}”吗？此操作无法撤销。`,
     cancel: true,
     ok: {
-      label: t('Delete'),
+      label: '删除',
       color: 'negative',
       flat: true,
     },
@@ -201,9 +200,9 @@ function confirmDelete(item: ContentRow) {
         documentId: item.id,
         folderId: props.folderId,
       })
-      Notify.create({ type: 'positive', message: t('Deleted') })
+      Notify.create({ type: 'positive', message: '已删除' })
     } catch (error) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Delete failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(error, '删除失败') })
     }
   })
 }

@@ -9,11 +9,11 @@
       pr-1
     >
       <div>
-        {{ t('Knowledge bases') }}
+        知识库
       </div>
       <q-btn
         icon="sym_o_add"
-        :title="t('Add knowledge base')"
+        title="添加知识库"
         flat
         round
         size="sm"
@@ -24,14 +24,14 @@
           <q-list>
             <menu-item
               v-close-popup
-              :label="t('Create knowledge base')"
+              label="新建知识库"
               icon="sym_o_add_box"
               data-testid="kb-create-entry"
               @click="showCreate = true"
             />
             <menu-item
               v-close-popup
-              :label="t('Join with a link')"
+              label="通过链接加入"
               icon="sym_o_link"
               data-testid="kb-join-entry"
               @click="joinWithLink"
@@ -40,44 +40,82 @@
         </q-menu>
       </q-btn>
     </div>
-    <dense-item
+    <template
       v-for="item in kbs"
       :key="item.id"
-      :avatar="kbAvatar(item)"
-      :label="item.name"
-      :active="item.id === kbStore.id"
-      clickable
-      data-testid="kb-switch-item"
-      @click="kbStore.switchKb(item.id)"
-      v-close-popup
     >
-      <q-item-section side>
-        <q-badge
-          outline
-          color="primary"
-          class="kb-role-badge"
+      <dense-item
+        :avatar="kbAvatar(item)"
+        :label="item.name"
+        :active="item.id === kbStore.id"
+        clickable
+        data-testid="kb-switch-item"
+        v-close-popup
+        @click="kbStore.switchKb(item.id)"
+      >
+        <q-item-section side>
+          <div
+            flex
+            items-center
+            gap-1
+          >
+            <q-icon
+              v-if="item.id === kbStore.id"
+              name="sym_o_check"
+              color="primary"
+              size="16px"
+              data-testid="kb-switch-item-check"
+            />
+            <q-badge
+              outline
+              color="primary"
+              class="kb-role-badge"
+            >
+              {{ item.owned ? '我创建的' : '共享给我的' }}
+            </q-badge>
+          </div>
+        </q-item-section>
+      </dense-item>
+      <q-item
+        v-if="item.id === kbStore.id"
+        v-close-popup
+        clickable
+        dense
+        class="kb-manage-entry"
+        data-testid="kb-manage-entry"
+        @click="kbStore.openManage()"
+      >
+        <q-item-section
+          avatar
+          min-w-0
         >
-          {{ item.owned ? t('Created by me') : t('Shared with me') }}
-        </q-badge>
-      </q-item-section>
-    </dense-item>
+          <q-icon
+            name="sym_o_tune"
+            size="18px"
+          />
+        </q-item-section>
+        <q-item-section>
+          管理与分享
+        </q-item-section>
+      </q-item>
+    </template>
     <q-item
       v-if="!kbs.length"
       data-testid="kb-empty"
     >
       <q-item-section class="text-secondary">
-        {{ t('No knowledge bases yet') }}
+        还没有知识库
       </q-item-section>
     </q-item>
     <q-separator spaced />
     <menu-item
-      :label="t('Create knowledge base')"
+      label="新建知识库"
       icon="sym_o_add_box"
       data-testid="kb-create-bottom"
       @click="showCreate = true"
     />
     <menu-item
-      :label="t('Join with a link')"
+      label="通过链接加入"
       icon="sym_o_link"
       data-testid="kb-join-bottom"
       @click="joinWithLink"
@@ -89,31 +127,31 @@
     >
       <q-card min-w="360px">
         <q-card-section class="text-h6">
-          {{ t('Create knowledge base') }}
+          新建知识库
         </q-card-section>
         <q-card-section>
           <q-input
             v-model="name"
             outlined
             autofocus
-            :label="t('Knowledge base name')"
+            label="知识库名称"
             data-testid="kb-name-input"
             @keyup.enter="create"
           />
           <div class="tk-caption q-mt-sm">
-            {{ t('You will become the owner of the new knowledge base.') }}
+            你将成为新知识库的所有者。
           </div>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn
             v-close-popup
             flat
-            :label="t('Cancel')"
+            label="取消"
           />
           <q-btn
             flat
             color="primary"
-            :label="t('Create')"
+            label="创建"
             :loading="creating"
             :disable="!name.trim()"
             data-testid="kb-create-button"
@@ -136,7 +174,6 @@ import { kbAvatar } from 'src/utils/defaults'
 import { useKbStore } from 'src/stores/knowledge-base'
 import { identityClient } from 'src/utils/identity-client'
 import { apiErrorMessage } from 'src/utils/api-error'
-import { t } from 'src/utils/i18n'
 
 const kbStore = useKbStore()
 const $q = useQuasar()
@@ -155,16 +192,16 @@ async function create() {
   try {
     const { data, error } = await identityClient.createKnowledgeBase({ name: kbName })
     if (error || !data) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Create failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(error, '创建失败') })
       return
     }
-    Notify.create({ type: 'positive', message: t('Knowledge base created') })
+    Notify.create({ type: 'positive', message: '知识库已创建' })
     showCreate.value = false
     // Membership list drives the switcher; refresh then select the new kb.
     await queryClient.invalidateQueries({ queryKey: ['knowledge-bases', 'member'] })
     kbStore.switchKb(data.id)
   } catch (error) {
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Create failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '创建失败') })
   } finally {
     creating.value = false
   }
@@ -172,10 +209,10 @@ async function create() {
 
 function joinWithLink() {
   $q.dialog({
-    title: t('Join knowledge base'),
+    title: '加入知识库',
     prompt: {
       model: '',
-      label: t('Share link'),
+      label: '分享链接',
     },
     cancel: true,
   }).onOk((link: string) => {
@@ -188,5 +225,11 @@ function joinWithLink() {
 <style scoped>
 .kb-role-badge {
   font-weight: 400;
+}
+
+.kb-manage-entry {
+  min-height: 32px;
+  font-size: 13px;
+  color: var(--tk-text-secondary);
 }
 </style>

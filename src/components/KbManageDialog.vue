@@ -9,7 +9,7 @@
         items-center
       >
         <div class="kb-manage-title">
-          {{ t('Manage knowledge base') }}
+          管理知识库
         </div>
         <q-space />
         <q-btn
@@ -18,7 +18,7 @@
           dense
           round
           icon="sym_o_close"
-          :title="t('Close')"
+          title="关闭"
         />
       </q-card-section>
       <q-separator />
@@ -28,14 +28,14 @@
           class="kb-manage-section"
         >
           <div class="kb-manage-section-title">
-            {{ t('Rename knowledge base') }}
+            重命名知识库
           </div>
           <div class="kb-rename-row">
             <q-input
               v-model="name"
               dense
               outlined
-              :label="t('Knowledge base name')"
+              label="知识库名称"
               data-testid="kb-rename-input"
               @keyup.enter="rename"
             />
@@ -44,7 +44,7 @@
               no-caps
               unelevated
               color="primary"
-              :label="t('Rename')"
+              label="重命名"
               :loading="renaming"
               :disable="!canRename"
               data-testid="kb-rename-save"
@@ -57,16 +57,18 @@
           :is-owner="isOwner"
           @left="show = false"
         />
-        <kb-share-links-panel
+        <div
           v-if="isOwner"
-          :kb-id="kb.id"
-        />
+          ref="shareAnchor"
+        >
+          <kb-share-links-panel :kb-id="kb.id" />
+        </div>
         <div
           v-if="isOwner"
           class="kb-manage-section"
         >
           <div class="kb-manage-section-title kb-manage-danger-title">
-            {{ t('Danger zone') }}
+            危险区
           </div>
           <div class="kb-danger-row">
             <q-btn
@@ -75,7 +77,7 @@
               dense
               no-caps
               icon="sym_o_archive"
-              :label="t('Archive knowledge base')"
+              label="归档知识库"
               data-testid="kb-archive"
               @click="confirmArchive"
             />
@@ -85,7 +87,7 @@
               dense
               no-caps
               icon="sym_o_unarchive"
-              :label="t('Restore knowledge base')"
+              label="恢复知识库"
               data-testid="kb-restore"
               @click="restore"
             />
@@ -96,15 +98,13 @@
               no-caps
               icon="sym_o_delete_forever"
               color="negative"
-              :label="t('Delete knowledge base')"
+              label="删除知识库"
               data-testid="kb-delete"
               @click="confirmDeleteKb"
             />
           </div>
           <div class="tk-caption">
-            {{ archived
-              ? t('Only archived knowledge bases can be deleted.')
-              : t('Archive the knowledge base before deleting it.') }}
+            {{ archived ? '只有已归档的知识库才能删除。' : '删除前需要先归档该知识库。' }}
           </div>
         </div>
       </q-card-section>
@@ -113,21 +113,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { Notify, useQuasar } from 'quasar'
 import { useQueryClient } from '@tanstack/vue-query'
 import KbMembersPanel from 'src/components/KbMembersPanel.vue'
 import KbShareLinksPanel from 'src/components/KbShareLinksPanel.vue'
 import { useKbStore } from 'src/stores/knowledge-base'
+import type { ManageSection } from 'src/stores/knowledge-base'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { identityClient } from 'src/utils/identity-client'
 import type { KnowledgeBaseSummary } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: boolean
   kb: KnowledgeBaseSummary
-}>()
+  initialSection?: ManageSection
+}>(), { initialSection: 'overview' })
 
 const emit = defineEmits<{
   'update:modelValue': [boolean]
@@ -148,14 +149,20 @@ const archived = computed(() => Boolean(props.kb.archivedAt))
 const name = ref(props.kb.name)
 const renaming = ref(false)
 const canRename = computed(() => name.value.trim().length > 0 && name.value.trim() !== props.kb.name)
+const shareAnchor = ref<HTMLElement | null>(null)
 
-watch(show, open => {
-  if (open) name.value = props.kb.name
+watch(show, async open => {
+  if (!open) return
+  name.value = props.kb.name
+  // The share button opens the dialog straight at the share links panel.
+  if (props.initialSection === 'share' && isOwner.value) {
+    await nextTick()
+    shareAnchor.value?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }
 })
 
 function invalidateKb() {
   queryClient.invalidateQueries({ queryKey: ['knowledge-bases', 'member'] })
-  queryClient.invalidateQueries({ queryKey: ['knowledge-bases', 'member', props.kb.id] })
 }
 
 async function rename() {
@@ -165,13 +172,13 @@ async function rename() {
   try {
     const result = await identityClient.renameKnowledgeBase(props.kb.id, { name: next })
     if (result.error) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, 'Rename failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, '重命名失败') })
       return
     }
-    Notify.create({ type: 'positive', message: t('Renamed') })
+    Notify.create({ type: 'positive', message: '已重命名' })
     invalidateKb()
   } catch (error) {
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Rename failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '重命名失败') })
   } finally {
     renaming.value = false
   }
@@ -179,20 +186,20 @@ async function rename() {
 
 function confirmArchive() {
   $q.dialog({
-    title: t('Archive knowledge base'),
-    message: t('Are you sure you want to archive "{0}"? Members will no longer be able to add or change content.', props.kb.name),
+    title: '归档知识库',
+    message: `确定归档“${props.kb.name}”吗？成员将无法再添加或修改内容。`,
     cancel: true,
     ok: {
-      label: t('Archive'),
+      label: '归档',
       flat: true,
     },
   }).onOk(async () => {
     const result = await identityClient.archiveKnowledgeBase(props.kb.id)
     if (result.error) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, 'Archive failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, '归档失败') })
       return
     }
-    Notify.create({ type: 'positive', message: t('Knowledge base archived') })
+    Notify.create({ type: 'positive', message: '知识库已归档' })
     invalidateKb()
   })
 }
@@ -200,34 +207,35 @@ function confirmArchive() {
 async function restore() {
   const result = await identityClient.restoreKnowledgeBase(props.kb.id)
   if (result.error) {
-    Notify.create({ type: 'negative', message: apiErrorMessage(result.error, 'Restore failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(result.error, '恢复失败') })
     return
   }
-  Notify.create({ type: 'positive', message: t('Knowledge base restored') })
+  Notify.create({ type: 'positive', message: '知识库已恢复' })
   invalidateKb()
 }
 
 function confirmDeleteKb() {
   $q.dialog({
-    title: t('Delete knowledge base'),
-    message: t('Are you sure you want to delete "{0}"? This cannot be undone.', props.kb.name),
+    title: '删除知识库',
+    message: `确定删除“${props.kb.name}”吗？此操作无法撤销。`,
     cancel: true,
     ok: {
-      label: t('Delete'),
+      label: '删除',
       color: 'negative',
       flat: true,
     },
   }).onOk(async () => {
     const result = await identityClient.deleteKnowledgeBase(props.kb.id)
     if (result.error) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, 'Delete failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, '删除失败') })
       return
     }
-    Notify.create({ type: 'positive', message: t('Knowledge base deleted') })
+    Notify.create({ type: 'positive', message: '知识库已删除' })
     show.value = false
-    await queryClient.invalidateQueries({ queryKey: ['knowledge-bases', 'member'] })
-    // The store falls back to the next knowledge base once this one is gone.
+    // Clear the selection first; the store falls back to the next knowledge
+    // base once the refreshed list lands.
     kbStore.id = null
+    await queryClient.invalidateQueries({ queryKey: ['knowledge-bases', 'member'] })
   })
 }
 </script>
@@ -239,7 +247,7 @@ function confirmDeleteKb() {
 }
 
 .kb-manage-title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--tk-text);
 }

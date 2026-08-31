@@ -1,10 +1,10 @@
 <template>
   <div class="kb-manage-section">
     <div class="kb-manage-section-title">
-      {{ t('Share links') }}
+      分享链接
     </div>
     <div class="tk-caption">
-      {{ t('Anyone with a share link can join this knowledge base.') }}
+      拿到分享链接的人都可以加入该知识库。
     </div>
     <div class="kb-share-create">
       <q-btn-toggle
@@ -16,8 +16,8 @@
         color="grey-3"
         text-color="grey-8"
         :options="[
-          { label: t('Read only'), value: 'viewer' },
-          { label: t('Editable'), value: 'editor' },
+          { label: '只读', value: 'viewer' },
+          { label: '可编辑', value: 'editor' },
         ]"
         data-testid="share-role-toggle"
       />
@@ -28,8 +28,8 @@
         type="number"
         min="1"
         class="kb-share-expiry"
-        :label="t('Expires in (days)')"
-        :hint="t('Leave empty for no expiry.')"
+        label="有效期（天）"
+        hint="留空表示不过期。"
       />
       <q-btn
         dense
@@ -37,7 +37,7 @@
         unelevated
         color="primary"
         icon="sym_o_link"
-        :label="t('Create share link')"
+        label="创建分享链接"
         :loading="creating"
         data-testid="share-link-create"
         @click="create"
@@ -61,7 +61,7 @@
         flat
         no-caps
         icon="sym_o_content_copy"
-        :label="t('Copy link')"
+        label="复制链接"
         data-testid="share-link-copy"
         @click="copy(justCreated.url!)"
       />
@@ -84,19 +84,19 @@
         </q-item-section>
         <q-item-section>
           <q-item-label>
-            {{ link.role === 'editor' ? t('Editable') : t('Read only') }}
+            {{ link.role === 'editor' ? '可编辑' : '只读' }}
             <q-badge
               v-if="linkState(link) !== 'active'"
               outline
               color="grey-7"
               class="kb-share-state"
             >
-              {{ linkState(link) === 'revoked' ? t('Revoked') : t('Expired') }}
+              {{ linkState(link) === 'revoked' ? '已撤销' : '已过期' }}
             </q-badge>
           </q-item-label>
           <q-item-label caption>
-            {{ t('Created {0}', formatDate(link.createdAt)) }} ·
-            {{ link.expiresAt ? t('Expires {0}', formatDate(link.expiresAt)) : t('Never expires') }}
+            创建于 {{ formatDate(link.createdAt) }} ·
+            {{ link.expiresAt ? `过期于 ${formatDate(link.expiresAt)}` : '永不过期' }}
           </q-item-label>
         </q-item-section>
         <q-item-section
@@ -110,7 +110,7 @@
             size="sm"
             icon="sym_o_block"
             color="negative"
-            :title="t('Revoke link')"
+            title="撤销链接"
             data-testid="share-link-revoke"
             @click="confirmRevoke(link)"
           />
@@ -130,7 +130,7 @@
       v-else
       class="kb-manage-empty"
     >
-      {{ t('No share links yet') }}
+      还没有分享链接
     </div>
   </div>
 </template>
@@ -142,7 +142,6 @@ import { Notify, copyToClipboard, useQuasar } from 'quasar'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { identityClient } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 
 type ShareLink = components['schemas']['ShareLink']
 
@@ -190,14 +189,14 @@ async function create() {
     const days = typeof expiresInDays.value === 'number' && expiresInDays.value > 0 ? Math.floor(expiresInDays.value) : null
     const result = await identityClient.createKbShareLink(props.kbId, { role: role.value, expiresInDays: days })
     if (result.error || !result.data) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, 'Create failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, '创建失败') })
       return
     }
     justCreated.value = result.data
-    Notify.create({ type: 'positive', message: t('Share link created') })
+    Notify.create({ type: 'positive', message: '分享链接已创建' })
     invalidateLinks()
   } catch (error) {
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Create failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '创建失败') })
   } finally {
     creating.value = false
   }
@@ -206,30 +205,30 @@ async function create() {
 async function copy(url: string) {
   try {
     await copyToClipboard(url)
-    Notify.create({ type: 'positive', message: t('Copied') })
+    Notify.create({ type: 'positive', message: '已复制' })
   } catch {
-    Notify.create({ type: 'negative', message: t('Copy failed') })
+    Notify.create({ type: 'negative', message: '复制失败' })
   }
 }
 
 function confirmRevoke(link: ShareLink) {
   $q.dialog({
-    title: t('Revoke link'),
-    message: t('Revoking stops new members from joining with this link. Members who already joined are not affected.'),
+    title: '撤销链接',
+    message: '撤销后，此链接将无法再用于加入。已加入的成员不受影响。',
     cancel: true,
     ok: {
-      label: t('Revoke'),
+      label: '撤销',
       color: 'negative',
       flat: true,
     },
   }).onOk(async () => {
     const result = await identityClient.revokeKbShareLink(props.kbId, link.id)
     if (result.error) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, 'Revoke failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, '撤销失败') })
       return
     }
     if (justCreated.value?.id === link.id) justCreated.value = null
-    Notify.create({ type: 'positive', message: t('Link revoked') })
+    Notify.create({ type: 'positive', message: '链接已撤销' })
     invalidateLinks()
   })
 }

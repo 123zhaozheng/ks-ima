@@ -1,7 +1,7 @@
 <template>
   <div class="kb-manage-section">
     <div class="kb-manage-section-title">
-      {{ t('Members') }}
+      成员
     </div>
     <q-list
       v-if="members.length"
@@ -36,7 +36,7 @@
             <span
               v-if="member.userId === userId"
               class="tk-caption"
-            >（{{ t('You') }}）</span>
+            >（你）</span>
           </q-item-label>
           <q-item-label
             v-if="member.email"
@@ -68,7 +68,7 @@
               round
               size="sm"
               icon="sym_o_more_vert"
-              :aria-label="t('More')"
+              aria-label="更多"
               data-testid="kb-member-menu"
             >
               <q-menu>
@@ -79,7 +79,7 @@
                     clickable
                     @click="changeRole(member, 'editor')"
                   >
-                    <q-item-section>{{ t('Make editor') }}</q-item-section>
+                    <q-item-section>设为可编辑</q-item-section>
                   </q-item>
                   <q-item
                     v-if="member.role === 'editor'"
@@ -87,7 +87,7 @@
                     clickable
                     @click="changeRole(member, 'viewer')"
                   >
-                    <q-item-section>{{ t('Make viewer') }}</q-item-section>
+                    <q-item-section>设为只读</q-item-section>
                   </q-item>
                   <q-separator />
                   <q-item
@@ -96,7 +96,7 @@
                     class="text-negative"
                     @click="confirmRemove(member)"
                   >
-                    <q-item-section>{{ t('Remove member') }}</q-item-section>
+                    <q-item-section>移除成员</q-item-section>
                   </q-item>
                 </q-list>
               </q-menu>
@@ -118,7 +118,7 @@
       v-else
       class="kb-manage-empty"
     >
-      {{ t('No members') }}
+      暂无成员
     </div>
     <div
       v-if="!isOwner && userId"
@@ -130,7 +130,7 @@
         no-caps
         icon="sym_o_logout"
         color="negative"
-        :label="t('Leave knowledge base')"
+        label="退出知识库"
         data-testid="kb-leave"
         @click="confirmLeave"
       />
@@ -146,7 +146,6 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useKbStore } from 'src/stores/knowledge-base'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { identityClient, session } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 
 type KbMember = components['schemas']['KbMember']
 
@@ -188,63 +187,63 @@ function initial(member: KbMember) {
 }
 
 function roleLabel(role: KbMember['role']) {
-  if (role === 'owner') return t('Owner')
-  if (role === 'editor') return t('Editor')
-  return t('Viewer')
+  if (role === 'owner') return '所有者'
+  if (role === 'editor') return '编辑者'
+  return '浏览者'
 }
 
 async function changeRole(member: KbMember, role: 'editor' | 'viewer') {
   const result = await identityClient.updateKbMemberRole(props.kbId, member.userId, { role, expectedVersion: member.version })
   if (result.error) {
-    Notify.create({ type: 'negative', message: apiErrorMessage(result.error, 'Update failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(result.error, '更新失败') })
     return
   }
-  Notify.create({ type: 'positive', message: t('Role updated') })
+  Notify.create({ type: 'positive', message: '角色已更新' })
   invalidateMembers()
 }
 
 function confirmRemove(member: KbMember) {
   $q.dialog({
-    title: t('Remove member'),
-    message: t('Are you sure you want to remove "{0}" from this knowledge base?', displayName(member)),
+    title: '移除成员',
+    message: `确定将“${displayName(member)}”移出该知识库吗？`,
     cancel: true,
     ok: {
-      label: t('Remove'),
+      label: '移除',
       color: 'negative',
       flat: true,
     },
   }).onOk(async () => {
     const result = await identityClient.removeKbMember(props.kbId, member.userId, member.version)
     if (result.error) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, 'Remove failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, '移除失败') })
       return
     }
-    Notify.create({ type: 'positive', message: t('Member removed') })
+    Notify.create({ type: 'positive', message: '成员已移除' })
     invalidateMembers()
   })
 }
 
 function confirmLeave() {
   $q.dialog({
-    title: t('Leave knowledge base'),
-    message: t('After leaving, you will lose access to this knowledge base. You can rejoin with a new share link.'),
+    title: '退出知识库',
+    message: '退出后，你将无法再访问该知识库。之后可通过新的分享链接重新加入。',
     cancel: true,
     ok: {
-      label: t('Leave'),
+      label: '离开',
       color: 'negative',
       flat: true,
     },
   }).onOk(async () => {
     const result = await identityClient.leaveKnowledgeBase(props.kbId)
     if (result.error) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, 'Leave failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(result.error, '退出失败') })
       return
     }
-    // Membership is gone; refresh the switcher list and let the store fall
-    // back to the next knowledge base.
-    await queryClient.invalidateQueries({ queryKey: ['knowledge-bases', 'member'] })
+    // Membership is gone. Clear the selection before the refreshed list
+    // lands so the store falls back to the next knowledge base.
     kbStore.id = null
     emit('left')
+    await queryClient.invalidateQueries({ queryKey: ['knowledge-bases', 'member'] })
   })
 }
 </script>

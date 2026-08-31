@@ -14,24 +14,52 @@
         py-1
         data-testid="kb-switcher"
       >
-        <q-item-section
-          avatar
-          pr-3
-          ml--1
-        >
-          <a-avatar :avatar="kbAvatar(kbStore.kb)" />
-        </q-item-section>
-        <q-item-section>
-          <q-item-label v-if="kbStore.kb">
-            {{ kbStore.kb.name }}
-          </q-item-label>
-          <q-item-label
-            v-else
-            class="text-secondary"
+        <template v-if="kbStore.current">
+          <q-item-section
+            avatar
+            pr-3
+            ml--1
           >
-            {{ t('No knowledge base selected') }}
-          </q-item-label>
-        </q-item-section>
+            <a-avatar :avatar="kbAvatar(kbStore.current)" />
+          </q-item-section>
+          <q-item-section>
+            <q-item-label>
+              {{ kbStore.current.name }}
+            </q-item-label>
+          </q-item-section>
+        </template>
+        <template v-else-if="kbStore.kbsStatus !== 'success'">
+          <q-item-section
+            avatar
+            pr-3
+            ml--1
+          >
+            <q-skeleton
+              type="QAvatar"
+              size="27px"
+            />
+          </q-item-section>
+          <q-item-section>
+            <q-skeleton
+              type="text"
+              width="96px"
+            />
+          </q-item-section>
+        </template>
+        <template v-else>
+          <q-item-section
+            avatar
+            pr-3
+            ml--1
+          >
+            <a-avatar :avatar="kbAvatar(null)" />
+          </q-item-section>
+          <q-item-section>
+            <q-item-label class="text-secondary">
+              未选择知识库
+            </q-item-label>
+          </q-item-section>
+        </template>
         <q-item-section side>
           <q-icon name="sym_o_keyboard_arrow_down" />
         </q-item-section>
@@ -51,7 +79,7 @@
         </q-item-section>
         <q-item-section>
           <q-item-label>
-            {{ t('Sign In / Sign Up') }}
+            登录/注册
           </q-item-label>
         </q-item-section>
       </q-item>
@@ -72,7 +100,7 @@
               <q-icon name="sym_o_chat" />
             </q-item-section>
             <q-item-section>
-              {{ t('Ask') }}
+              提问
             </q-item-section>
           </q-item>
           <q-item
@@ -85,7 +113,7 @@
               <q-icon name="sym_o_folder" />
             </q-item-section>
             <q-item-section>
-              {{ t('Knowledge base') }}
+              知识库
             </q-item-section>
           </q-item>
           <q-item
@@ -98,7 +126,7 @@
               <q-icon name="sym_o_history" />
             </q-item-section>
             <q-item-section>
-              {{ t('History') }}
+              历史
             </q-item-section>
           </q-item>
           <q-item
@@ -111,7 +139,7 @@
               <q-icon name="sym_o_hub" />
             </q-item-section>
             <q-item-section>
-              {{ t('Connectors') }}
+              连接器
             </q-item-section>
           </q-item>
         </q-list>
@@ -126,7 +154,7 @@
               <q-icon name="sym_o_settings" />
             </q-item-section>
             <q-item-section>
-              {{ t('Settings') }}
+              设置
             </q-item-section>
           </q-item>
           <q-item
@@ -140,7 +168,7 @@
               <q-icon name="sym_o_manage_accounts" />
             </q-item-section>
             <q-item-section>
-              {{ t('Admin console') }}
+              管理控制台
             </q-item-section>
           </q-item>
           <q-item
@@ -154,13 +182,19 @@
               <q-icon name="sym_o_logout" />
             </q-item-section>
             <q-item-section>
-              {{ t('Sign Out') }}
+              退出登录
             </q-item-section>
           </q-item>
         </q-list>
       </template>
     </q-drawer>
     <router-view />
+    <kb-manage-dialog
+      v-if="kbStore.current"
+      v-model="kbStore.manageOpen"
+      :kb="kbStore.current"
+      :initial-section="kbStore.manageSection"
+    />
   </q-layout>
 </template>
 
@@ -168,12 +202,12 @@
 import { computed, provide } from 'vue'
 import { useQuasar } from 'quasar'
 import { useRouter } from 'vue-router'
-import { t } from 'src/utils/i18n'
 import { useKbStore } from 'src/stores/knowledge-base'
 import { useUiStateStore } from 'src/stores/ui-state'
 import { identityClient, session } from 'src/utils/identity-client'
 import { kbAvatar } from 'src/utils/defaults'
 import AAvatar from 'src/components/AAvatar.vue'
+import KbManageDialog from 'src/components/KbManageDialog.vue'
 import KbMenuList from 'src/components/KbMenuList.vue'
 import { groundedKey, useGroundedKnowledge } from 'src/composables/use-grounded-knowledge'
 
@@ -193,20 +227,20 @@ const canSeeAdminConsole = computed(() =>
   session.value.data?.user.platformRoles?.some(role => adminRoles.includes(role)) ?? false)
 
 // The admin console is a separate deployment: same host, port 8081 in
-// production (Caddyfile), port 9015 for local development.
+// production (Caddyfile), port 9017 for local development.
 const adminConsoleUrl = computed(() => {
   const { protocol, hostname, port } = location
-  const adminPort = port === '9015' || port === '9016' ? '9015' : '8081'
+  const adminPort = port === '9015' || port === '9016' ? '9017' : '8081'
   return `${protocol}//${hostname}:${adminPort}/`
 })
 
 function signOut() {
   $q.dialog({
-    title: t('Sign Out'),
-    message: t('Are you sure you want to sign out?'),
+    title: '退出登录',
+    message: '您确定要退出登录吗？',
     cancel: true,
     ok: {
-      label: t('Sign Out'),
+      label: '退出登录',
       color: 'negative',
       flat: true,
     },

@@ -1,18 +1,18 @@
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { useQuery } from '@tanstack/vue-query'
 import { computed, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { identityClient, session } from 'src/utils/identity-client'
 import { useUserDataStore } from './user-data'
 import { queryClient } from 'src/boot/vue-query'
 
+export type ManageSection = 'overview' | 'share'
+
 export const useKbStore = defineStore('knowledge-base', () => {
   const userDataStore = useUserDataStore()
-  const router = useRouter()
   const id = ref<string | null>(null)
   const userId = computed(() => session.value.data?.user.id ?? null)
 
-  const { data: kbs, status: kbsStatus } = useQuery({
+  const { data: kbs, status: kbsStatus, isFetching: listFetching } = useQuery({
     queryKey: ['knowledge-bases', 'member'],
     queryFn: async () => {
       const result = await identityClient.listKnowledgeBases()
@@ -22,6 +22,14 @@ export const useKbStore = defineStore('knowledge-base', () => {
     enabled: computed(() => Boolean(userId.value)),
   })
 
+  // The current knowledge base is looked up synchronously from the membership
+  // list, so the switcher name updates immediately without waiting on any
+  // detail request.
+  const current = computed(() => (kbs.value ?? []).find(kb => kb.id === id.value) ?? null)
+
+  // Auto-initialize the selection only. Never overwrite an id the user just
+  // picked: while the membership list is being invalidated/refetched it can be
+  // stale, and falling back to the first entry made the switcher flicker.
   watch(
     [userId, () => userDataStore.lastKbId, kbs],
     ([uid, last, list]) => {
@@ -30,22 +38,14 @@ export const useKbStore = defineStore('knowledge-base', () => {
         return
       }
       const ids = (list ?? []).map(kb => kb.id)
-      if (id.value && ids.includes(id.value)) return
-      const next = (last && ids.includes(last) ? last : null) ?? ids[0] ?? null
-      if (next) id.value = next
+      if (id.value == null || !ids.includes(id.value)) {
+        if (id.value != null && listFetching.value) return
+        const next = (last && ids.includes(last) ? last : null) ?? ids[0] ?? null
+        id.value = next
+      }
     },
     { immediate: true },
   )
-
-  const { data: kb } = useQuery({
-    queryKey: computed(() => ['knowledge-bases', 'member', id.value] as const),
-    queryFn: async () => {
-      const result = await identityClient.getKnowledgeBase(id.value!)
-      if (result.error) throw new Error(result.error.message)
-      return result.data!
-    },
-    enabled: computed(() => Boolean(id.value)),
-  })
 
   watch(id, (next, previous) => {
     if (!previous || previous === next) return
@@ -65,30 +65,47 @@ export const useKbStore = defineStore('knowledge-base', () => {
       }
       userDataStore.setLastKbId(to)
     }
-    router.push('/')
   }
 
+  // Manage dialog state lives here so the dialog can be opened from any page
+  // (toolbar share button, switcher menu entry).
+  const manageOpen = ref(false)
+  const manageSection = ref<ManageSection>('overview')
+  function openManage(section: ManageSection = 'overview') {
+    manageSection.value = section
+    manageOpen.value = true
+  }
+  // The dialog is bound to the current knowledge base; close it when the
+  // selection disappears so a stale open flag does not resurface later.
+  watch(current, next => {
+    if (!next) manageOpen.value = false
+  })
+
   // My membership in the current knowledge base: role drives readonly hints
-  // and owner-only entry points.
+  // and owner-only entry points. The detail API does not return `owned`, so
+  // ownership comes from the membership role instead.
   const member = computed(() => {
-    if (!kb.value || !userId.value) return undefined
+    if (!current.value || !userId.value) return undefined
     return {
       userId: userId.value,
-      role: kb.value.role,
+      role: current.value.role,
     }
   })
 
   const myRole = computed(() => member.value?.role ?? null)
-  const isOwner = computed(() => kb.value?.owned ?? false)
+  const isOwner = computed(() => myRole.value === 'owner')
 
   return {
     id,
+    current,
     member,
     myRole,
     isOwner,
     kbs,
     kbsStatus,
-    kb,
+    manageOpen,
+    manageSection,
+    openManage,
     switchKb,
   }
 })

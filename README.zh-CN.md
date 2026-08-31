@@ -1,13 +1,13 @@
 # 内网 IMA（基于 Nya AI）
 
-内网知识库工作台：目录 + Markdown 笔记 + 文件 + 带引用的 Copilot，并向其他 agent 提供 MCP 连接器。
+内网知识库：用户可拥有多个知识库（目录 + Markdown 笔记 + 文件），通过分享链接（只读 / 读写）加入他人的知识库，并向带引用的 Copilot 提问；同时向其他 agent 提供出站 MCP 连接器。
 
 已去掉公网能力：网页搜索、GitHub 插件、公开发布、翻译、频道、MCP 客户端插件、在线支付。
 
 ## 知识库
 
 - 用文件夹组织笔记、文件和对话
-- 标签与文件夹权限（继承 / 打断）
+- 分享链接邀请协作者：只读（viewer）或读写（editor）
 - 笔记与文件全文检索
 - Copilot 默认走知识库搜索，并应引用资料
 
@@ -26,7 +26,7 @@
 }
 ```
 
-详见 `docs/PRD-intranet-ima.md`。
+现行设计详见 `docs/DESIGN.md` 与 `docs/kb-authorization.md`；`docs/PRD-intranet-ima.md` 为历史产品规格。
 
 ## 开发
 

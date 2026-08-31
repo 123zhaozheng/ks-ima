@@ -1,13 +1,13 @@
 # Intranet IMA (Nya AI)
 
-Internal knowledge workspace: directory + Markdown notes + files + Copilot with citations, and an outbound MCP connector for other agents.
+Internal knowledge bases: users own multiple knowledge bases (folders + Markdown notes + files), join others through share links (read-only or read-write), and ask a Copilot that must cite sources. An outbound MCP connector exposes the knowledge to other agents.
 
 Internet features from upstream Nya AI are removed (web search, GitHub plugin, public publish, translation, channels, MCP client plugins, billing).
 
 ## Knowledge
 
 - Folders organize notes, files, and chats
-- Tags and folder ACLs (inherit / break)
+- Share links invite collaborators as read-only (viewer) or read-write (editor)
 - Full-text search over notes and files
 - Copilot uses knowledge search by default and must cite sources
 
@@ -26,7 +26,7 @@ The preferred protected resource is `https://your-host/mcp`. Interactive clients
 }
 ```
 
-Tools: `kb_list_dir`, `kb_search`, `kb_ask`, `kb_get_note`, `kb_get_file`, `kb_create_note`, `kb_update_note`, `kb_mkdir`, `kb_set_tags`.
+Tools: `kb_list_knowledge_bases`, `kb_list_dir`, `kb_get_tree`, `kb_search`, `kb_ask`, `kb_get_note`, `kb_get_file`, `kb_create_note`, `kb_update_note`, `kb_mkdir`, `kb_upload_file`, `kb_move`, `kb_delete`. Authorizations are user-level: an OAuth grant or service principal covers every knowledge base the creating user can access, and write tools require editor membership per knowledge base.
 
 ## Development
 
@@ -49,4 +49,4 @@ bun dev:front # or: bun dev:admin
 
 Point model providers at an intranet OpenAI-compatible gateway. Do not configure public search or crawl endpoints.
 
-See `docs/PRD-intranet-ima.md` for the full product spec.
+See `docs/DESIGN.md` and `docs/kb-authorization.md` for the current design; `docs/PRD-intranet-ima.md` is the historical product spec.

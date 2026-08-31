@@ -1,9 +1,9 @@
 # Central Model Governance Operations
 
 Python is the only writer and executor for model gateways, credentials,
-governed models, capability profiles, health and workspace assignments.
-Gateway material stays server-side; the browser never receives it. The
-private Bun bridge that existed during coexistence was removed with the
+governed models, capability profiles, health and per-knowledge-base
+assignments. Gateway material stays server-side; the browser never receives it.
+The private Bun bridge that existed during coexistence was removed with the
 legacy deletion release.
 
 ## Key Ring
@@ -41,7 +41,10 @@ limits timeout and response size. Do not add arbitrary headers or proxy URLs.
 2. Discover names, create disabled models with explicit capability and (for
    embeddings) dimension, validate, then enable.
 3. Create typed workflow Profile drafts, publish immutable versions, and assign
-   exact versions to active workspaces.
+   exact versions to active knowledge bases
+   (`PUT /api/v1/admin/knowledge-bases/{kbId}/profile-assignments/{workflow}`).
+   A knowledge base without an assignment fails terminally (`NO_ASSIGNMENT`,
+   409) — there is no legacy adapter fallback.
 4. Review health and impact before embedding changes. `REINDEX_REQUIRED` is a
    hard conflict until the later ingestion child records a compatible index.
 5. Disable immediately for an incident; delete only after dependency checks pass.
@@ -70,8 +73,8 @@ the source row, provide an operator-owned mapping file through
 Malformed or ambiguous provider settings become disabled review checkpoints.
 Compatible credentials are encrypted immediately. Legacy rows are read-only;
 they are never reverse-written from target ciphertext. During the rollback
-window only a workspace with no target assignment may use the named legacy
-adapter. A target denial is terminal.
+window only a knowledge base with no target assignment may use the named
+legacy adapter. A target denial is terminal.
 
 The old `public.provider`, `public.model`, `public.globalSettings`,
 `public.plan`, `public.planPrice`, `public.order`, and usage/quota columns remain

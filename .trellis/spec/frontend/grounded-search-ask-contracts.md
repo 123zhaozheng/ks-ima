@@ -2,7 +2,7 @@
 
 ## Scope / Trigger
 
-Apply this contract to target workspace search, private conversation/history UI, grounded Ask SSE parsing, cancellation/retry, citation rendering/navigation, workspace switching, generated clients, Vue Query, and desktop/mobile browser verification.
+Apply this contract to target knowledge-base search, private conversation/history UI, grounded Ask SSE parsing, cancellation/retry, citation rendering/navigation, knowledge base switching, generated clients, Vue Query, and desktop/mobile browser verification.
 
 ## Signatures
 
@@ -13,6 +13,14 @@ src/pages/AskHome.vue
 src/pages/ConversationView.vue
 / (composer home)
 /ask/:conversationId
+
+GET  /api/v1/conversations                                    # user-level history across the caller's knowledge bases (rows carry kbId/kbName)
+GET  /api/v1/knowledge-bases/{kbId}/search
+POST /api/v1/knowledge-bases/{kbId}/search-indexes/build
+POST /api/v1/knowledge-bases/{kbId}/ask                       # SSE
+GET|PATCH|DELETE /api/v1/knowledge-bases/{kbId}/conversations/{conversationId}
+POST /api/v1/knowledge-bases/{kbId}/conversations/{conversationId}/retry
+GET  /api/v1/knowledge-bases/{kbId}/messages/{messageId}/citations/{ordinal}
 ```
 
 ## Contracts
@@ -21,8 +29,8 @@ src/pages/ConversationView.vue
 - Ask lives in the new IA: composer home at `/` (`AskHome.vue`), conversations at `/ask/:conversationId` (`ConversationView.vue`); the active stream is owned by the shell (`AppShell.vue`, `groundedKey`) so it survives navigation. UX-level contracts (composer scope, citation marks/pane, history, save-as-note) live in [UX Design Language](./ux-design-language.md).
 - Search supports target filters/modes and renders safe title/quote/rank projections only. `REINDEX_REQUIRED`, degraded rerank, no hits, access revoked, offline, archived, loading, and retry states are explicit.
 - Ask events are handled in order: conversation/message, citations, delta, terminal completed/knowledge-gap/cancelled/error. Answer deltas never render before the citation event for grounded answers.
-- Conversation queries and all mutations are workspace and owner scoped by the server. The UI supports list/open/rename/archive/delete/retry without assuming administrators can read other owners.
-- Workspace changes cancel active streams, clear target query caches, and remove stale conversations/results/citations from the prior workspace even when the workspace ID changes outside the standard switch action.
+- Conversation mutations are knowledge-base and owner scoped by the server; the user-level `GET /api/v1/conversations` aggregates only knowledge bases where the caller holds a membership, and each row carries `kbId`/`kbName` for display. The UI supports list/open/rename/archive/delete/retry without assuming administrators can read other owners.
+- Knowledge base changes cancel active streams, clear target query caches, and remove stale conversations/results/citations from the prior knowledge base even when the knowledge base ID changes outside the standard switch action.
 - Cancellation aborts the fetch reader, leaves authoritative persisted terminal state to reload, and never reports completion. Retry uses expected versions and preserves prior completed history.
 - Citation chips/rows use typed exact citation data and navigate to target document/version resolution. Legacy entity-ID citation parsing is not used for target grounded answers.
 - Query, question, answer, quote, and citation content are not persisted to localStorage/Pinia beyond bounded current view state. Raw upstream errors, prompts, gateway details, and secrets are never rendered.
@@ -37,13 +45,13 @@ src/pages/ConversationView.vue
 | Rerank degradation | Original results remain, bounded degraded marker |
 | Citations event then deltas | Citations visible before progressive answer text |
 | Cancel during stream | Reader aborts, cancelled state, no completed state |
-| Workspace changes mid-stream | Stream and old queries cleared immediately |
+| Knowledge base changes mid-stream | Stream and old queries cleared immediately |
 | Other-owner conversation ID | Unavailable/404; no stale cached content |
 | Citation revoked/deleted | Hidden not-found state; no newer-source substitution |
 
 ## Tests Required
 
-1. Vitest mounts the real `ConversationView`/`AskComposer` with Vue Query and exercises SSE citations/deltas, cancellation, no-hit, retry/degraded/error, workspace change, and responsive classes.
+1. Vitest mounts the real `ConversationView`/`AskComposer` with Vue Query and exercises SSE citations/deltas, cancellation, no-hit, retry/degraded/error, knowledge base change, and responsive classes.
 2. Client tests assert generated paths, credentials/CSRF, SSE framing, AbortSignal, event ordering, and typed errors.
 3. ESLint, `vue-tsc --noEmit`, Vitest, and sequential Quasar builds pass.
 4. Desktop and Pixel-class mobile Playwright exercise target search, grounded answer, citations-before-delta, cancellation, no-hit/degraded states, conversation actions, citation navigation, and overflow/overlap checks. Route fixtures may isolate UI protocol, while PostgreSQL/model fake tests separately prove backend behavior.
@@ -55,7 +63,7 @@ src/pages/ConversationView.vue
 
 ```typescript
 createLegacyChat()
-await legacyWorkspaceSearch(question)
+await legacyChatSearch(question)
 streamGenericChatWithBrowserTools()
 ```
 
@@ -65,5 +73,5 @@ streamGenericChatWithBrowserTools()
 generated target search/conversation API
 -> typed grounded SSE parser
 -> citations rendered before deltas
--> workspace-scoped cancellation/cache clearing
+-> knowledge-base-scoped cancellation/cache clearing
 ```

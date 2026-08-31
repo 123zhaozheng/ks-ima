@@ -3,7 +3,7 @@
 ## 1. Scope / Trigger
 
 Apply this specification to local accounts, sessions, TOTP/recovery, platform
-roles, user/workspace administration, and Caddy routing for
+roles, user/knowledge base administration, and Caddy routing for
 `/api/v1/auth|account|admin/*`. Python is the sole browser identity authority.
 Platform roles never imply knowledge-content access. The legacy identity
 importer, the `public.user`/`userData` projection, and the Bun session bridge
@@ -14,12 +14,13 @@ terminal public 404.
 
 ```text
 POST /api/v1/auth/sign-in|totp/verify|recovery/verify|sign-out|register
-POST /api/v1/auth/invitations/accept|password/forgot|password/reset
-GET  /api/v1/auth/session|csrf
+POST /api/v1/auth/accept-invite|password/forgot|password/reset
+GET  /api/v1/auth/session|csrf|capabilities
 GET/PATCH /api/v1/account/profile
 GET/DELETE /api/v1/account/sessions[/{id}]
 POST/DELETE /api/v1/account/totp/*
-GET/POST/PATCH/DELETE /api/v1/admin/users|workspaces|settings|audit-events
+GET/POST /api/v1/admin/knowledge-bases*
+GET/POST/PATCH/DELETE /api/v1/admin/users|settings|audit-events
 
 ima bootstrap-admin
 ```
@@ -39,12 +40,14 @@ modules.
   require Origin and rate limits.
 - Sensitive password/TOTP/role/disable/delete operations require recent auth and
   revoke affected sessions. TOTP/recovery challenges re-check active users.
-- `super_admin` alone manages platform roles. `platform_admin` manages ordinary
-  users, workspaces, and settings. `security_auditor` reads audit/workspace
-  registry only. Role authorization, actor/target locks, last-super advisory
-  lock, mutation, and audit share one transaction.
-- User/workspace cursors are opaque base64url JSON containing `(createdAt,id)`;
-  SQL uses the same descending tuple order and explicit asyncpg casts.
+- `super_admin` alone manages platform roles. `platform_admin` manages
+  ordinary users, knowledge bases (`knowledge_bases_manage`), and settings.
+  `security_auditor` reads audit events and the knowledge base registry only
+  (`knowledge_bases_read`). Role authorization, actor/target locks,
+  last-super advisory lock, mutation, and audit share one transaction.
+- User/knowledge base cursors are opaque base64url JSON containing
+  `(createdAt,id)`; SQL uses the same descending tuple order and explicit
+  asyncpg casts.
 - Better Auth account/session/verification/TOTP schema and runtime are
   forbidden. No code path writes the retired legacy `public` schema; the
   `ima.legacy_identity_projection` checkpoint table survives as migration

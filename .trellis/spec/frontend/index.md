@@ -23,7 +23,7 @@ This directory contains guidelines for frontend development. Fill in each file w
 | [Type Safety](./type-safety.md) | Type patterns, validation | Active |
 | [OpenAPI Client Contracts](./openapi-client-contracts.md) | Generated schema, runtime client, Vue Query, and cross-layer tests | Active |
 | [Identity And Administration](./identity-admin-contracts.md) | Generated identity client, role-aware UI, account security, and E2E | Active |
-| [Workspace Authorization](./workspace-authorization-contracts.md) | Generated workspace/member/group/folder ACL workflows and compatibility UX | Active |
+| [Knowledge Base Authorization](./kb-authorization-contracts.md) | Generated knowledge base/member/share-link workflows and join flow | Active |
 | [Model Governance](./model-governance-contracts.md) | Central admin model workflows, safe capability projection, and browser cutover | Active |
 | [File Upload And Ingestion](./file-upload-ingestion-contracts.md) | Upload/replace/download/preview, ingestion status, retry/cancel contracts | Active |
 | [Grounded Search And Ask](./grounded-search-ask-contracts.md) | Search/Ask SSE parsing, citations, cancellation/retry, conversation contracts | Active |

@@ -2,9 +2,10 @@
 
 ## Scope / Trigger
 
-Apply this contract to the admin model-governance SPA, workspace capability
-settings, chat/title requests, generated OpenAPI client usage, and component or
-browser tests added during the central governance cutover.
+Apply this contract to the admin model-governance SPA, knowledge base
+capability projections, per-knowledge-base assignment management, generated
+OpenAPI client usage, and component or browser tests added during the central
+governance cutover.
 
 ## Signatures
 
@@ -13,10 +14,13 @@ identityClient.listModelGateways|createModelGateway|updateModelGateway
 identityClient.rotateModelGatewaySecret|discoverModelGateway|checkModelGatewayHealth
 identityClient.listGovernedModels|createGovernedModel|updateGovernedModel
 identityClient.listCapabilityProfiles|patchCapabilityProfileDraft|publishCapabilityProfile
-identityClient.listCapabilityAssignments|assignCapabilityProfile|removeCapabilityProfile
-identityClient.modelGovernanceImpact|workspaceCapabilities
-POST /api/v1/chat/completions
-POST /api/v1/chat/titles
+identityClient.listCapabilityAssignments(kbId)|assignCapabilityProfile(kbId,...)|removeCapabilityProfile(kbId,...)
+identityClient.modelGovernanceImpact|kbModelCapabilities(kbId)
+
+GET    /api/v1/knowledge-bases/{kbId}/capabilities                          # read-only business projection for members
+GET    /api/v1/admin/knowledge-bases/{kbId}/profile-assignments
+PUT    /api/v1/admin/knowledge-bases/{kbId}/profile-assignments/{workflow}
+DELETE /api/v1/admin/knowledge-bases/{kbId}/profile-assignments/{workflow}
 ```
 
 All HTTP calls use the generated schema/client and the shared CSRF/session
@@ -26,8 +30,8 @@ transport. No component-local upstream client or browser model SDK is allowed.
 
 - Platform administrators get complete gateway/model/profile/assignment
   lifecycle controls. Auditors get read-only safe metadata and no rendered
-  mutation controls. Ordinary/workspace users get only alias, description,
-  exact version, status, and non-secret reason.
+  mutation controls. Ordinary knowledge base members get only alias,
+  description, exact version, status, and non-secret reason.
 - Gateway base URL, remote model name, gateway/model IDs, prompt, low-level
   parameters, fingerprints, credentials, health detail, and arbitrary provider
   JSON are absent from auditor/member projections. A write-only credential input
@@ -39,11 +43,15 @@ transport. No component-local upstream client or browser model SDK is allowed.
 - Profiles expose the five fixed workflows, typed configuration validation,
   draft version conflict, publish/history/diff/clone/disable/restore/delete;
   published versions are never edited in place. Assignments use exact version.
-- Workspace settings are read-only business capabilities. Chat and title flows
-  send messages/tools to server workflows and never include a model selector,
-  upstream URL, key, or provider object. Server responses remain progressive
-  SSE; the existing bounded tool loop persists tool results, files, reasoning,
-  usage, warnings, and cancellation/errors.
+- Knowledge base capability projections
+  (`identityClient.kbModelCapabilities`) are read-only business views: alias,
+  workflow, exact version, status, non-secret reason — no gateway/model IDs or
+  parameters. Python executes every workflow itself (grounded ask, title
+  generation, summarization, embedding, reranking); there are no browser chat
+  completion or title endpoints, no model selector, upstream URL, key, or
+  provider object anywhere in the app. Grounded Ask responses remain
+  progressive SSE through the shared bounded parser; missing per-knowledge-base
+  assignment is terminal (`NO_ASSIGNMENT` 409) with no fallback.
 
 ## Validation & Error Matrix
 
@@ -60,26 +68,27 @@ transport. No component-local upstream client or browser model SDK is allowed.
 ## Good / Base / Bad Cases
 
 - Good: an admin edits a typed draft, validates/publishes it, and sees the exact
-  immutable version in the assignment matrix.
-- Base: a workspace member sees only business capabilities and status badges.
+  immutable version in the per-knowledge-base assignment matrix.
+- Base: a knowledge base member sees only business capabilities and status badges.
 - Bad: a chat selector, gateway key, remote name, prompt, arbitrary provider
   option, or credential `window.prompt` appears in browser state.
 - Bad: an auditor sees disabled mutation buttons, or a failed target request
-  silently invokes legacy fallback.
+  silently invokes any provider fallback.
 
 ## Tests Required
 
 1. Vitest mounts assert real gateway/model/profile/assignment rows, lifecycle
    interactions, conflicts, disabled/health/dependency states, auditor control
-   absence, write-only secret clearing, and safe workspace projection.
-2. Bun tests assert opaque resolver payloads, private bridge origin, target
-   denial, exact no-assignment fallback, streamed responses, tools, and secret
-   absence.
+   absence, write-only secret clearing, and the safe knowledge base capability
+   projection.
+2. No bridge/resolver client remains: tests fail if any browser model SDK or
+   component-local upstream client reappears; terminal `NO_ASSIGNMENT` and
+   target-denial errors render without any fallback.
 3. Playwright covers platform full lifecycle, auditor read-only, ordinary
    projection, target execution, disable/revoke, `REINDEX_REQUIRED`, desktop
    and mobile widths, with zero skips and cleanup.
-4. Run generated OpenAPI drift, ESLint, `vue-tsc`, and sequential front/admin/
-   server builds. Tests must assert concrete behavior, not component existence.
+4. Run generated OpenAPI drift, ESLint, `vue-tsc`, and sequential front/admin
+   builds. Tests must assert concrete behavior, not component existence.
 
 ## Wrong vs Correct
 
@@ -92,6 +101,6 @@ const model = await browserProvider(userSelectedModel, apiKey)
 ### Correct
 
 ```typescript
-await managedChat(workspaceId, messages)
-// Python selects the fixed assigned workflow and owns the connection.
+await groundedClient.ask(kbId, request, signal, onEvent)
+// Python selects the knowledge base's assigned workflow versions and owns the connection.
 ```

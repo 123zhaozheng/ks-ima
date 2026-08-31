@@ -31,9 +31,9 @@ ima.storage_cleanup_jobs
 - Supported parse formats are text, Markdown, JSON, PDF text, DOCX, and XLSX. Legacy XLS, PPTX, OCR/scanned PDF, image, audio, and video parsing are unsupported until a bounded adapter is specified and tested.
 - Parser limits cover object bytes, extracted text, PDF pages, ZIP entry count, uncompressed bytes, and decompression ratio. Unsupported/malformed/limit cases produce stable safe codes, never arbitrary binary decoding or raw parser errors.
 - Parse, chunk, embed, and cleanup rows are persisted and idempotent. Dependent stages start blocked and are unblocked only after predecessor success. Worker reconciliation re-delivers queued/retryable rows, expired leases, and due cleanup rows after restart.
-- Embeddings execute through the exact Python `Workflow.EMBEDDING` assignment. Persist only finite vectors with the expected dimension/model metadata. Parsed text remains available when embedding fails; target denial never invokes Bun/provider fallback.
+- Embeddings execute through the exact Python `Workflow.EMBEDDING` assignment. Persist only finite vectors with the expected dimension/model metadata. Parsed text remains available when embedding fails; target denial never invokes any provider fallback.
 - Object cleanup is deferred and retryable. It must not delete bytes referenced by an active file version, ingestion job, rollback-retained legacy source, derived artifact, chunk, or later citation owner.
-- Byte/status/history operations authorize before serialization and hide inactive/trashed/unauthorized documents as nonexistent. Object keys, presigned URLs, credentials, raw bytes, extracted hidden content, and raw exceptions never enter logs/audit/Problem Details.
+- Byte/status/history operations authorize against the containing knowledge-base membership before serialization and hide inactive/unauthorized documents as nonexistent (folders and documents are `active`-only; there is no trash lifecycle). Object keys, presigned URLs, credentials, raw bytes, extracted hidden content, and raw exceptions never enter logs/audit/Problem Details.
 - Legacy migration copies only completed metadata mappings with stable fingerprints. It bounded-streams/verifies the source, performs provider-side copy to an opaque target key, verifies the target, checkpoints repeatably, and never deletes or reverse-writes legacy objects.
 
 ## Validation Matrix
@@ -45,7 +45,7 @@ ima.storage_cleanup_jobs
 | Worker restart, retry time, or expired lease | Reconciler eventually redelivers exactly one idempotent stage |
 | Parse malformed/oversized/archive bomb/unsupported | Bounded safe terminal state; no raw exception/content leak |
 | Missing/broken embedding assignment or wrong vector dimension | Parsed text preserved; embedding unavailable/failed; no fake ready |
-| Trashed/unauthorized file byte/status/history request | Safe 404 |
+| Unauthorized or non-member file byte/status/history request | Safe 404 |
 | Cleanup with any dependency | Retain object and return/defer dependency state |
 | Changed/missing legacy blob | Review/failed checkpoint; no guessed copy |
 | Provider HEAD omits checksum without checksum mode | Client explicitly requests checksum metadata |

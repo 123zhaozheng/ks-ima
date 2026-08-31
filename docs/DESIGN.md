@@ -1,88 +1,80 @@
 # 内网知识库：设计与实现对照
 
-> 本文是**现在该怎么做**的操作说明，比 PRD 更贴代码。PRD 仍是范围合同；本文解决「界面分区、模型放哪、什么该删、预览怎么做」。  
-> 日期：2026-08-21
-
-> **历史快照（2026-08-21）**：本文记录切换前的设计（Bun/Hono 服务、Zero 缓存、`/api/mcp`）。legacy 删除发布已移除该运行时：Python 是唯一后端，MCP 规范入口为 `/mcp`。本文保留为设计史证据，不再描述当前架构。
+> 本文是**现在该怎么做**的操作说明，比 PRD 更贴代码。PRD 仍是范围合同；本文解决「界面分区、模型放哪、权限怎么算、预览怎么做」。
+> 日期：2026-08-31（知识库一等公民重构后重写；2026-08-21 的 Bun/Zero 快照已作废）
 
 ---
 
 ## 1. 产品是什么
 
-内网员工把资料放进**一个网盘式目录**，上传后自动解析，可以**基于库内资料提问并带引用**。同一套库以后通过 **MCP 连接器**给公司其他 agent 用。
+内网员工把资料放进**知识库**：自己创建（成为 owner）或通过分享链接加入（成为 editor/viewer）。库内上传后自动解析，可以**基于库内资料提问并带引用**。同一套库通过 **MCP 连接器**（OAuth 2.1 + PKCE 的 service principal）给公司其他 agent 用。
 
 不是：ChatGPT 壳、Notion、IM、公网 SaaS、MCP 插件市场。
 
-一句话心智：**目录是骨架，文件是血肉，提问是入口，模型只走内网网关。**
+一句话心智：**知识库是骨架，成员角色是唯一授权依据，文件是血肉，提问是入口，模型只走平台治理的内网网关。**
 
 ---
 
 ## 2. 人看见的功能分区（当前锁定）
 
-新手路径：**目录 → 上传文件 → 自动解析 → 提问**。  
-对话**不进资料树**（避免和文件抢位置）。笔记入口已拿掉（PRD 的 `note` 仍可后补，不挡现在）。
+新手路径：**创建/加入知识库 → 上传文件 → 自动解析 → 提问**。
+对话**不进资料树**（避免和文件抢位置）。
 
 ```
 ┌─────────────┬──────────────────────────────────────────┐
-│ 工作区切换    │ 当前文件夹标题                              │
-│ 全部资料树    │ 工具栏：新建文件夹 / 上传文件 / 上传文件夹 / 提问 │
-│             │ 文件列表（解析状态：解析中 / 已可提问 / 失败）      │
-│ 提问         │ 点文件 → 预览 + 提取文本 + 元信息               │
-│ 工作区搜索    │ 点提问 → Copilot（默认搜本库）                 │
-│ 回收站       │                                            │
+│ 知识库切换    │ 当前文件夹标题                              │
+│ (我的全部库)  │ 工具栏：新建文件夹 / 新建笔记 / 上传文件      │
+│ 新建/加入库   │ 文件列表（解析状态：解析中 / 已可提问 / 失败）  │
+│             │ 点文件 → 预览 + 提取文本 + 元信息             │
+│ 提问 (/)     │ 点提问 → 预置当前文档范围                    │
+│ 知识库 (/kb) │ 管理面板：成员角色 / 分享链接                 │
+│ 历史         │                                            │
+│ 连接器       │                                            │
 │ 设置         │                                            │
 └─────────────┴──────────────────────────────────────────┘
 ```
 
 | 分区 | 路由 | 谁用 | 里面有什么 |
 |---|---|---|---|
-| 资料库 | `/folder/:id` `/item/:id` | 所有成员 | 目录、上传、预览、解析状态 |
-| 提问 | `/chat/:id` | 所有成员 | 只问库；右上角选**本次**聊天模型 |
-| 搜索 | 对话框 | 所有成员 | 文件夹 + 文件 |
-| 账号 | `/account` | 登录用户 | 姓名、头像、邮箱、改密 |
-| 工作区 | `/workspace` | admin/owner | 名称、成员、邀请、**连接器（签发 MCP Key）**、**模型（网关 / 嵌入 / 检索）** |
-| 个人设置 | `/settings` | 登录用户 | 这台设备：外观、语言、发送快捷键 |
-| 平台后台 | Admin 应用（`dev:admin`） | 平台管理员 | 用户、工作区、**平台模型与默认值** |
+| 提问 | `/`、`/ask/:conversationId` | 所有成员 | 组合器 + 引用面板；范围默认「全库」，可收窄到文件夹/文档 |
+| 知识库 | `/kb` | 所有成员 | 三栏：目录树、文件列表、预览；`?folderId=` `?doc=` 深链 |
+| 历史 | `/history` | 所有成员 | 跨库对话列表（每行带所属库名），打开/重命名/归档/删除/重试 |
+| 连接器 | `/connectors` | 登录用户 | 用户级 OAuth 连接器与 service principal（scope 勾选，不含 ask） |
+| 设置 | `/settings` | 登录用户 | 单页：个人资料、密码、TOTP、恢复码、会话吊销 |
+| 加入库 | `/join/:token` | 拿到分享链接的人 | 展示库名与拟授予角色，确认后入成员表 |
+| 授权页 | `/oauth/consent` | MCP 客户端用户 | 仅勾选 scope；不选库、不选文件夹 |
+| 平台后台 | Admin 应用（独立部署，生产 8081 / 本地 9015） | `super_admin` / `platform_admin` / `security_auditor` | 用户、知识库登记、审计、模型治理 |
 
-资料树里**只出现**用户文件夹和文件。隐藏：`$chat` `$providers` `$pages` `$files` 等系统目录。
+没有会员（无成员记录）时 `/kb` 渲染 onboarding：创建或凭分享链接加入。
+标签（tags）、回收站、文件夹 ACL、邀请制群组已全部删除：删除是服务端依赖检查把关的硬删除。
 
 ---
 
-## 3. 模型到底放在哪（三层）
+## 3. 模型到底放在哪（只有平台一层）
 
-这是当前最容易迷路的一点。模型**不是**资料树上的一种文件。
+模型**不是**资料树上的一种文件，也**不再**放在库里让人配置。
 
 ```
-① 平台后台 Admin
-     全局供应商（公开根 PUBLIC）上的「平台模型」
-     全局设置：默认聊天模型 / 标题模型 / embedding / rerank
-        ↓ 新工作区创建时拷贝 defaultChatModel
-② 工作区「模型 / 网关」页  ← 人应该来这里配内网网关
-     实体仍存在 $providers 下，但 UI 不进资料树
-     每个网关：baseURL + API Key，下面挂若干聊天模型
-        ↓ 提问时可选
-③ 提问页右上角调参
-     只选「这一次用哪个聊天模型」
-     不配 embedding（那是入库用的）
+① 平台后台 Admin（唯一配置面）
+     网关（baseURL + 一次性密钥）→ 受管模型 → 能力 Profile
+     五个固定工作流：grounded_ask / title_generation / summarization / embedding / reranking
+        ↓ 发布不可变版本
+② 按知识库指派（Admin → 知识库 → profile-assignments）
+     PUT /api/v1/admin/knowledge-bases/{kbId}/profile-assignments/{workflow}
+     精确版本；未指派 = 409 NO_ASSIGNMENT，终止，不回退
+③ 成员只读投影
+     GET /api/v1/knowledge-bases/{kbId}/capabilities
+     只见业务别名 / 版本 / 状态 / 非机密原因
 ```
 
 | 配置项 | 放哪 | 干什么 |
 |---|---|---|
-| 内网网关 URL / Key | 工作区 → 模型 | 所有 LLM 调用只打这里 |
-| 聊天 / 嵌入 / 重排模型名 | 点开某个网关添加 | 提问、入库向量、检索重排 |
-| 默认提问模型 | 工作区 → 模型 | 新对话缺省；提问页仍可改本次 |
-| Embedding 模型 | 工作区 → 模型（可留空用平台默认） | 切片向量化；不配则仅关键词检索 |
-| 检索方式 | 工作区 → 模型：关键词 / 混合 / 向量 | 提问怎么找片段；默认混合 |
-| 召回条数 / 分数阈值 | 工作区 → 模型 | 对标 Dify dataset retrieval 的 top_k / score |
-| 混合检索向量权重 | 工作区 → 模型（仅混合） | 对标 Dify `weighted_score`，默认 0.7 / 0.3 |
-| Rerank 模型 | 工作区 → 模型，可选 | 检索后重排（先 ACL 再送模型） |
-| 平台默认聊天 / embedding / rerank | Admin → 全局设置 | 工作区未覆盖时的缺省 |
-| 本次提问用哪个聊天模型 | 提问页 tune | 覆盖工作区默认 |
+| 内网网关 URL / Key | Admin → 网关 | 所有 LLM 出站只打这里（受 `IMA_MODEL_ALLOWED_HOSTS/CIDRS` 约束） |
+| 聊天 / 嵌入 / 重排模型 | Admin → 受管模型 | 挂到能力 Profile 的对应工作流 |
+| 某库用哪个版本 | Admin → 按库指派 | 精确版本；改动触发 `REINDEX_REQUIRED` 等依赖检查 |
+| 本次提问用哪个模型 | **没有** | 提问页没有模型选择器；Python 按库的指派执行 |
 
-**当前代码的问题：** 网关藏在隐藏目录 `$providers`，入口是旧的「自定义供应商」欢迎页和 `/models` 定价页（SaaS）。普通人找不到，所以会觉得「模型放哪都不知道」。  
-**改法：** 工作区顶栏「模型」页同时配网关、默认提问模型、嵌入、检索方式、重排。Admin 只保留平台默认。个人设置不再放模型。
-
-内网只保留供应商类型：`openaiCompatible`（公司网关）和可选 `ollama`（本机）。OpenAI / Anthropic / OpenRouter 等公网厂商入口应隐藏。
+网关密钥是 write-only 输入：成功/取消/出错/离开即清空，永不回显。审计员只见安全元数据。
 
 ---
 
@@ -91,52 +83,59 @@
 ### 4.1 运行时
 
 ```
-浏览器 Vue/Quasar :9015
-    │  /api 代理
+浏览器 Vue/Quasar（PWA 前端 :9016 / Admin SPA :9015，生产经 Caddy :8080/:8081）
+    │  /api、/mcp、/oauth 代理
     ▼
-Hono :3000     Zero cache :4848     Postgres :5430     MinIO :9000
-  鉴权、上传、解析队列、KB 检索     同步副本              业务库           文件
-  MCP `/api/mcp`：官方 SDK Streamable HTTP（抄 typescript-sdk 的 Hono 示例）
+Python FastAPI（唯一后端）   Postgres（zhparser + vector）   MinIO   Procrastinate worker
+  鉴权/库与成员/入库/检索/问答/治理   业务库                    文件     解析-切片-向量-清理
+  MCP `/mcp`：官方 Python SDK（mcp==2.1.1）Streamable HTTP
     │
     ▼
-内网 LLM 网关（OpenAI 兼容）  ← 禁止公网备援
+内网 LLM 网关（OpenAI 兼容）  ← 守卫式出站：禁公网备援、禁重定向、DNS 预解析
 ```
 
-连接器页签发 Key；Cursor 用 `url + Authorization`；只支持 stdio 的客户端用 `npx mcp-remote` 本地桥（geelen/mcp-remote）。
+连接器页不再签发长驻 Key：MCP 客户端走 OAuth 2.1 + PKCE；service principal 是**用户级**的，由用户自助创建/吊销，scope 不含 `mcp:knowledge:ask`（ask 仅限真人）。`/api/mcp` 已在边缘 `410 Gone`，`/api/v1/internal/*` 恒 `404`。
 
 ### 4.2 入库
 
 ```
-上传文件 → 建 item（parseStatus=queued）→ 写 S3
-       → 定时任务 parseKb
-       → 抽文本 → chunk（~600 字）→ embedding（若已配）
-       → 状态 ready / unparsed / failed
+本地算 SHA-256 → 上传票据（绑定文件夹/文档、尺寸、MIME、过期）
+             → 直传 S3（Content-Type + x-amz-checksum-sha256）
+             → 完成回调：提供方 HEAD 校验校验和/尺寸/MIME 后才推进版本
+             → Procrastinate：parse → chunk → embed → cleanup（逐级持久化、幂等、可重试）
+             → 状态 ready / unparsed / failed
 ```
 
-解析与预览分开：预览看原文件二进制；提问看 chunk/文本。
+支持解析：text、Markdown、JSON、PDF 文本、DOCX、XLSX。解析与预览分开：预览看原文件（`/file/preview`、`/file/download` 先授权后出 URL），提问看 chunk/文本。替换上传带双版本号，冲突保留现行版本。
 
 ### 4.3 提问
 
 ```
-用户问题 → 工作区知识工具 /api/kb/search
-        → 按工作区检索方式：关键词 / 向量 / 混合（默认）
-        → can() 过滤（含连接器 folderRoot）后再可选 rerank
-        → topK / 分数阈值（对标 Dify dataset retrieval）
-        → 带 path + quote 的片段进 prompt
-        → 流式回答；无命中则说库里没有
+用户问题 → GET  /api/v1/knowledge-bases/{kbId}/search
+        → 关键词(zhparser) + 向量(HNSW) 混合，按成员角色过滤，可选 rerank
+        → POST /api/v1/knowledge-bases/{kbId}/ask（SSE）
+        → 事件序：conversation/message → citations → delta → completed|knowledge_gap|cancelled|error
+        → 无命中固定 knowledge_gap，不调模型、不编造
 ```
 
-MCP `/api/mcp` 工具对齐 PRD §9.3：读（list/tree/search/ask/get）+ 写（mkdir/note/upload/move/tags/delete）。传输抄 `@modelcontextprotocol/sdk` 的 Hono WebStandard Streamable HTTP。
+对话存 `ima.conversations`（外键落在 `ima.kb_members` 复合键上，成员被移除即失去访问）；`GET /api/v1/conversations` 是用户级跨库列表，每行带 `kbId`/`kbName`。
 
-`kb_ask` 先用 `ask` 权限检索引用，再按「工作区根目录 `conf.chatModelId` → 平台默认聊天模型」选择 OpenAI 兼容内网网关。无命中固定返回「知识库未收录」，不调用模型；网关未配置、失败或超时时只回退为引用原文，不补写事实。
+### 4.4 权限（成员角色是唯一投票）
 
-V1 可以没有 embedding，关键词也能问。有 embedding 后语义更好。
+`ima.kb_members` 三种角色：`owner` / `editor` / `viewer`。
 
-### 4.4 权限（已完成）
+| 动作 | owner | editor | viewer |
+|---|---|---|---|
+| 看目录/列表/预览/下载 | ✅ | ✅ | ✅ |
+| 搜索 / 提问 | ✅ | ✅ | ✅ |
+| 建子文件夹/笔记、上传、移动、重命名、编辑 | ✅ | ✅ | ❌ |
+| 删除 | ✅ | ✅ | ❌ |
+| 成员管理 / 分享链接 / 归档库 | ✅ | ❌ | ❌ |
 
-文件夹 ACL 由同一套 `can()` 罩住列表、下载、搜索、问答、MCP 和服务端 mutation。`ask` 必须同时具备 `view`；owner 永远不会被 ACL 锁出。对话默认写入个人 ACL，仅自己可见。
-
-`entityPermission` 把每个用户对每个实体的 `view/ask/edit/delete/manage` 权限物化到 PostgreSQL，由实体 ACL/父目录/根目录和成员变化触发重算。Zero 查询先关联这张表，未授权行不会进入客户端副本。迁移还会把该表加入已存在的 Zero publication，升级部署不需要手工维护复制表清单。
+没有文件夹 ACL、没有群组：文档/文件夹权限完全由所在库的成员角色推导。
+分享链接：仅授 `editor`/`viewer`，token 加盐加 pepper 只存摘要，创建时一次性返回 `{origin}/join/{token}`，可设 1–365 天有效期并可吊销；接受是幂等的，且**从不降级**已有成员。
+owner 保护：最后一个 owner 不能离开/降级；转让须先提权再移除。
+MCP 每次工具调用都重新检查：scope → 用户级授权 → 目标库成员关系 → 角色门槛（写工具要求 editor+）；授权失败映射成带错误码的 `ToolError`。
 
 ---
 
@@ -146,54 +145,39 @@ V1 可以没有 embedding，关键词也能问。有 embedding 后语义更好�
 
 | 需求 | 开源实现 | 怎么用 |
 |---|---|---|
-| Word/Excel/PDF 浏览器预览 | [vue-office](https://github.com/501351981/vue-office)（~6k stars） | `@vue-office/docx` `excel` `pdf`；纯前端，不经公网转换服务 |
+| Word/Excel/PDF 浏览器预览 | [vue-office](https://github.com/501351981/vue-office) | `@vue-office/docx` `excel` `pdf`；纯前端，不经公网转换服务 |
 | PDF 内核 | pdf.js（vue-office 已包一层） | worker 用仓库内 `public/pdf.worker.min.mjs`，禁止 unpkg |
 | 知识库产品形态 | IMA / Dify Dataset / Nextcloud+RAG | 学「目录+解析+问」，不学广场和联网搜 |
-| 检索配置 | [Dify](https://github.com/langgenius/dify) dataset retrieval | 工作区模型页：关键词/混合/向量、top_k、分数阈值、混合向量权重（weighted_score）、rerank |
-| MCP 传输 | [typescript-sdk](https://github.com/modelcontextprotocol/typescript-sdk) Hono WebStandard 示例 | `/api/mcp` Streamable HTTP；Cursor 官方 `url` + `headers.Authorization` |
-| Claude Desktop 桥 | [mcp-remote](https://github.com/geelen/mcp-remote) | `--allow-http` + `Authorization` 放 env，避开 Windows 空格拆参 |
-| 服务端 RAG | 自研薄管道（已有） | 不引入 LlamaIndex.TS（已归档） |
+| 检索配置 | [Dify](https://github.com/langgenius/dify) dataset retrieval | 混合检索、top_k、分数阈值、混合权重、先权限后 rerank |
+| MCP 传输 | 官方 Python SDK（`mcp==2.1.1`） | `/mcp` Streamable HTTP + OAuth 2.1 PKCE；传输安全设置校验 Origin/宿主 |
+| 服务端 RAG | 自研薄管道（已有） | 不引入 LlamaIndex 类框架 |
 
-PPTX：vue-office 的 pptx 内核不是完全开源（需向作者付费）。V1 对 pptx **下载 + 抽文本提问**，不做幻灯片级预览。
-
-OnlyOffice / Collabora 要单独文档服务，内网可以以后上，不挡 V1。
+PPTX：vue-office 的 pptx 内核不完全开源。对 pptx **下载 + 抽文本提问**，不做幻灯片级预览。
 
 ---
 
-## 6. 该删 / 该藏
+## 6. 该删 / 已删
 
-产品入口必须消失（代码能删就删，schema 可后拆以免 Zero 炸）：
+知识库一等公民重构删除并禁止复活：
 
-| 项 | 处理 |
+| 项 | 状态 |
 |---|---|
-| 翻译、频道、Page、MCP 插件页 | 无入口；死视图文件删除 |
-| 公网 web / gread 插件 | 不进 builtin 列表；源文件删除 |
-| `/models` 定价页 | 删除 |
-| Admin 套餐 / 价格 | 侧栏去掉 |
-| 工作区订阅/计费/AI 美金额度 | 已从概览拿掉 |
-| 供应商欢迎页 SaaS 文案 | 换成工作区模型页 |
-| 资料树里的 Chat/Note/Assistant/Provider | 已藏 |
-
-暂不删表：`page` `channel` `translation` `mcpPlugin`（避免一次改 schema 把 Zero 搞挂）。旧频道、翻译、外部 MCP 插件和发布的 Zero 查询/mutation 已取消注册；新工作区不再创建对应隐藏目录。
+| 「工作区」概念、邀请、群组、文件夹 ACL | 删除；授权只剩库成员角色 |
+| 标签、回收站 | 删除；删除即硬删除（依赖检查把关） |
+| Bun/Zero 运行时、`/api/mcp`、内部桥 | 删除；`/api/mcp` 边缘 410，`/api/v1/internal/*` 恒 404 |
+| 遗留 `public.*` 37 表与 `migrate-legacy-*` CLI | 删除（迁移 `20260829_0011`）；检查点历史表留档 |
+| 长驻 MCP Key、浏览器端模型选择器 | 删除；换 OAuth 2.1 + PKCE 与平台治理 |
 
 ---
 
 ## 7. 验收（按这个测）
 
-1. 登录 → 进「全部资料」，不是聊天首页。
-2. 新建工作区 → 空目录提示上传。
-3. 工作区 → **模型**：能加内网网关、拉模型列表、保存。
-4. Admin：能配默认聊天模型 + embedding；看不到套餐。
-5. 上传 pdf/docx/xlsx → 预览像文档而不是一坨 HTML；状态变为已可提问。
-6. 提问页能选模型；没配模型有明确提示。
-7. 找不到翻译/频道/定价/发布。
-8. 工作区 → **连接器**：创建 Key（只显示一次），复制 Cursor `mcp.json` / Claude Desktop `mcp-remote` 模板，可吊销。
-9. 用复制出的配置能 `initialize` + `tools/list`；只读 Key 没有写工具。开发环境 URL 为 `http://127.0.0.1:3000/api/mcp`。
-
-### 7.1 2026-08-24 验证记录
-
-- `bun test`：11 个测试通过，覆盖 ACL 和 `kb_ask` 的成功、无命中、无模型、网关失败、超时。
-- `bun run test:permissions`：18 条物化权限与预期一致，覆盖继承中断、guest 拒绝、owner 保护和事务回滚。
-- `bun run test:mcp`、`bun run test:mcp-live`：握手通过；只读 8 个工具、读写 15 个工具；跨工作区、目录越界、吊销和过期 Key 均拒绝，操作错误带 `isError`。
-- `bun run lint`、`vue-tsc --noEmit`、server/PWA/admin 生产构建通过。
-- 浏览器：登录态进入「全部资料」；模型和连接器页加载；Page/Search/Assistant/Plans 旧路由进入 404；390×844 视口无横向溢出。Office 实际文件上传与预览仍需带样本人工验收。
+1. 登录 → 无库时 `/kb` 出现 onboarding；创建库后自动成为 owner 并切换。
+2. `/join/:token`：有效链接显示库名与角色，接受后出现在切换器；重复接受幂等；失效/过期链接给明确错误。
+3. 上传 pdf/docx/xlsx → 预览像文档而不是一坨 HTML；状态变为已可提问。
+4. 提问：引用先于正文出现；无命中显示「知识库未收录」；取消/重试状态正确。
+5. 成员面板：owner 可将 editor↔viewer 互改，不能直接降级/移除最后一个 owner。
+6. viewer 只读：无新建/上传/删除控件；越权 API 返回 403 且前端无假成功。
+7. 连接器：创建 service principal（scope 不含 ask）；`initialize` + `tools/list` 成功；写工具在 viewer 库上被逐调用拒绝。
+8. Admin：配置网关/模型/Profile 并按库指派；成员页只见业务投影；审计员全只读。
+9. `bun run test:unit`、`bun run test:e2e`、后端 `uv run pytest` 全绿，零跳过。

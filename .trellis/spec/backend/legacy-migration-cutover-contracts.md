@@ -1,6 +1,6 @@
 # Legacy Migration and Cutover Contracts (Terminal State)
 
-> Historical contracts for the retired `migrate-legacy-*` / `inventory-legacy-mcp` CLI family, plus the retained write freeze. The ETL code and legacy `public.*` tables were deleted in task `08-24-legacy-deletion-release` (cleanup migration `20260829_0011_legacy_schema_removal.py`). Checkpoint/history tables (`ima.legacy_*_migration`, `ima.workspace_authorization_migration`, `ima.legacy_identity_projection`) are retained as migration-history evidence.
+> Historical contracts for the retired `migrate-legacy-*` / `inventory-legacy-mcp` CLI family, plus the retained write freeze. The ETL code and legacy `public.*` tables were deleted in task `08-24-legacy-deletion-release` (cleanup migration `20260829_0011_legacy_schema_removal.py`). Checkpoint/history tables (`ima.legacy_knowledge_migration`, `ima.legacy_model_governance_migration`, `ima.legacy_identity_projection`) are retained as migration-history evidence. The former `ima.workspace_authorization_migration` table disappeared when the authorization migration was rewritten for the knowledge-base-first schema (`20260825_0003_kb_authorization.py`).
 
 Captured from tasks `08-24-legacy-migration-cutover` and `08-24-legacy-deletion-release`.
 
@@ -22,11 +22,11 @@ Legacy blob checksums were base64 (`public.blob.sha256`); `ima.*` checksum colum
 
 ---
 
-## Contract: Trash propagation keeps restoration anchors
+## Contract: Trash propagation kept restoration anchors (retired)
 
 ### Rule
 
-Any code path that moves a target row to trash must set the restoration anchors: `documents.original_folder_id = COALESCE(original_folder_id, folder_id)` and `folders.original_parent_id = COALESCE(original_parent_id, parent_id)`. A trashed row without anchors cannot be restored, violating the lifecycle contract. (Still live behavior in `ima/application/knowledge.py`.)
+Any code path that moved a target row to trash had to set the restoration anchors: `documents.original_folder_id = COALESCE(original_folder_id, folder_id)` and `folders.original_parent_id = COALESCE(original_parent_id, parent_id)`. **Retired:** the knowledge-base-first simplification removed the trash lifecycle entirely — folders and documents are `active`-only, delete operations are hard deletes gated by dependency checks, and the anchor columns no longer exist. Do not reintroduce trash semantics without a new contract.
 
 ---
 
@@ -43,7 +43,7 @@ Operational verify/report commands print one JSON payload and `raise SystemExit(
 ### Rule (retained machinery)
 
 - Enter/exit require an active super administrator; both write `ima.audit_events` (`maintenance.freeze.enter|exit`) with metadata `{"reason", "secretValues": false}`.
-- While frozen, mutating workspace/knowledge/storage actions raise `MaintenanceFreezeError` → RFC 9457 `503` with code `maintenance_freeze`. Migration-tagged writers (direct `ima` CLI SQL) bypass it by design.
+- While frozen, mutating knowledge-base/knowledge/storage actions raise `MaintenanceFreezeError` → RFC 9457 `503` with code `maintenance_freeze`. Migration-tagged writers (direct `ima` CLI SQL) bypass it by design.
 - The freeze flag lives in `ima.system_settings` (`maintenance_write_freeze` + reason/entered_at/entered_by). The freeze is a generic operations tool and survives legacy deletion.
 
 ---
@@ -79,7 +79,7 @@ Rehearsal-style tests that assert a clean state fail on leftover rows from earli
 
 ### Fix / Prevention
 
-Tests that assert clean state must sanitize at start: delete rows from `ima.legacy_*_migration` / `ima.workspace_authorization_migration` and leftover fixture rows (guarded by `to_regclass`). Never assume the shared test DB is pristine between runs.
+Tests that assert clean state must sanitize at start: delete rows from `ima.legacy_*_migration` and leftover fixture rows (guarded by `to_regclass`). Never assume the shared test DB is pristine between runs.
 
 ---
 

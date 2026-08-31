@@ -38,7 +38,7 @@ cd backend
 uv run ima inventory-legacy-mcp report
 ```
 
-The deterministic JSON output contains connector ID, mode, folder-scope presence, and classification. It omits workspace names/IDs, connector names, last-use timestamps, key hashes, and raw keys. Create an operator-reviewed JSON file whose unique keys are connector IDs and whose values are only `reissued` or `revoked`:
+The deterministic JSON output contains connector ID, mode, folder-scope presence, and classification. It omits knowledge base names/IDs, connector names, last-use timestamps, key hashes, and raw keys. Create an operator-reviewed JSON file whose unique keys are connector IDs and whose values are only `reissued` or `revoked`:
 
 ```json
 {

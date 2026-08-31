@@ -3,19 +3,19 @@
 ## 1. Scope / Trigger
 
 Apply this specification to Vue authentication, account security, admin users,
-workspace registry, audit/settings screens, route guards, generated identity
-types, and identity Playwright/component tests.
+knowledge base registry, audit/settings screens, route guards, generated
+identity types, and identity Playwright/component tests.
 
 ## 2. Signatures
 
 ```text
-src/utils/identity-client.ts       # one cookie/CSRF transport and session ref
-src/api/generated/schema.ts        # generator-owned DTO source
-src/pages/AccountSecurity.vue      # profile, TOTP, recovery, sessions
-src/admin/pages/UsersPage.vue      # user/security/role lifecycle
-src/admin/pages/WorkspacesPage.vue # role-aware registry lifecycle
-src/admin/pages/AuditPage.vue      # typed read-only audit data
-src/components/AcceptInviteForm.vue
+src/utils/identity-client.ts          # one cookie/CSRF transport and session ref
+src/api/generated/schema.ts           # generator-owned DTO source
+src/layouts/SettingsLayout.vue        # single /settings page (SettingsList + SettingsSecurity: profile, TOTP, recovery, sessions)
+src/admin/pages/UsersPage.vue         # user/security/role lifecycle
+src/admin/pages/KnowledgeBasesPage.vue # capability-aware knowledge base registry lifecycle
+src/admin/pages/AuditPage.vue         # typed read-only audit data
+src/components/AcceptInviteForm.vue   # platform user invite (not knowledge base joining)
 
 bun run generate:api
 bun run test:unit
@@ -33,9 +33,9 @@ bun run test:e2e
 - Successful password/TOTP/recovery authentication refreshes the central
   session ref. Route guards watch both pending state and identity, because
   `undefined -> undefined` user IDs do not trigger a user-ID-only watcher.
-- The admin SPA is capability-aware: auditors see workspace/audit read views and
-  Sign Out, but no user/workspace/settings mutation controls. Only super admins
-  see role actions. API authorization remains authoritative.
+- The admin SPA is capability-aware: auditors see knowledge-base/audit read
+  views and Sign Out, but no user/knowledge-base/settings mutation controls.
+  Only super admins see role actions. API authorization remains authoritative.
 - Account security exposes current/other/all session revocation, TOTP
   enrollment/confirmation/disablement, and one-time recovery display/download,
   with loading/empty/error/expired/recent-auth states.
@@ -53,15 +53,16 @@ bun run test:e2e
 | Recovery code reused | First succeeds; second 401 and visible failure |
 | Registration closed | Signup surface may render; API 404 handled clearly |
 | SMTP disabled | Explicit unavailable reset/invite state |
-| Auditor opens admin | Audit/workspaces read-only; settings/mutations hidden |
+| Auditor opens admin | Audit/knowledge bases read-only; settings/mutations hidden |
 | Generated API error | Typed message; no internal response/secret logging |
 | Invalid invite | Safe error; token never rendered/logged after submission |
 
 ## 5. Good / Base / Bad Cases
 
 - Good: TOTP/recovery verification refreshes session and closes the challenge.
-- Good: auditor sees workspace rows but no create/archive/restore/delete actions.
-- Base: empty users/workspaces/sessions render stable empty states.
+- Good: auditor sees knowledge base rows but no create/archive/restore/delete
+  actions.
+- Base: empty users/knowledge bases/sessions render stable empty states.
 - Bad: rename a Better Auth facade to `identity-client` without changing types.
 - Bad: start front/admin Quasar dev servers concurrently in one worktree; the
   shared `.quasar` directory can swap applications nondeterministically.
@@ -70,7 +71,7 @@ bun run test:e2e
 
 ## 6. Tests Required
 
-1. Bun tests for typed client CSRF/error behavior and Bun bridge behavior.
+1. Bun tests for typed client CSRF/error behavior.
 2. Vitest mounts real SFCs and asserts concrete rows, errors, role controls, and
    session/TOTP actions; `wrapper.exists()` alone is insufficient.
 3. Playwright global setup creates a test-only database/seed, runs Python with
@@ -79,8 +80,8 @@ bun run test:e2e
 4. Browser journeys cover closed registration, invite, SMTP unavailable,
    ordinary account security, super/platform/auditor roles, disabled/expired
    sessions, TOTP, and recovery single use with zero skips.
-5. Lint, `vue-tsc`, PWA/Admin/Server builds, OpenAPI/Zero regeneration, and drift
-   checks pass after component changes.
+5. Lint, `vue-tsc`, PWA/Admin builds, OpenAPI regeneration, and drift checks
+   pass after component changes.
 
 ## 7. Wrong vs Correct
 

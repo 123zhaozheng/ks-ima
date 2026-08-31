@@ -47,27 +47,31 @@ drawer, 240px, breakpoint 1200px, overlay below) with durable nouns. No nested
 drawers, no global top bar — each page owns its own header (`q-header` +
 `.tk-header` styling) with a menu button that toggles the rail on small widths.
 
-Rail order: workspace switcher (top) → **Ask (`/`)** → **Knowledge base
-(`/kb`)** → **History (`/history`)** → **Connectors (`/connectors`)** →
-"Workspace admin" group (`/workspace`, `/workspace/tags`, `/workspace/models`)
-→ **Trash (`/trash`)** → footer (Settings, Account, Admin console by role,
-Sign out).
+Rail order: **knowledge base switcher** (`kb-switcher`, top — `KbMenuList`
+popover: switch between memberships, create, join via share link) → **Ask
+(`/`)** → **Knowledge base (`/kb`)** → **History (`/history`)** →
+**Connectors (`/connectors`)** → **Settings (`/settings`)** → conditional
+**Admin console** external link (only for `super_admin` / `platform_admin` /
+`security_auditor`; separate deployment on the same host, port 8081 in
+production, 9015 in local dev) → Sign out.
 
 ### Route map (front app)
 
 | Path | Component | Notes |
 |---|---|---|
-| `/` | `AskHome.vue` | calm composer home |
+| `/` | `AskHome.vue` | calm composer home; includes create/join knowledge base onboarding |
 | `/ask/:conversationId` | `ConversationView.vue` | chat pane + citation pane |
 | `/history` | `HistoryPage.vue` | conversation list (open/rename/archive/delete/retry) |
-| `/kb` | `KnowledgeWorkspace.vue` | three-pane; `?folderId=`, `?doc=` query state |
-| `/knowledge/:documentId` | redirect → `/kb?doc=:id` | deep links preserved |
-| `/connectors` | `WorkspaceConnectors.vue` | restyled |
-| `/workspace*` | Overview/Tags/Models | restyled, no route-tab bar |
-| `/trash`, `/settings`, `/account*`, auth, oauth | unchanged components | restyled with tokens |
+| `/kb` | `KnowledgeBase.vue` | three-pane; `?folderId=`, `?doc=` query state |
+| `/connectors` | `ConnectorsPage.vue` | MCP/OAuth connector management |
+| `/settings` | `SettingsLayout.vue` | single settings page (profile, security, sessions); the old `/account*` pages are gone |
+| `/join/:token` | `JoinKnowledgeBase.vue` | knowledge base share-link join |
+| `/oauth/consent` | `OAuthConsentPage.vue` | scope-only MCP consent |
+| auth routes, catchAll | unchanged / `NotFoundPage.vue` | restyled with tokens |
 
-`GroundedAskPage` and `/workspace/ask` are deleted; `MainDrawer`, task panel
-code, and the hue engine are gone.
+The legacy admin pages (Overview/Tags/Models), `/trash`, and the
+`/knowledge/:documentId` redirect are deleted; `MainDrawer`, task panel code,
+and the hue engine are gone.
 
 ---
 
@@ -78,7 +82,7 @@ code, and the hue engine are gone.
 - One generous autosize textarea; **Enter sends**, Shift+Enter newline.
 - Left of the send row: the **scope control** (`data-testid="ask-scope-chip"`).
   Home mode without document scope: folder picker button (default label "Whole
-  workspace") opening `FolderPickerList`. With a document scope (one-shot from
+  knowledge base") opening `FolderPickerList`. With a document scope (one-shot from
   the knowledge pane via `src/stores/ask-context.ts`): a removable primary chip
   showing the document title; removing it restores the folder picker.
 - The model picker slot (`<slot name="model" />`) stays empty until a gateway
@@ -89,7 +93,8 @@ code, and the hue engine are gone.
 
 Search-engine calm: product name, one-line grounding statement, composer,
 curated hint chips (`data-testid="ask-hint"` fill the composer), footnote.
-Submitting with no workspace shows a warning notification; with a workspace it
+Submitting requires a selected knowledge base — without one the composer
+blocks send and the page offers create/join onboarding; with one it
 starts the shared stream (provided by AppShell under `groundedKey`) and routes
 to `/ask/:conversationId` as soon as the stream reports an id, so the stream
 keeps running across navigation.
@@ -123,18 +128,23 @@ time, overflow menu (Rename / Archive-Restore / Delete). Opening navigates to
 
 ---
 
-## 4. Knowledge base — three-pane workspace (`KnowledgeWorkspace.vue`)
+## 4. Knowledge base — three-pane page (`KnowledgeBase.vue`)
 
-Pane 1 **tree** (`kb-tree-pane`): `FolderTree` + **New folder** action
-(`kb-new-folder`). Pane 2 **list**: `KnowledgeList` rows (36px+, status, tags)
-with header actions **New note** (`kb-new-note`), **Upload** (`kb-upload`),
-tag filter (`kb-tag-filter`). Pane 3 **preview** (`kb-preview-pane`):
+No membership renders the onboarding state (`kb-onboarding`: create
+`kb-create` / join via share link `kb-join`); with memberships the header
+carries the manage entry (`kb-manage` → `KbManageDialog` with members and
+share-link panels). Pane 1 **tree** (`kb-tree-pane`): `FolderTree` + **New
+folder** action (`kb-new-folder`). Pane 2 **list**: `KnowledgeList` rows
+(36px+, status) with header actions **New note** (`kb-new-note`) and
+**Upload** (`kb-upload`). Pane 3 **preview** (`kb-preview-pane`):
 `DocPreview` — markdown render/edit for notes (editor + live render
-side-by-side), iframe preview for files, version history, ingestion banners,
-trash; top-right **"Ask about this document"** (`doc-ask-button`) pre-scopes
+side-by-side), iframe preview for files, version history, ingestion banners;
+top-right **"Ask about this document"** (`doc-ask-button`) pre-scopes
 the home composer through the ask-context store. Selection lives in the URL
 (`?folderId=`, `?doc=`) so deep links and refresh survive; `/kb` with no
-query means the workspace root. New notes open straight in editor mode.
+query means the knowledge base root. New notes open straight in editor mode.
+Tags and trash UIs are deleted — delete is a direct hard delete gated by
+dependency checks on the server.
 
 ---
 
@@ -171,19 +181,22 @@ Stable `data-testid`s are the e2e contract (Playwright `getByTestId`); add
 them when touching these surfaces and never rename without updating
 `tests/e2e/`:
 
-- Rail: `rail-nav-ask`, `rail-nav-kb`, `rail-nav-history`,
-  `rail-nav-connectors`, `rail-nav-workspace`, `rail-nav-trash`.
+- Rail: `kb-switcher`, `rail-nav-ask`, `rail-nav-kb`, `rail-nav-history`,
+  `rail-nav-connectors`, `rail-nav-settings`.
+- Knowledge base switcher/menu: `kb-add`, `kb-switch-item`, `kb-empty`,
+  `kb-create-entry`, `kb-join-entry`, `kb-create-bottom`, `kb-join-bottom`,
+  `kb-name-input`, `kb-create-button`.
 - Ask: `ask-composer`, `ask-send`, `ask-stop`, `ask-scope-chip`, `ask-hints`,
   `ask-hint`.
 - Conversation: `conversation-view`, `conversation-title`,
   `conversation-reload`, `assistant-answer`, `save-as-note`, `answer-retry`,
   `citation-mark` (injected by `injectCitationMarks`), `citation-source`,
   `citation-pane`.
-- Knowledge: `kb-tree-pane`, `kb-new-folder`, `kb-new-note`, `kb-upload`,
-  `kb-tag-filter`, `kb-preview-pane`, `kb-preview-reopen`, `doc-ask-button`,
-  `doc-close-button`, `doc-trash-button`, `row-trash-action`,
-  `folder-name-input`, `folder-create-button`, `note-title-input`,
-  `note-create-button`, `upload-dropzone`, `folder-picker`.
+- Knowledge: `kb-onboarding`, `kb-create`, `kb-join`, `kb-manage`,
+  `kb-manage-dialog`, `kb-tree-pane`, `kb-new-folder`, `kb-new-note`,
+  `kb-upload`, `kb-preview-pane`, `kb-preview-reopen`, `doc-ask-button`,
+  `doc-close-button`, `folder-name-input`, `folder-create-button`,
+  `note-title-input`, `note-create-button`, `upload-dropzone`, `folder-picker`.
 - History: `history-list`, `history-item`, `history-item-menu`.
 - Save answer: `save-as-note-dialog`, `save-as-note-title`,
   `save-as-note-confirm`.
@@ -196,7 +209,7 @@ Identity/auth and model-governance suites are unchanged by the IA overhaul.
 The grounded-Ask and knowledge suites in `tests/e2e/` drive the real app
 served from `dist/` with seeded accounts (`e2e-*@example.com`); because the
 e2e environment has no model gateway or object storage, the Ask suite mocks
-the workspace SSE endpoints at the browser edge (same protocol as the backend:
+the knowledge-base Ask SSE endpoint at the browser edge (same protocol as the backend:
 `conversation`/`message`/`citations`/`delta`/`completed`/`knowledge_gap`/
 `error` frames) while citation previews and note creation stay on the real
 API. Keep desktop `chromium` + `mobile-chromium` projects green.

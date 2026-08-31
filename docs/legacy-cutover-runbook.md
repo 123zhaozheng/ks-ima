@@ -36,7 +36,7 @@ longer describes a reachable state:
 
 - Until cutover, the legacy Bun service remains the source of truth for
   `/api/*` catch-all traffic; Python already serves identity, OAuth/MCP,
-  workspace/knowledge, and storage APIs on its explicit paths.
+  knowledge-base/knowledge, and storage APIs on its explicit paths.
 - `/api/v1/internal/*` remains public `404` in every phase.
 - Conversation/chat history is not migrated (the system was never live).
   Only a counts-only archive report is produced:
@@ -159,9 +159,10 @@ Freeze at the edge first, then raise the typed flag:
    `/api/*` traffic reaches Python, legacy upstreams are withdrawn, and
    `/api/mcp` returns `410`. Legacy MCP consumers move to canonical `/mcp`
    per the OAuth/MCP runbook; the Bun service stays stopped.
-5. Run the smoke matrix on migrated data: platform admin, workspace admin,
-   editor, viewer, restricted-folder user, OAuth agent (kb:read/ask/write),
-   service principal, and an MCP SDK handshake on `/mcp`.
+5. Run the smoke matrix on migrated data: platform admin, knowledge base
+   owner, editor, viewer, OAuth agent (`mcp:knowledge-bases:read`,
+   `mcp:knowledge:read`/`search`/`ask`/`write`), service principal, and an
+   MCP SDK handshake on `/mcp`.
 6. Monitor auth failures, policy denials, queue age, ingestion failures,
    and storage errors through the rollback window.
 7. Declare cutover. The legacy tables, images, and configuration remain

@@ -287,9 +287,9 @@ test.describe('grounded Ask desktop/mobile journey', () => {
     await page.getByTestId('save-as-note').last().click()
     const dialog = page.getByTestId('save-as-note-dialog')
     await expect(dialog).toBeVisible()
-    await dialog.getByRole('option', { name: 'Whole knowledge base' }).click()
+    await dialog.getByRole('option', { name: '整个知识库' }).click()
     await dialog.getByTestId('save-as-note-confirm').click()
-    await expect(page.getByText('Note saved')).toBeVisible()
+    await expect(page.getByText('笔记已保存')).toBeVisible()
 
     // The saved note appears in the knowledge base list.
     await page.goto('/kb')
@@ -313,7 +313,7 @@ test.describe('grounded Ask desktop/mobile journey', () => {
     const question = `fail: E2E failing question ${Date.now()}`
     await askFromHome(page, question)
     await expect(page).toHaveURL(/\/ask\/conversation-/)
-    await expect(page.getByText('The answer failed to generate.').first()).toBeVisible()
+    await expect(page.getByText('回答生成失败。').first()).toBeVisible()
 
     // Retry recovers the answer through the same stream contract.
     await page.getByTestId('answer-retry').first().click()
@@ -346,6 +346,6 @@ test.describe('grounded Ask desktop/mobile journey', () => {
 
     await askFromHome(page, `gap: E2E gap question ${Date.now()}`)
     await expect(page).toHaveURL(/\/ask\/conversation-/)
-    await expect(page.getByText('The knowledge base does not contain an answer to this question.').first()).toBeVisible()
+    await expect(page.getByText('知识库中没有找到这个问题的答案。').first()).toBeVisible()
   })
 })

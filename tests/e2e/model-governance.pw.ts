@@ -65,8 +65,8 @@ test.describe('central model governance boundary', () => {
   test('platform admin can open the governance surface', async ({ page }) => {
     await login(page, accounts.platform as [string, string])
     await page.goto(`${adminOrigin}/models`)
-    await expect(page.getByText('Model governance')).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'Gateways' })).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'Profiles' })).toBeVisible()
+    await expect(page.getByText('模型配置')).toBeVisible()
+    await expect(page.getByRole('tab', { name: '模型服务' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: '场景配置' })).toBeVisible()
   })
 })

@@ -95,10 +95,10 @@ test.describe('knowledge base sharing journey', () => {
 
       // Opening /join/:token accepts the link automatically.
       await joiner.goto(`/join/${token}`)
-      await expect(joiner.getByText('Joined knowledge base')).toBeVisible()
+      await expect(joiner.getByText('已加入知识库')).toBeVisible()
       await expect(joiner).toHaveURL(/\/kb/)
       await expect(joiner.getByTestId('kb-tree-pane')).toBeVisible()
-      await expect(joiner.getByText('Read only').first()).toBeVisible()
+      await expect(joiner.getByText('只读').first()).toBeVisible()
       // Viewer role hides every write entry point.
       await expect(joiner.getByTestId('kb-new-folder')).toHaveCount(0)
       await expect(joiner.getByTestId('kb-new-note')).toHaveCount(0)
@@ -125,9 +125,9 @@ test.describe('knowledge base sharing journey', () => {
 
       // Revoke the link; the row keeps showing it with a Revoked badge.
       await page.getByTestId('share-link-revoke').click()
-      await page.getByRole('button', { name: 'Revoke', exact: true }).click()
-      await expect(page.getByText('Link revoked')).toBeVisible()
-      await expect(dialog.getByText('Revoked', { exact: true })).toBeVisible()
+      await page.getByRole('button', { name: '撤销链接' }).click()
+      await expect(page.getByText('链接已撤销')).toBeVisible()
+      await expect(dialog.getByText('已撤销', { exact: true })).toBeVisible()
 
       // Revocation never touches existing members: the joiner keeps access in
       // the same context whose last selected knowledge base is the shared one.

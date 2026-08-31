@@ -39,7 +39,7 @@ test.describe('knowledge base desktop/mobile journey', () => {
 
     await page.goto('/kb')
     await expect(page.getByTestId('kb-tree-pane')).toBeVisible()
-    await expect(page.getByRole('treeitem', { name: 'All files' })).toBeVisible()
+    await expect(page.getByRole('treeitem', { name: '全部资料' })).toBeVisible()
     await expect(page.getByTestId('kb-new-folder')).toBeEnabled()
     await expect(page.getByTestId('kb-new-note')).toBeEnabled()
     await expect(page.getByTestId('kb-upload')).toBeEnabled()
@@ -56,13 +56,13 @@ test.describe('knowledge base desktop/mobile journey', () => {
     const folderId = new URL(page.url()).searchParams.get('folderId')
     expect(folderId).toBeTruthy()
     await expect(page.getByRole('treeitem', { name: folderName })).toBeVisible()
-    await expect(page.getByText('Folder created')).toBeVisible()
+    await expect(page.getByText('文件夹已创建')).toBeVisible()
 
     // Create a note inside the folder; it lands in the list and the editor.
     await page.getByTestId('kb-new-note').click()
     await page.getByTestId('note-title-input').fill(noteName)
     await page.getByTestId('note-create-button').click()
-    await expect(page.getByText('Note created')).toBeVisible()
+    await expect(page.getByText('笔记已创建')).toBeVisible()
     await expect(page.locator('.kb-row').filter({ hasText: noteName })).toBeVisible()
     const preview = page.getByTestId('kb-preview-pane')
     await expect(preview).toBeVisible()
@@ -73,7 +73,7 @@ test.describe('knowledge base desktop/mobile journey', () => {
     await expect(editor).toBeVisible()
     await editor.fill('# E2E heading\n\nBody paragraph for the preview.')
     await expect(preview.locator('.doc-preview-editor-render h1')).toHaveText('E2E heading')
-    const save = page.getByRole('button', { name: 'Save', exact: true })
+    const save = page.getByRole('button', { name: '保存', exact: true })
     await expect(save).toBeEnabled()
     await save.click()
     await expect(save).toBeDisabled()
@@ -90,7 +90,7 @@ test.describe('knowledge base desktop/mobile journey', () => {
     await page.goto('/kb')
     await page.getByTestId('kb-upload').click()
     await expect(page.getByTestId('upload-dropzone')).toBeVisible()
-    await page.getByRole('button', { name: 'Close', exact: true }).last().click()
+    await page.getByRole('button', { name: '关闭', exact: true }).last().click()
 
     // Deletion is immediate: the list row menu confirms and removes the note.
     await page.goto(`/kb?folderId=${folderId}`)
@@ -99,8 +99,8 @@ test.describe('knowledge base desktop/mobile journey', () => {
     await row.hover()
     await row.locator('.kb-row-menu').click()
     await page.getByTestId('row-delete-action').click()
-    await page.getByRole('button', { name: 'Delete', exact: true }).click()
-    await expect(page.getByText('Deleted')).toBeVisible()
+    await page.getByRole('button', { name: '删除', exact: true }).click()
+    await expect(page.getByText('已删除')).toBeVisible()
     await expect(row).toHaveCount(0)
 
     if (isDesktop) {

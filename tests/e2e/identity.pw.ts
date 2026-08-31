@@ -48,9 +48,9 @@ test.describe('local identity journeys', () => {
   }
   test('closed registration and sign-in surface', async ({ page }) => {
     await page.goto('/auth/sign-in')
-    await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /登录/ })).toBeVisible()
     await page.goto('/auth/sign-up')
-    await expect(page.getByRole('button', { name: /sign up/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /注册/ })).toBeVisible()
     const response = await page.request.post('/api/v1/auth/register', {
       data: { email: `closed-${Date.now()}@example.com`, password: 'password-123456', displayName: 'Closed' },
       headers: { Origin: new URL(page.url()).origin },
@@ -79,9 +79,9 @@ test.describe('local identity journeys', () => {
     const fixture = identityFixture(testInfo.project.name)
     const password = 'E2E-invited-password-123'
     await page.goto(`/auth/accept-invite?token=${fixture.invite.token}`)
-    await page.getByLabel('Display name').fill('Accepted Invite')
-    await page.getByLabel('Password').fill(password)
-    await page.getByRole('button', { name: 'Accept invitation' }).click()
+    await page.getByLabel('显示名称').fill('Accepted Invite')
+    await page.getByLabel('密码').fill(password)
+    await page.getByRole('button', { name: '接受邀请' }).click()
     await expect(page).toHaveURL(/auth\/sign-in/)
     const result = await login(page, fixture.invite.email, password)
     expect(result.status).toBe('authenticated')
@@ -94,10 +94,10 @@ test.describe('local identity journeys', () => {
 
   test('ordinary user can use profile and session security on the settings page', async ({ page }) => {
     await page.goto('/auth/sign-in')
-    await page.getByLabel('Email').fill(accounts.ordinary[0])
-    await page.getByLabel('Password').fill(accounts.ordinary[1])
+    await page.getByLabel('电子邮件').fill(accounts.ordinary[0])
+    await page.getByLabel('密码').fill(accounts.ordinary[1])
     const signInResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/auth/sign-in') && response.request().method() === 'POST')
-    await page.getByRole('button', { name: /sign in/i }).click()
+    await page.getByRole('button', { name: /登录/ }).click()
     expect((await signInResponse).ok()).toBeTruthy()
     await expect.poll(async () => (await page.request.get('/api/v1/auth/session')).status()).toBe(200)
     // Settings is a single page: profile, security, and preferences sections.
@@ -105,7 +105,7 @@ test.describe('local identity journeys', () => {
     await expect(page.getByTestId('settings-profile')).toBeVisible()
     await expect(page.getByTestId('settings-security')).toBeVisible()
     await expect(page.getByTestId('settings-preferences')).toBeVisible()
-    await expect(page.getByText('Active sessions', { exact: true })).toBeVisible()
+    await expect(page.getByText('活跃会话', { exact: true })).toBeVisible()
   })
 
   test('super admin can manage roles, knowledge bases, and audit', async ({ page }) => {
@@ -113,10 +113,10 @@ test.describe('local identity journeys', () => {
     await page.goto(`${adminOrigin}/users`)
     await expect(page.getByText('e2e-ordinary@example.com')).toBeVisible()
     await page.goto(`${adminOrigin}/knowledge-bases`)
-    await expect(page.getByLabel('Search knowledge bases')).toBeVisible()
+    await expect(page.getByLabel('搜索知识库')).toBeVisible()
     await page.goto(`${adminOrigin}/audit`)
     await expect(page.getByRole('table')).toBeVisible()
-    await expect(page.getByText('Action', { exact: true })).toBeVisible()
+    await expect(page.getByText('动作', { exact: true })).toBeVisible()
     await expect.poll(() => page.getByRole('row').count()).toBeGreaterThan(1)
   })
 
@@ -195,29 +195,29 @@ test.describe('local identity journeys', () => {
   test('TOTP challenge can be completed', async ({ page }, testInfo) => {
     const fixture = identityFixture(testInfo.project.name)
     await page.goto('/auth/sign-in')
-    await page.getByLabel('Email').fill(fixture.totp.email)
-    await page.getByLabel('Password').fill('E2E-password-123')
-    await page.getByRole('button', { name: /sign in/i }).click()
-    await expect(page.getByLabel('TOTP code')).toBeVisible()
+    await page.getByLabel('电子邮件').fill(fixture.totp.email)
+    await page.getByLabel('密码').fill('E2E-password-123')
+    await page.getByRole('button', { name: /登录/ }).click()
+    await expect(page.getByLabel('TOTP 代码')).toBeVisible()
     const code = new TOTP({ secret: fixture.totp.secret, algorithm: 'SHA1', digits: 6, period: 30 }).generate()
-    await page.getByLabel('TOTP code').fill(code)
+    await page.getByLabel('TOTP 代码').fill(code)
     const verifyResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/auth/totp/verify') && response.request().method() === 'POST')
-    await page.getByRole('button', { name: 'Verify' }).click()
+    await page.getByRole('button', { name: '验证' }).click()
     expect((await verifyResponse).ok()).toBeTruthy()
   })
 
   test('recovery-code challenge can be completed exactly once', async ({ page }, testInfo) => {
     const fixture = identityFixture(testInfo.project.name)
     await page.goto('/auth/sign-in')
-    await page.getByLabel('Email').fill(fixture.recovery.email)
-    await page.getByLabel('Password').fill('E2E-password-123')
-    await page.getByRole('button', { name: /sign in/i }).click()
-    await page.getByRole('button', { name: 'Use recovery code' }).click()
-    await expect(page.getByLabel('Recovery code')).toBeVisible()
+    await page.getByLabel('电子邮件').fill(fixture.recovery.email)
+    await page.getByLabel('密码').fill('E2E-password-123')
+    await page.getByRole('button', { name: /登录/ }).click()
+    await page.getByRole('button', { name: '使用恢复码' }).click()
+    await expect(page.getByLabel('恢复码')).toBeVisible()
     const code = fixture.recovery.code
-    await page.getByLabel('Recovery code').fill(code)
+    await page.getByLabel('恢复码').fill(code)
     const verifyResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/auth/recovery/verify') && response.request().method() === 'POST')
-    await page.getByRole('button', { name: 'Verify' }).click()
+    await page.getByRole('button', { name: '验证' }).click()
     expect((await verifyResponse).ok()).toBeTruthy()
     const result = await login(page, fixture.recovery.email, 'E2E-password-123')
     expect(result.status).toBe('totp_required')

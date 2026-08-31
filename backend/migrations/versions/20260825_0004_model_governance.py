@@ -112,27 +112,27 @@ def upgrade() -> None:
         END $$;
         DROP TRIGGER IF EXISTS trg_published_profile_immutable ON ima.capability_profile_versions;
         CREATE TRIGGER trg_published_profile_immutable BEFORE UPDATE ON ima.capability_profile_versions FOR EACH ROW EXECUTE FUNCTION ima.reject_published_profile_rewrite();
-        CREATE TABLE IF NOT EXISTS ima.workspace_profile_assignments (
-          workspace_id varchar(32) NOT NULL REFERENCES ima.workspaces(id) ON DELETE CASCADE,
+        CREATE TABLE IF NOT EXISTS ima.kb_profile_assignments (
+          kb_id varchar(32) NOT NULL REFERENCES ima.knowledge_bases(id) ON DELETE CASCADE,
           workflow varchar(32) NOT NULL CHECK(workflow IN ('grounded_ask','title_generation','summarization','embedding','reranking')),
           profile_id uuid NOT NULL, profile_version integer NOT NULL,
           version integer NOT NULL DEFAULT 1 CHECK(version > 0),
           availability varchar(16) NOT NULL DEFAULT 'unavailable' CHECK(availability IN ('available','degraded','unavailable')),
           availability_reason varchar(64), assigned_by varchar(32) REFERENCES ima.users(id), assigned_at timestamptz NOT NULL,
-          PRIMARY KEY(workspace_id,workflow),
+          PRIMARY KEY(kb_id,workflow),
           FOREIGN KEY(profile_id,profile_version) REFERENCES ima.capability_profile_versions(profile_id,version) ON DELETE RESTRICT
         );
-        CREATE INDEX IF NOT EXISTS ix_profile_assignments_profile ON ima.workspace_profile_assignments(profile_id,profile_version);
+        CREATE INDEX IF NOT EXISTS ix_profile_assignments_profile ON ima.kb_profile_assignments(profile_id,profile_version);
         CREATE TABLE IF NOT EXISTS ima.model_dependency_index (
           id uuid PRIMARY KEY,
           dependency_kind varchar(32) NOT NULL CHECK(dependency_kind IN ('target_index','legacy_index','job','answer')),
-          workspace_id varchar(32) REFERENCES ima.workspaces(id) ON DELETE CASCADE,
+          kb_id varchar(32) REFERENCES ima.knowledge_bases(id) ON DELETE CASCADE,
           source_id varchar(255) NOT NULL,
           model_id uuid REFERENCES ima.governed_models(id) ON DELETE RESTRICT,
           profile_id uuid, profile_version integer, dimension integer,
           active boolean NOT NULL DEFAULT true,
           created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL,
-          UNIQUE(dependency_kind,workspace_id,source_id),
+          UNIQUE(dependency_kind,kb_id,source_id),
           FOREIGN KEY(profile_id,profile_version)
             REFERENCES ima.capability_profile_versions(profile_id,version)
             ON DELETE RESTRICT
@@ -154,14 +154,14 @@ def downgrade() -> None:
         """DO $$ BEGIN
         IF EXISTS (SELECT 1 FROM ima.model_gateways LIMIT 1)
            OR EXISTS (SELECT 1 FROM ima.capability_profile_versions LIMIT 1)
-           OR EXISTS (SELECT 1 FROM ima.workspace_profile_assignments LIMIT 1)
+           OR EXISTS (SELECT 1 FROM ima.kb_profile_assignments LIMIT 1)
         THEN RAISE EXCEPTION 'model governance downgrade requires an explicit verified snapshot'; END IF;
         END $$;"""
     )
     for table in (
         "legacy_model_governance_migration",
         "model_dependency_index",
-        "workspace_profile_assignments",
+        "kb_profile_assignments",
         "capability_profile_versions",
         "capability_profiles",
         "governed_models",

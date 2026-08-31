@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 from ima.application.search import SearchError, SearchService, fuse_scores
-from ima.domain.authorization import AclAction
+from ima.domain.authorization import KbAction
 
 
 class _Context:
@@ -41,7 +41,6 @@ class _Engine:
 class _BoundedSearch(SearchService):
     def __init__(self) -> None:
         self.engine = cast(Any, _Engine())
-        self.workspace = cast(Any, SimpleNamespace())
         self.models = SimpleNamespace(
             managed_chat=AsyncMock(
                 return_value={"choices": [{"message": {"content": "Grounded answer"}}]}
@@ -61,13 +60,14 @@ class _BoundedSearch(SearchService):
         self.persisted = AsyncMock()
         self.statuses: list[tuple[str, str]] = []
 
-    async def _folders(self, *_: object, **__: object) -> set[str]:
-        return {"folder-1"}
+    async def _require_kb(self, *_: object, **__: object) -> str:
+        return "Knowledge"
 
     async def _owned_conversation(self, *_: object, **__: object) -> dict[str, object]:
         return {
             "id": uuid4(),
-            "workspace_id": "workspace-1",
+            "kb_id": "kb-1",
+            "kb_name": "Knowledge",
             "owner_user_id": "user-1",
             "title": "Existing",
             "lifecycle": "active",
@@ -92,18 +92,18 @@ class _BoundedSearch(SearchService):
         self.statuses.append((status, content))
 
 
-def test_search_sql_keeps_workspace_inside_fts_and_vector_predicates() -> None:
+def test_search_sql_keeps_kb_inside_fts_and_vector_predicates() -> None:
     source = Path("src/ima/application/search.py").read_text(encoding="utf-8")
-    assert "c.workspace_id=:workspace AND d.workspace_id=:workspace" in source
-    assert 'workspace_literal = workspace_id.replace("\'", "\'\'")' in source
-    assert "WHERE workspace_id='{workspace_literal}' AND embedding_status='ready'" in source
+    assert "c.kb_id=:kb AND d.kb_id=:kb" in source
+    assert 'kb_literal = kb_id.replace("\'", "\'\'")' in source
+    assert "WHERE kb_id='{kb_literal}' AND embedding_status='ready'" in source
     assert "pg_advisory_xact_lock(hashtextextended(:key, 0))" in source
     assert "INDEX_BUILD_IN_PROGRESS" in source
 
 
-def test_search_index_name_includes_workspace_identity() -> None:
+def test_search_index_name_includes_kb_identity() -> None:
     source = Path("src/ima/application/search.py").read_text(encoding="utf-8")
-    assert 'f"ix_cv_{sha256(workspace_id.encode()).hexdigest()[:8]}_"' in source
+    assert 'f"ix_cv_{sha256(kb_id.encode()).hexdigest()[:8]}_"' in source
 
 
 def test_fusion_normalizes_and_is_deterministic() -> None:
@@ -114,15 +114,13 @@ def test_fusion_normalizes_and_is_deterministic() -> None:
     assert scores[second] == 0.75
 
 
-def test_search_migration_has_workspace_identity_and_immutable_citations() -> None:
+def test_search_migration_has_kb_identity_and_immutable_citations() -> None:
     source = Path("migrations/versions/20260826_0007_search_conversations.py").read_text(
         encoding="utf-8"
     )
-    assert "ADD COLUMN IF NOT EXISTS workspace_id varchar(32)" in source
-    assert (
-        "FOREIGN KEY(workspace_id,document_id) REFERENCES ima.documents(workspace_id,id)" in source
-    )
-    assert "FOREIGN KEY(workspace_id,owner_user_id) REFERENCES ima.workspace_members" in source
+    assert "ADD COLUMN IF NOT EXISTS kb_id varchar(32)" in source
+    assert "FOREIGN KEY(kb_id,document_id) REFERENCES ima.documents(kb_id,id)" in source
+    assert "FOREIGN KEY(kb_id,owner_user_id) REFERENCES ima.kb_members" in source
     assert "trg_message_citation_immutable" in source
     assert "CREATE TEXT SEARCH CONFIGURATION ima.mixed (PARSER=zhparser)" in source
     assert "ADD MAPPING FOR e WITH english_stem" in source
@@ -133,18 +131,19 @@ def test_grounded_search_openapi_has_lifecycle_and_owner_mutations() -> None:
 
     paths = create_app().openapi()["paths"]
     assert (
-        paths["/api/v1/workspaces/{workspace_id}/search-indexes/build"]["post"]["operationId"]
+        paths["/api/v1/knowledge-bases/{kb_id}/search-indexes/build"]["post"]["operationId"]
         == "buildGroundedSearchIndex"
     )
-    conversation = paths["/api/v1/workspaces/{workspace_id}/conversations/{conversation_id}"]
+    conversation = paths["/api/v1/knowledge-bases/{kb_id}/conversations/{conversation_id}"]
     assert conversation["patch"]["operationId"] == "updateGroundedConversation"
     assert conversation["delete"]["operationId"] == "deleteGroundedConversation"
     assert (
-        paths["/api/v1/workspaces/{workspace_id}/conversations/{conversation_id}/retry"]["post"][
+        paths["/api/v1/knowledge-bases/{kb_id}/conversations/{conversation_id}/retry"]["post"][
             "operationId"
         ]
         == "retryGroundedConversation"
     )
+    assert paths["/api/v1/conversations"]["get"]["operationId"] == "listGroundedConversations"
     assert not any("/internal/" in path for path in paths)
 
 
@@ -169,9 +168,7 @@ async def test_ask_bounded_uses_non_streaming_gateway_and_persists_citations() -
     service = _BoundedSearch()
     search = AsyncMock(return_value={"items": [service.citation]})
     cast(Any, service).search = search
-    result = await service.ask_bounded(
-        "user-1", "workspace-1", "Question?", uuid4(), max_answer_chars=100
-    )
+    result = await service.ask_bounded("user-1", "kb-1", "Question?", uuid4(), max_answer_chars=100)
     assert result.status == "completed"
     assert result.answer == "Grounded answer"
     assert result.citations == (service.citation,)
@@ -181,7 +178,7 @@ async def test_ask_bounded_uses_non_streaming_gateway_and_persists_citations() -
     assert "Evidence" in messages[0]["content"]
     assert service.statuses[-1] == ("completed", "Grounded answer")
     assert search.await_count == 3
-    assert all(call.kwargs["action"] is AclAction.ASK for call in search.await_args_list)
+    assert all(call.kwargs["action"] is KbAction.ASK for call in search.await_args_list)
 
 
 @pytest.mark.asyncio
@@ -189,9 +186,7 @@ async def test_ask_bounded_rejects_oversized_model_answer_and_marks_failed() -> 
     service = _BoundedSearch()
     service.models.managed_chat.return_value = {"choices": [{"message": {"content": "x" * 101}}]}
     with pytest.raises(SearchError) as exc:
-        await service.ask_bounded(
-            "user-1", "workspace-1", "Question?", uuid4(), max_answer_chars=100
-        )
+        await service.ask_bounded("user-1", "kb-1", "Question?", uuid4(), max_answer_chars=100)
     assert exc.value.code == "INVALID_MODEL_RESPONSE"
     assert service.statuses[-1] == ("failed", "")
 
@@ -200,7 +195,7 @@ async def test_ask_bounded_rejects_oversized_model_answer_and_marks_failed() -> 
 async def test_ask_bounded_empty_retrieval_never_calls_model() -> None:
     service = _BoundedSearch()
     cast(Any, service).search = AsyncMock(return_value={"items": []})
-    result = await service.ask_bounded("user-1", "workspace-1", "Question?", uuid4())
+    result = await service.ask_bounded("user-1", "kb-1", "Question?", uuid4())
     assert result.status == "knowledge_gap"
     assert result.citations == ()
     service.models.managed_chat.assert_not_awaited()
@@ -218,7 +213,7 @@ async def test_ask_bounded_final_recheck_cancels_revoked_sources() -> None:
         )
     )
     with pytest.raises(SearchError) as exc:
-        await service.ask_bounded("user-1", "workspace-1", "Question?", uuid4())
+        await service.ask_bounded("user-1", "kb-1", "Question?", uuid4())
     assert exc.value.code == "ACCESS_REVOKED"
     assert service.statuses[-1] == ("cancelled", "")
 
@@ -228,5 +223,5 @@ async def test_ask_bounded_cancellation_persists_cancelled_state() -> None:
     service = _BoundedSearch()
     service.models.managed_chat.side_effect = asyncio.CancelledError()
     with pytest.raises(asyncio.CancelledError):
-        await service.ask_bounded("user-1", "workspace-1", "Question?", uuid4())
+        await service.ask_bounded("user-1", "kb-1", "Question?", uuid4())
     assert service.statuses[-1] == ("cancelled", "")

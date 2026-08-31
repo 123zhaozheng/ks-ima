@@ -42,29 +42,29 @@ def test_search_migration_installs_real_fts_and_exact_chunk_citation_dependency(
         )
         assert connection.execute(
             "SELECT attnotnull FROM pg_attribute WHERE attrelid='ima.document_chunks'::regclass "
-            "AND attname='workspace_id'"
+            "AND attname='kb_id'"
         ).fetchone() == (True,)
-        chunk_workspace_fk = (
-            "FOREIGN KEY (workspace_id, document_id) REFERENCES "
-            "ima.documents(workspace_id, id) ON DELETE RESTRICT"
+        chunk_kb_fk = (
+            "FOREIGN KEY (kb_id, document_id) REFERENCES "
+            "ima.documents(kb_id, id) ON DELETE RESTRICT"
         )
         assert (
             connection.execute(
                 "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
                 "WHERE conrelid='ima.document_chunks'::regclass "
-                "AND conname='fk_document_chunks_workspace_document'"
+                "AND conname='fk_document_chunks_kb_document'"
             ).fetchone()[0]
-            == chunk_workspace_fk
+            == chunk_kb_fk
         )
         conversation_owner_fk = (
-            "FOREIGN KEY (workspace_id, owner_user_id) REFERENCES "
-            "ima.workspace_members(workspace_id, user_id) ON DELETE RESTRICT"
+            "FOREIGN KEY (kb_id, owner_user_id) REFERENCES "
+            "ima.kb_members(kb_id, user_id) ON DELETE RESTRICT"
         )
         assert (
             connection.execute(
                 "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
                 "WHERE conrelid='ima.conversations'::regclass "
-                "AND contype='f' AND pg_get_constraintdef(oid) LIKE '%workspace_members%'"
+                "AND contype='f' AND pg_get_constraintdef(oid) LIKE '%kb_members%'"
             ).fetchone()[0]
             == conversation_owner_fk
         )

@@ -4,6 +4,8 @@ These tests exercise the digest-only repository directly against the real
 database: one-time authorization-code behavior, refresh rotation/replay family
 revocation, finite service-credential expiry, credential rotation/replacement,
 rate buckets, and safe audit payloads.  They are mandatory in the Compose gate.
+Grants and service principals are user-level; there is no per-knowledge-base
+grant boundary anymore.
 """
 
 # ruff: noqa: E501, ASYNC221
@@ -20,7 +22,6 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import text
 
-from ima.application.authorization import WorkspaceService
 from ima.config import Settings
 from ima.domain.oauth import AuthorizationTokenBundle, GrantRecord
 from ima.infrastructure.db.engine import create_engine
@@ -28,7 +29,7 @@ from ima.infrastructure.oauth import McpOauthRepository, McpRepositoryError
 
 DATABASE_URL = os.environ.get("IMA_TEST_DATABASE_URL")
 RESOURCE = "https://ima.test/mcp"
-SCOPES_READ = ("mcp:knowledge:read", "mcp:workspaces:read")
+SCOPES_READ = ("mcp:knowledge:read", "mcp:knowledge-bases:read")
 CLIENT_OPERATOR_ID = "oauth-client-operator"
 
 
@@ -68,8 +69,8 @@ async def run_migrations_once() -> None:
     )
 
 
-async def create_fixture(engine: object, workspace_service: WorkspaceService) -> tuple[str, str]:
-    """Create separate platform and workspace actors for the OAuth fixture."""
+async def create_fixture(engine: object) -> str:
+    """Create the platform and client-operator actors for the OAuth fixture."""
     admin_id = "oauth-admin"
     now = datetime.now(UTC)
     async with engine.begin() as conn:  # type: ignore[attr-defined]
@@ -78,9 +79,6 @@ async def create_fixture(engine: object, workspace_service: WorkspaceService) ->
         )
         await conn.execute(
             text("DELETE FROM ima.audit_events WHERE actor_id=:id"), {"id": CLIENT_OPERATOR_ID}
-        )
-        await conn.execute(
-            text("DELETE FROM ima.workspaces WHERE created_by=:id"), {"id": admin_id}
         )
         await conn.execute(text("DELETE FROM ima.users WHERE id=:id"), {"id": admin_id})
         await conn.execute(
@@ -112,48 +110,49 @@ async def create_fixture(engine: object, workspace_service: WorkspaceService) ->
             ),
             {"id": CLIENT_OPERATOR_ID, "now": now},
         )
-    workspace_id = str(
-        (await workspace_service.create_workspace(admin_id, "OAuth Fixture", admin_id))["id"]
-    )
-    return workspace_id, admin_id
+    return admin_id
 
 
-async def cleanup(engine: object, workspace_id: str, admin_id: str) -> None:
+async def cleanup(engine: object, admin_id: str) -> None:
     async with engine.begin() as conn:  # type: ignore[attr-defined]
         await conn.execute(
-            text("DELETE FROM ima.mcp_access_tokens WHERE workspace_id=:wid"), {"wid": workspace_id}
+            text(
+                """DELETE FROM ima.mcp_access_tokens WHERE grant_id IN
+                (SELECT id FROM ima.mcp_grants WHERE user_id=:uid)
+                OR principal_id IN
+                (SELECT id FROM ima.mcp_service_principals WHERE owner_user_id=:uid)"""
+            ),
+            {"uid": admin_id},
         )
         await conn.execute(
             text(
-                "DELETE FROM ima.mcp_refresh_tokens WHERE grant_id IN (SELECT id FROM ima.mcp_grants WHERE workspace_id=:wid)"
+                "DELETE FROM ima.mcp_refresh_tokens WHERE grant_id IN (SELECT id FROM ima.mcp_grants WHERE user_id=:uid)"
             ),
-            {"wid": workspace_id},
+            {"uid": admin_id},
         )
         await conn.execute(
             text(
-                "DELETE FROM ima.mcp_refresh_families WHERE grant_id IN (SELECT id FROM ima.mcp_grants WHERE workspace_id=:wid)"
+                "DELETE FROM ima.mcp_refresh_families WHERE grant_id IN (SELECT id FROM ima.mcp_grants WHERE user_id=:uid)"
             ),
-            {"wid": workspace_id},
+            {"uid": admin_id},
         )
         await conn.execute(
             text(
-                "DELETE FROM ima.mcp_authorization_codes WHERE grant_id IN (SELECT id FROM ima.mcp_grants WHERE workspace_id=:wid)"
+                "DELETE FROM ima.mcp_authorization_codes WHERE grant_id IN (SELECT id FROM ima.mcp_grants WHERE user_id=:uid)"
             ),
-            {"wid": workspace_id},
+            {"uid": admin_id},
         )
         await conn.execute(
             text(
-                "DELETE FROM ima.mcp_credentials WHERE principal_id IN (SELECT id FROM ima.mcp_service_principals WHERE workspace_id=:wid)"
+                "DELETE FROM ima.mcp_credentials WHERE principal_id IN (SELECT id FROM ima.mcp_service_principals WHERE owner_user_id=:uid)"
             ),
-            {"wid": workspace_id},
+            {"uid": admin_id},
         )
         await conn.execute(
-            text("DELETE FROM ima.mcp_service_principals WHERE workspace_id=:wid"),
-            {"wid": workspace_id},
+            text("DELETE FROM ima.mcp_service_principals WHERE owner_user_id=:uid"),
+            {"uid": admin_id},
         )
-        await conn.execute(
-            text("DELETE FROM ima.mcp_grants WHERE workspace_id=:wid"), {"wid": workspace_id}
-        )
+        await conn.execute(text("DELETE FROM ima.mcp_grants WHERE user_id=:uid"), {"uid": admin_id})
         await conn.execute(
             text(
                 "DELETE FROM ima.mcp_client_redirects WHERE client_id IN (SELECT id FROM ima.mcp_clients WHERE created_by=:id)"
@@ -170,7 +169,6 @@ async def cleanup(engine: object, workspace_id: str, admin_id: str) -> None:
             ),
             {"admin": admin_id, "operator": CLIENT_OPERATOR_ID},
         )
-        await conn.execute(text("DELETE FROM ima.workspaces WHERE id=:id"), {"id": workspace_id})
         await conn.execute(
             text("DELETE FROM ima.platform_role_assignments WHERE user_id=:id"),
             {"id": admin_id},
@@ -184,9 +182,9 @@ async def cleanup(engine: object, workspace_id: str, admin_id: str) -> None:
 
 
 async def build_human_grant(
-    repository: McpOauthRepository, workspace_id: str, user_id: str
+    repository: McpOauthRepository, user_id: str
 ) -> tuple[UUID, GrantRecord]:
-    """Register a public desktop client and approve a human grant."""
+    """Register a public desktop client and approve a user-level human grant."""
     client_uuid = await repository.register_client(
         client_id="desktop-1",
         client_name="Test Desktop",
@@ -201,8 +199,6 @@ async def build_human_grant(
         user_id=user_id,
         client_id=client_uuid,
         canonical_resource=RESOURCE,
-        workspace_id=workspace_id,
-        folder_root_id=None,
         scopes=SCOPES_READ,
         expires_at=datetime.now(UTC) + timedelta(days=31),
         consent_granted_by=user_id,
@@ -219,8 +215,6 @@ async def issue_human_token_bundle(
         client_id=client_uuid,
         redirect_uri="http://localhost:8765/callback",
         canonical_resource=RESOURCE,
-        workspace_id=grant.workspace_id,
-        folder_root_id=grant.folder_root_id,
         scopes=grant.scopes,
         code_challenge="E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
         security_stamp=user_id,
@@ -245,8 +239,7 @@ async def test_mcp_client_registration_requires_active_super_admin_and_attribute
     settings = integration_settings()
     engine = create_engine(settings)
     repository = McpOauthRepository(engine, settings)
-    workspace_service = WorkspaceService(engine, settings)
-    workspace_id, admin_id = await create_fixture(engine, workspace_service)
+    admin_id = await create_fixture(engine)
 
     async def register(created_by: str | None) -> UUID:
         return await repository.register_client(
@@ -294,7 +287,7 @@ async def test_mcp_client_registration_requires_active_super_admin_and_attribute
         assert client_actor == CLIENT_OPERATOR_ID
         assert audit_actor == CLIENT_OPERATOR_ID
     finally:
-        await cleanup(engine, workspace_id, admin_id)
+        await cleanup(engine, admin_id)
         await engine.dispose()
 
 
@@ -308,8 +301,7 @@ async def test_oauth_schema_digest_only_and_one_time_code() -> None:
     settings = integration_settings()
     engine = create_engine(settings)
     repository = McpOauthRepository(engine, settings)
-    workspace_service = WorkspaceService(engine, settings)
-    workspace_id, admin_id = await create_fixture(engine, workspace_service)
+    admin_id = await create_fixture(engine)
     try:
         async with engine.connect() as conn:
             # New tables exist in ima.
@@ -334,15 +326,15 @@ async def test_oauth_schema_digest_only_and_one_time_code() -> None:
                 text("SELECT to_regclass('ima.ix_mcp_concurrency_source_expiry')")
             )
 
-        client_uuid, grant = await build_human_grant(repository, workspace_id, admin_id)
+        client_uuid, grant = await build_human_grant(repository, admin_id)
+        # User-level grants never carry a knowledge base binding.
+        assert grant.kb_id is None
         raw_code, code = await repository.create_authorization_code(
             grant_id=grant.id,
             user_id=admin_id,
             client_id=client_uuid,
             redirect_uri="http://localhost:8765/callback",
             canonical_resource=RESOURCE,
-            workspace_id=workspace_id,
-            folder_root_id=None,
             scopes=SCOPES_READ,
             code_challenge="E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
             security_stamp=admin_id,
@@ -416,7 +408,7 @@ async def test_oauth_schema_digest_only_and_one_time_code() -> None:
             )
             assert grant_state == "revoked"
     finally:
-        await cleanup(engine, workspace_id, admin_id)
+        await cleanup(engine, admin_id)
         await engine.dispose()
 
 
@@ -429,10 +421,9 @@ async def test_oauth_refresh_rotation_replay_family_revoke_and_narrowing() -> No
     settings = integration_settings()
     engine = create_engine(settings)
     repository = McpOauthRepository(engine, settings)
-    workspace_service = WorkspaceService(engine, settings)
-    workspace_id, admin_id = await create_fixture(engine, workspace_service)
+    admin_id = await create_fixture(engine)
     try:
-        client_uuid, grant = await build_human_grant(repository, workspace_id, admin_id)
+        client_uuid, grant = await build_human_grant(repository, admin_id)
         issued = await issue_human_token_bundle(repository, grant, client_uuid, admin_id)
         raw_refresh, refresh = issued.refresh_token, issued.refresh
         async with engine.connect() as conn:
@@ -540,7 +531,7 @@ async def test_oauth_refresh_rotation_replay_family_revoke_and_narrowing() -> No
                 requested_scopes=None,
             )
     finally:
-        await cleanup(engine, workspace_id, admin_id)
+        await cleanup(engine, admin_id)
         await engine.dispose()
 
 
@@ -553,10 +544,9 @@ async def test_oauth_refresh_bundle_failure_and_cancellation_roll_back_all_write
     settings = integration_settings()
     engine = create_engine(settings)
     repository = McpOauthRepository(engine, settings)
-    workspace_service = WorkspaceService(engine, settings)
-    workspace_id, admin_id = await create_fixture(engine, workspace_service)
+    admin_id = await create_fixture(engine)
     try:
-        client_uuid, grant = await build_human_grant(repository, workspace_id, admin_id)
+        client_uuid, grant = await build_human_grant(repository, admin_id)
         issued = await issue_human_token_bundle(repository, grant, client_uuid, admin_id)
         raw_refresh, refresh = issued.refresh_token, issued.refresh
         async with engine.connect() as conn:
@@ -683,7 +673,7 @@ async def test_oauth_refresh_bundle_failure_and_cancellation_roll_back_all_write
                 text("DROP TRIGGER IF EXISTS fail_refresh_access_bundle ON ima.mcp_access_tokens")
             )
             await conn.execute(text("DROP FUNCTION IF EXISTS ima.fail_refresh_access_bundle()"))
-        await cleanup(engine, workspace_id, admin_id)
+        await cleanup(engine, admin_id)
         await engine.dispose()
 
 
@@ -696,10 +686,9 @@ async def test_oauth_concurrent_refresh_has_one_winner_then_revokes_family_on_re
     settings = integration_settings()
     engine = create_engine(settings)
     repository = McpOauthRepository(engine, settings)
-    workspace_service = WorkspaceService(engine, settings)
-    workspace_id, admin_id = await create_fixture(engine, workspace_service)
+    admin_id = await create_fixture(engine)
     try:
-        client_uuid, grant = await build_human_grant(repository, workspace_id, admin_id)
+        client_uuid, grant = await build_human_grant(repository, admin_id)
         issued = await issue_human_token_bundle(repository, grant, client_uuid, admin_id)
         raw_refresh = issued.refresh_token
         family_id = issued.refresh.family_id
@@ -763,7 +752,7 @@ async def test_oauth_concurrent_refresh_has_one_winner_then_revokes_family_on_re
             is None
         )
     finally:
-        await cleanup(engine, workspace_id, admin_id)
+        await cleanup(engine, admin_id)
         await engine.dispose()
 
 
@@ -776,17 +765,14 @@ async def test_oauth_access_token_resource_binding_and_revoke() -> None:
     settings = integration_settings()
     engine = create_engine(settings)
     repository = McpOauthRepository(engine, settings)
-    workspace_service = WorkspaceService(engine, settings)
-    workspace_id, admin_id = await create_fixture(engine, workspace_service)
+    admin_id = await create_fixture(engine)
     try:
-        client_uuid, grant = await build_human_grant(repository, workspace_id, admin_id)
+        client_uuid, grant = await build_human_grant(repository, admin_id)
         raw_at, at = await repository.create_access_token(
             grant_id=grant.id,
             principal_id=None,
             client_id=client_uuid,
             canonical_resource=RESOURCE,
-            workspace_id=workspace_id,
-            folder_root_id=None,
             scopes=SCOPES_READ,
             expires_at=datetime.now(UTC) + timedelta(minutes=10),
             security_stamp=admin_id,
@@ -821,7 +807,7 @@ async def test_oauth_access_token_resource_binding_and_revoke() -> None:
         await repository.revoke_access_token(raw_at, reason="test_revoke")
         assert await repository.load_access_token(raw_at, expected_resource=RESOURCE) is None
     finally:
-        await cleanup(engine, workspace_id, admin_id)
+        await cleanup(engine, admin_id)
         await engine.dispose()
 
 
@@ -834,12 +820,9 @@ async def test_oauth_service_principal_credential_finite_expiry_rotation_and_rev
     settings = integration_settings()
     engine = create_engine(settings)
     repository = McpOauthRepository(engine, settings)
-    workspace_service = WorkspaceService(engine, settings)
-    workspace_id, admin_id = await create_fixture(engine, workspace_service)
+    admin_id = await create_fixture(engine)
     try:
         principal = await repository.create_service_principal(
-            workspace_id=workspace_id,
-            folder_root_id=None,
             display_name="CI Deploy",
             purpose="Automated ingestion",
             owner_user_id=admin_id,
@@ -853,8 +836,6 @@ async def test_oauth_service_principal_credential_finite_expiry_rotation_and_rev
         # Finite expiry is enforced.
         with pytest.raises(McpRepositoryError) as exc:
             await repository.create_service_principal(
-                workspace_id=workspace_id,
-                folder_root_id=None,
                 display_name="Too Long",
                 purpose="Should be rejected",
                 owner_user_id=admin_id,
@@ -911,7 +892,7 @@ async def test_oauth_service_principal_credential_finite_expiry_rotation_and_rev
         )
         assert await repository.load_service_principal(principal.id, include_inactive=False) is None
     finally:
-        await cleanup(engine, workspace_id, admin_id)
+        await cleanup(engine, admin_id)
         await engine.dispose()
 
 
@@ -924,8 +905,7 @@ async def test_oauth_rate_buckets_and_safe_audit() -> None:
     settings = integration_settings()
     engine = create_engine(settings)
     repository = McpOauthRepository(engine, settings)
-    workspace_service = WorkspaceService(engine, settings)
-    workspace_id, admin_id = await create_fixture(engine, workspace_service)
+    admin_id = await create_fixture(engine)
     try:
         # Exhaust a limit of 3 attempts; the 4th is blocked.
         bucket_run = str(uuid4())
@@ -956,7 +936,7 @@ async def test_oauth_rate_buckets_and_safe_audit() -> None:
             target_type="tool",
             target_id="kb_ask",
             reason="insufficient_scope",
-            metadata={"workspace_id": workspace_id, "scopes": ["mcp:knowledge:read"]},
+            metadata={"scopes": ["mcp:knowledge:read"]},
             correlation_id="corr-1",
         )
         await repository.append_audit(
@@ -965,7 +945,7 @@ async def test_oauth_rate_buckets_and_safe_audit() -> None:
             "failure",
             metadata={
                 "access_token": "must-not-persist",
-                "nested": {"code_verifier": "must-not-persist", "workspace_id": workspace_id},
+                "nested": {"code_verifier": "must-not-persist", "kb_id": "kb-1"},
             },
         )
         async with engine.connect() as conn:
@@ -997,7 +977,7 @@ async def test_oauth_rate_buckets_and_safe_audit() -> None:
             assert redacted["nested"]["code_verifier"] in {"[REDACTED]", "<redacted>"}
             assert "must-not-persist" not in str(redacted)
     finally:
-        await cleanup(engine, workspace_id, admin_id)
+        await cleanup(engine, admin_id)
         await engine.dispose()
 
 
@@ -1011,18 +991,15 @@ async def test_oauth_concurrent_code_exchange_allows_exactly_one_winner() -> Non
     settings = integration_settings()
     engine = create_engine(settings)
     repository = McpOauthRepository(engine, settings)
-    workspace_service = WorkspaceService(engine, settings)
-    workspace_id, admin_id = await create_fixture(engine, workspace_service)
+    admin_id = await create_fixture(engine)
     try:
-        client_uuid, grant = await build_human_grant(repository, workspace_id, admin_id)
+        client_uuid, grant = await build_human_grant(repository, admin_id)
         raw_code, _ = await repository.create_authorization_code(
             grant_id=grant.id,
             user_id=admin_id,
             client_id=client_uuid,
             redirect_uri="http://localhost:8765/callback",
             canonical_resource=RESOURCE,
-            workspace_id=workspace_id,
-            folder_root_id=None,
             scopes=SCOPES_READ,
             code_challenge="E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
             security_stamp=admin_id,
@@ -1046,7 +1023,7 @@ async def test_oauth_concurrent_code_exchange_allows_exactly_one_winner() -> Non
         results = await asyncio.gather(attempt(), attempt())
         assert sum(results) == 1
     finally:
-        await cleanup(engine, workspace_id, admin_id)
+        await cleanup(engine, admin_id)
         await engine.dispose()
 
 
@@ -1059,18 +1036,15 @@ async def test_oauth_token_bundle_failure_rolls_back_code_and_all_tokens() -> No
     settings = integration_settings()
     engine = create_engine(settings)
     repository = McpOauthRepository(engine, settings)
-    workspace_service = WorkspaceService(engine, settings)
-    workspace_id, admin_id = await create_fixture(engine, workspace_service)
+    admin_id = await create_fixture(engine)
     try:
-        client_uuid, grant = await build_human_grant(repository, workspace_id, admin_id)
+        client_uuid, grant = await build_human_grant(repository, admin_id)
         raw_code, code = await repository.create_authorization_code(
             grant_id=grant.id,
             user_id=admin_id,
             client_id=client_uuid,
             redirect_uri="http://localhost:8765/callback",
             canonical_resource=RESOURCE,
-            workspace_id=workspace_id,
-            folder_root_id=None,
             scopes=SCOPES_READ,
             code_challenge="E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
             security_stamp=admin_id,
@@ -1155,20 +1129,13 @@ async def test_oauth_token_bundle_failure_rolls_back_code_and_all_tokens() -> No
                 )
                 == 0
             )
-            assert (
-                await conn.scalar(
-                    text("SELECT count(*) FROM ima.mcp_refresh_families WHERE grant_id=:id"),
-                    {"id": grant.id},
-                )
-                == 0
-            )
     finally:
         async with engine.begin() as conn:
             await conn.execute(
                 text("DROP TRIGGER IF EXISTS fail_refresh_bundle ON ima.mcp_refresh_tokens")
             )
             await conn.execute(text("DROP FUNCTION IF EXISTS ima.fail_refresh_bundle()"))
-        await cleanup(engine, workspace_id, admin_id)
+        await cleanup(engine, admin_id)
         await engine.dispose()
 
 
@@ -1181,17 +1148,14 @@ async def test_oauth_concurrency_leases_limit_release_and_expiry_recovery() -> N
     settings = integration_settings()
     engine = create_engine(settings)
     repository = McpOauthRepository(engine, settings)
-    workspace_service = WorkspaceService(engine, settings)
-    workspace_id, admin_id = await create_fixture(engine, workspace_service)
+    admin_id = await create_fixture(engine)
     try:
-        client_uuid, grant = await build_human_grant(repository, workspace_id, admin_id)
+        client_uuid, grant = await build_human_grant(repository, admin_id)
         raw, token = await repository.create_access_token(
             grant_id=grant.id,
             principal_id=None,
             client_id=client_uuid,
             canonical_resource=RESOURCE,
-            workspace_id=workspace_id,
-            folder_root_id=None,
             scopes=SCOPES_READ,
             expires_at=datetime.now(UTC) + timedelta(minutes=5),
             security_stamp=admin_id,
@@ -1261,8 +1225,6 @@ async def test_oauth_concurrency_leases_limit_release_and_expiry_recovery() -> N
             principal_id=None,
             client_id=client_uuid,
             canonical_resource=RESOURCE,
-            workspace_id=workspace_id,
-            folder_root_id=None,
             scopes=SCOPES_READ,
             expires_at=datetime.now(UTC) + timedelta(minutes=5),
             security_stamp=admin_id,
@@ -1296,8 +1258,6 @@ async def test_oauth_concurrency_leases_limit_release_and_expiry_recovery() -> N
         )
 
         principal = await repository.create_service_principal(
-            workspace_id=workspace_id,
-            folder_root_id=None,
             display_name="Lease principal",
             purpose="Concurrency boundary",
             owner_user_id=admin_id,
@@ -1312,8 +1272,6 @@ async def test_oauth_concurrency_leases_limit_release_and_expiry_recovery() -> N
             principal_id=principal.id,
             client_id=None,
             canonical_resource=RESOURCE,
-            workspace_id=workspace_id,
-            folder_root_id=None,
             scopes=("mcp:knowledge:read",),
             expires_at=datetime.now(UTC) + timedelta(minutes=5),
         )
@@ -1322,8 +1280,6 @@ async def test_oauth_concurrency_leases_limit_release_and_expiry_recovery() -> N
             principal_id=principal.id,
             client_id=None,
             canonical_resource=RESOURCE,
-            workspace_id=workspace_id,
-            folder_root_id=None,
             scopes=("mcp:knowledge:read",),
             expires_at=datetime.now(UTC) + timedelta(minutes=5),
         )
@@ -1356,5 +1312,5 @@ async def test_oauth_concurrency_leases_limit_release_and_expiry_recovery() -> N
             is None
         )
     finally:
-        await cleanup(engine, workspace_id, admin_id)
+        await cleanup(engine, admin_id)
         await engine.dispose()

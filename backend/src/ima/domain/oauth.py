@@ -77,7 +77,7 @@ class ClientRecord:
 
 
 class GrantRecord:
-    """A persisted human authorization grant for one workspace boundary."""
+    """A persisted human authorization grant; user-level (kb_id null)."""
 
     def __init__(
         self,
@@ -85,19 +85,17 @@ class GrantRecord:
         user_id: str,
         client_id: UUID,
         canonical_resource: str,
-        workspace_id: str,
-        folder_root_id: str | None,
         scopes: tuple[str, ...],
         state: GrantState,
         expires_at: datetime,
+        kb_id: str | None = None,
         **_: object,
     ) -> None:
         self.id = id
         self.user_id = user_id
         self.client_id = client_id
         self.canonical_resource = canonical_resource
-        self.workspace_id = workspace_id
-        self.folder_root_id = folder_root_id
+        self.kb_id = kb_id
         self.scopes = scopes
         self.state = state
         self.expires_at = expires_at
@@ -114,8 +112,6 @@ class AuthorizationCodeRecord:
         client_id: UUID,
         redirect_uri: str,
         canonical_resource: str,
-        workspace_id: str,
-        folder_root_id: str | None,
         scopes: tuple[str, ...],
         code_challenge: str,
         expires_at: datetime,
@@ -128,8 +124,6 @@ class AuthorizationCodeRecord:
         self.client_id = client_id
         self.redirect_uri = redirect_uri
         self.canonical_resource = canonical_resource
-        self.workspace_id = workspace_id
-        self.folder_root_id = folder_root_id
         self.scopes = scopes
         self.code_challenge = code_challenge
         self.expires_at = expires_at
@@ -147,8 +141,6 @@ class AccessTokenRecord:
         principal_id: UUID | None,
         client_id: UUID | None,
         canonical_resource: str,
-        workspace_id: str,
-        folder_root_id: str | None,
         scopes: tuple[str, ...],
         expires_at: datetime,
         security_stamp: str | None = None,
@@ -160,8 +152,6 @@ class AccessTokenRecord:
         self.principal_id = principal_id
         self.client_id = client_id
         self.canonical_resource = canonical_resource
-        self.workspace_id = workspace_id
-        self.folder_root_id = folder_root_id
         self.scopes = scopes
         self.expires_at = expires_at
         self.security_stamp = security_stamp
@@ -177,8 +167,6 @@ class RefreshTokenRecord:
         grant_id: UUID,
         client_id: UUID,
         canonical_resource: str,
-        workspace_id: str,
-        folder_root_id: str | None,
         scopes: tuple[str, ...],
         token_digest: str,
         expires_at: datetime,
@@ -191,8 +179,6 @@ class RefreshTokenRecord:
         self.grant_id = grant_id
         self.client_id = client_id
         self.canonical_resource = canonical_resource
-        self.workspace_id = workspace_id
-        self.folder_root_id = folder_root_id
         self.scopes = scopes
         self.token_digest = token_digest
         self.expires_at = expires_at
@@ -237,13 +223,11 @@ class RefreshAccessTokenBundle:
 
 
 class ServicePrincipalRecord:
-    """A workspace-admin-approved delegated grant for unattended agents."""
+    """A user-level delegated principal for unattended agents."""
 
     def __init__(
         self,
         id: UUID,
-        workspace_id: str,
-        folder_root_id: str | None,
         display_name: str,
         purpose: str,
         owner_user_id: str,
@@ -256,8 +240,6 @@ class ServicePrincipalRecord:
         **_: object,
     ) -> None:
         self.id = id
-        self.workspace_id = workspace_id
-        self.folder_root_id = folder_root_id
         self.display_name = display_name
         self.purpose = purpose
         self.owner_user_id = owner_user_id

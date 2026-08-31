@@ -23,7 +23,7 @@ from mcp_types import ListToolsResult
 from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from ima.application.authorization import WorkspaceError, WorkspaceService
+from ima.application.authorization import KbError, KbService
 from ima.application.knowledge import KnowledgeError, KnowledgeService
 from ima.application.mcp_contracts import ALL_MCP_SCOPES, McpActor, tools_for_scopes
 from ima.application.oauth import McpAuthorizationError, McpAuthorizationService
@@ -37,7 +37,7 @@ _current_actor: ContextVar[McpActor | None] = ContextVar("ima_mcp_actor", defaul
 @dataclass(frozen=True, slots=True)
 class McpRuntime:
     authorization: McpAuthorizationService
-    workspace: WorkspaceService
+    kb: KbService
     knowledge: KnowledgeService
     storage: StorageService
     search: SearchService
@@ -90,25 +90,12 @@ class ScopeToolMiddleware:
 
     @staticmethod
     def _allowed(actor: McpActor | None) -> set[str]:
+        # Authorization is user-level: visibility comes from OAuth scopes alone.
+        # Membership and role checks happen per tool call; kb_ask additionally
+        # refuses service principals at execution time.
         if actor is None:
             return set()
-        allowed = set(tools_for_scopes(actor.scopes))
-        if actor.actor_type == "service_principal":
-            allowed.difference_update(
-                {
-                    "kb_ask",
-                    "kb_mkdir",
-                    "kb_create_note",
-                    "kb_update_note",
-                    "kb_upload_file",
-                    "kb_move",
-                    "kb_set_tags",
-                    "kb_delete",
-                }
-            )
-        if actor.folder_root_id is not None:
-            allowed.discard("kb_list_tags")
-        return allowed
+        return set(tools_for_scopes(actor.scopes))
 
 
 class McpToolAdapter:
@@ -123,7 +110,7 @@ class McpToolAdapter:
         if actor is None:
             raise ToolError("UNAUTHENTICATED: Bearer authentication is required")
         if human_only and (actor.actor_type != "human" or actor.user_id is None):
-            raise ToolError("POLICY_DENIED: delegated target adapter is not available")
+            raise ToolError("POLICY_DENIED: this tool requires a human account")
         return actor
 
     def _bounded(self, value: Any) -> Any:
@@ -135,9 +122,9 @@ class McpToolAdapter:
     async def _execute(
         self,
         tool_name: str,
-        operation: Callable[[Any], Awaitable[Any]],
+        operation: Callable[[str], Awaitable[Any]],
         *,
-        target_folder_id: str | None = None,
+        target_kb_id: str | None = None,
         human_only: bool = False,
         timeout_seconds: float = 15,
     ) -> Any:
@@ -145,22 +132,21 @@ class McpToolAdapter:
         runtime = self._runtime()
         lease_id: UUID | None = None
         try:
-            await runtime.authorization.authorize_tool(
-                actor, tool_name, target_folder_id=target_folder_id
-            )
+            await runtime.authorization.authorize_tool(actor, tool_name, target_kb_id=target_kb_id)
             lease_id = await runtime.authorization.acquire_tool_lease(
                 actor, secrets.token_urlsafe(18)
             )
+            user_id = await runtime.authorization.effective_user_id(actor)
             # Stay below the repository's 60-second cross-replica lease TTL so a
             # timed-out operation still releases its lease itself.
             async with asyncio.timeout(timeout_seconds):
-                result = await operation(actor.user_id if actor.user_id is not None else actor)
+                result = await operation(user_id)
             return self._bounded(result)
         except asyncio.CancelledError:
             raise
         except TimeoutError as exc:
             raise ToolError("TIMEOUT: target operation timed out") from exc
-        except (McpAuthorizationError, WorkspaceError, KnowledgeError, SearchError) as exc:
+        except (McpAuthorizationError, KbError, KnowledgeError, SearchError) as exc:
             code = getattr(exc, "code", None) or getattr(exc, "reason", "POLICY_DENIED")
             detail = getattr(exc, "detail", "Target operation denied")
             raise ToolError(f"{code}: {detail}") from exc
@@ -174,7 +160,7 @@ class McpToolAdapter:
         self,
         tool_name: str,
         document_id: UUID,
-        operation: Callable[[Any], Awaitable[Any]],
+        operation: Callable[[str], Awaitable[Any]],
         *,
         human_only: bool = False,
     ) -> Any:
@@ -183,27 +169,29 @@ class McpToolAdapter:
         lease_id: UUID | None = None
         try:
             # Enforce OAuth scope and current grant lifecycle before loading any
-            # protected document metadata needed for the folder-level check.
+            # protected document metadata needed for the knowledge-base check.
             await runtime.authorization.authorize_tool(actor, tool_name)
             lease_id = await runtime.authorization.acquire_tool_lease(
                 actor, secrets.token_urlsafe(18)
             )
+            user_id = await runtime.authorization.effective_user_id(actor)
             # Keep the complete post-acquisition path below the repository's
             # 60-second cross-replica lease recovery TTL.
             async with asyncio.timeout(45):
-                document = await runtime.knowledge.get_document(
-                    actor.user_id if actor.user_id is not None else actor, document_id
-                )
+                document = await runtime.knowledge.get_document(user_id, document_id)
+                target_kb_id = document.get("kbId")
+                if not target_kb_id:
+                    raise McpAuthorizationError("policy_denied", "Knowledge base is not accessible")
                 await runtime.authorization.authorize_tool(
-                    actor, tool_name, target_folder_id=str(document["folderId"])
+                    actor, tool_name, target_kb_id=str(target_kb_id)
                 )
-                result = await operation(actor.user_id if actor.user_id is not None else actor)
+                result = await operation(user_id)
                 return self._bounded(result)
         except asyncio.CancelledError:
             raise
         except TimeoutError as exc:
             raise ToolError("TIMEOUT: target operation timed out") from exc
-        except (McpAuthorizationError, WorkspaceError, KnowledgeError, SearchError) as exc:
+        except (McpAuthorizationError, KbError, KnowledgeError, SearchError) as exc:
             code = getattr(exc, "code", None) or getattr(exc, "reason", "POLICY_DENIED")
             detail = getattr(exc, "detail", "Target operation denied")
             raise ToolError(f"{code}: {detail}") from exc
@@ -213,20 +201,15 @@ class McpToolAdapter:
             if lease_id is not None:
                 await runtime.authorization.release_tool_lease(lease_id)
 
-    async def list_workspaces(self) -> dict[str, Any]:
-        actor = self._actor()
+    async def list_knowledge_bases(self) -> dict[str, Any]:
+        async def run(user_id: str) -> Any:
+            return {"items": await self._runtime().kb.list_knowledge_bases(user_id)}
 
-        async def run(identity: Any) -> Any:
-            if isinstance(identity, McpActor):
-                value = await self._runtime().workspace.delegated_workspace(identity)
-                return {"items": [value]}
-            values = await self._runtime().workspace.list_workspaces(identity)
-            return {"items": [item for item in values if item["id"] == actor.workspace_id]}
-
-        return cast(dict[str, Any], await self._execute("kb_list_workspaces", run))
+        return cast(dict[str, Any], await self._execute("kb_list_knowledge_bases", run))
 
     async def list_dir(
         self,
+        kb_id: str,
         folder_id: str,
         cursor: str | None = None,
         limit: int = 50,
@@ -239,32 +222,21 @@ class McpToolAdapter:
                 lambda user: self._runtime().knowledge.list_contents(
                     user, folder_id, cursor, min(max(limit, 1), 100), kind
                 ),
-                target_folder_id=folder_id,
+                target_kb_id=kb_id,
             ),
         )
 
-    async def get_tree(self, folder_id: str) -> dict[str, Any]:
-        actor = self._actor()
-
+    async def get_tree(self, kb_id: str, folder_id: str) -> dict[str, Any]:
         async def run(user: str) -> Any:
-            workspace = actor.workspace_id
-            if actor.actor_type == "service_principal":
-                folder = await self._runtime().workspace.delegated_folder(actor, folder_id)
-                breadcrumbs = await self._runtime().workspace.delegated_breadcrumbs(
-                    actor, folder_id
-                )
-                children = await self._runtime().workspace.delegated_folders(actor, folder_id)
-            else:
-                folder = await self._runtime().workspace.folder(user, workspace, folder_id)
-                breadcrumbs = await self._runtime().workspace.breadcrumbs(
-                    user, workspace, folder_id
-                )
-                children = await self._runtime().workspace.folders(user, workspace, folder_id)
+            runtime = self._runtime()
+            folder = await runtime.kb.folder(user, kb_id, folder_id)
+            breadcrumbs = await runtime.kb.breadcrumbs(user, kb_id, folder_id)
+            children = await runtime.kb.folders(user, kb_id, folder_id)
             return {"folder": folder, "breadcrumbs": breadcrumbs, "children": children}
 
         return cast(
             dict[str, Any],
-            await self._execute("kb_get_tree", run, target_folder_id=folder_id),
+            await self._execute("kb_get_tree", run, target_kb_id=kb_id),
         )
 
     async def get_note(self, document_id: UUID) -> dict[str, Any]:
@@ -286,57 +258,41 @@ class McpToolAdapter:
 
         return cast(dict[str, Any], await self._document("kb_get_file", document_id, run))
 
-    async def list_tags(self) -> dict[str, Any]:
-        actor = self._actor()
-        if actor.folder_root_id is not None:
-            raise ToolError("POLICY_DENIED: folder-scoped grants cannot list workspace tags")
-        return cast(
-            dict[str, Any],
-            await self._execute(
-                "kb_list_tags",
-                lambda user: self._list_tags(user, actor.workspace_id),
-            ),
-        )
-
-    async def _list_tags(self, user: str, workspace_id: str) -> dict[str, Any]:
-        return {"items": await self._runtime().knowledge.list_tags(user, workspace_id)}
-
     async def search(
         self,
+        kb_id: str,
         query: str,
         mode: str = "keyword",
         top_k: int = 8,
         threshold: float = 0,
         folder_id: str | None = None,
-        tag_id: UUID | None = None,
     ) -> dict[str, Any]:
-        actor = self._actor()
-        effective_folder = folder_id or actor.folder_root_id
         return cast(
             dict[str, Any],
             await self._execute(
                 "kb_search",
                 lambda user: self._runtime().search.search(
                     user,
-                    actor.workspace_id,
+                    kb_id,
                     query,
                     mode=mode,
                     top_k=min(max(top_k, 1), 50),
                     threshold=min(max(threshold, 0), 1),
-                    folder_id=effective_folder,
-                    tag_id=tag_id,
+                    folder_id=folder_id,
                 ),
-                target_folder_id=effective_folder,
+                target_kb_id=kb_id,
             ),
         )
 
-    async def ask(self, question: str, conversation_id: UUID | None = None) -> dict[str, Any]:
-        actor = self._actor(human_only=True)
+    async def ask(
+        self, kb_id: str, question: str, conversation_id: UUID | None = None
+    ) -> dict[str, Any]:
+        self._actor(human_only=True)
 
         async def run(user: str) -> Any:
             result = await self._runtime().search.ask_bounded(
                 user,
-                actor.workspace_id,
+                kb_id,
                 question,
                 conversation_id,
                 max_answer_chars=max(1, min(self._settings.mcp_body_max_bytes // 4, 100000)),
@@ -353,24 +309,24 @@ class McpToolAdapter:
 
         return cast(
             dict[str, Any],
-            await self._execute("kb_ask", run, human_only=True, timeout_seconds=45),
+            await self._execute(
+                "kb_ask", run, target_kb_id=kb_id, human_only=True, timeout_seconds=45
+            ),
         )
 
-    async def mkdir(self, parent_id: str, name: str) -> dict[str, Any]:
-        actor = self._actor()
+    async def mkdir(self, kb_id: str, parent_id: str, name: str) -> dict[str, Any]:
         return cast(
             dict[str, Any],
             await self._execute(
                 "kb_mkdir",
-                lambda user: self._runtime().workspace.create_folder(
-                    user, actor.workspace_id, parent_id, name
-                ),
-                target_folder_id=parent_id,
-                human_only=True,
+                lambda user: self._runtime().kb.create_folder(user, kb_id, parent_id, name),
+                target_kb_id=kb_id,
             ),
         )
 
-    async def create_note(self, folder_id: str, title: str, markdown: str) -> dict[str, Any]:
+    async def create_note(
+        self, kb_id: str, folder_id: str, title: str, markdown: str
+    ) -> dict[str, Any]:
         return cast(
             dict[str, Any],
             await self._execute(
@@ -378,13 +334,13 @@ class McpToolAdapter:
                 lambda user: self._runtime().knowledge.create_note(
                     user, folder_id, title, markdown
                 ),
-                target_folder_id=folder_id,
-                human_only=True,
+                target_kb_id=kb_id,
             ),
         )
 
     async def upload_file(
         self,
+        kb_id: str,
         folder_id: str,
         title: str,
         filename: str,
@@ -405,8 +361,7 @@ class McpToolAdapter:
                     size_bytes,
                     checksum,
                 ),
-                target_folder_id=folder_id,
-                human_only=True,
+                target_kb_id=kb_id,
             ),
         )
 
@@ -431,17 +386,14 @@ class McpToolAdapter:
                     expected_version=expected_version,
                     expected_content_version=expected_content_version,
                 ),
-                human_only=True,
             ),
         )
 
     async def move(
         self, document_id: UUID, destination_folder_id: str, expected_version: int
     ) -> dict[str, Any]:
-        actor = self._actor(human_only=True)
-        await self._runtime().authorization.authorize_tool(
-            actor, "kb_move", target_folder_id=destination_folder_id
-        )
+        # The target service rejects destinations outside the document's
+        # knowledge base; the membership check below covers the source KB.
         return cast(
             dict[str, Any],
             await self._document(
@@ -450,32 +402,17 @@ class McpToolAdapter:
                 lambda user: self._runtime().knowledge.move_document(
                     user, document_id, destination_folder_id, expected_version
                 ),
-                human_only=True,
             ),
         )
 
-    async def set_tags(
-        self, document_id: UUID, tag_ids: tuple[UUID, ...], expected_version: int
-    ) -> dict[str, bool]:
+    async def delete(self, document_id: UUID) -> dict[str, bool]:
         async def run(user: str) -> Any:
-            await self._runtime().knowledge.assign_tags(
-                user, document_id, tag_ids, expected_version
-            )
-            return {"updated": True}
+            await self._runtime().knowledge.delete_document(user, document_id)
+            return {"deleted": True}
 
         return cast(
             dict[str, bool],
-            await self._document("kb_set_tags", document_id, run, human_only=True),
-        )
-
-    async def delete(self, document_id: UUID, expected_version: int) -> dict[str, bool]:
-        async def run(user: str) -> Any:
-            await self._runtime().knowledge.trash_document(user, document_id, expected_version)
-            return {"trashed": True}
-
-        return cast(
-            dict[str, bool],
-            await self._document("kb_delete", document_id, run, human_only=True),
+            await self._document("kb_delete", document_id, run),
         )
 
 
@@ -663,12 +600,11 @@ class McpTransport:
 
     def _register_tools(self) -> None:
         tools: tuple[tuple[str, Callable[..., Awaitable[Any]]], ...] = (
-            ("kb_list_workspaces", self.adapter.list_workspaces),
+            ("kb_list_knowledge_bases", self.adapter.list_knowledge_bases),
             ("kb_list_dir", self.adapter.list_dir),
             ("kb_get_tree", self.adapter.get_tree),
             ("kb_get_note", self.adapter.get_note),
             ("kb_get_file", self.adapter.get_file),
-            ("kb_list_tags", self.adapter.list_tags),
             ("kb_search", self.adapter.search),
             ("kb_ask", self.adapter.ask),
             ("kb_mkdir", self.adapter.mkdir),
@@ -676,7 +612,6 @@ class McpTransport:
             ("kb_upload_file", self.adapter.upload_file),
             ("kb_update_note", self.adapter.update_note),
             ("kb_move", self.adapter.move),
-            ("kb_set_tags", self.adapter.set_tags),
             ("kb_delete", self.adapter.delete),
         )
         for name, function in tools:

@@ -14,10 +14,10 @@ def test_search_is_python_owned_and_legacy_chat_is_removed() -> None:
     assert not (root / "src/views/ChatView.vue").exists()
 
 
-def test_caddy_routes_workspace_search_and_blocks_private_bridge() -> None:
+def test_caddy_routes_knowledge_base_search_and_blocks_private_bridge() -> None:
     root = Path(__file__).resolve().parents[3]
     caddy = (root / "Caddyfile").read_text(encoding="utf-8")
-    assert "/api/v1/workspaces/*" in caddy
+    assert "/api/v1/knowledge-bases/*" in caddy
     assert "@ima_internal_forbidden path /api/v1/internal/*" in caddy
     assert 'respond "Not Found" 404' in caddy
     assert 'respond "Gone" 410' in caddy

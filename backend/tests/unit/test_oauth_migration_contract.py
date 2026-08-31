@@ -69,7 +69,7 @@ def test_scope_check_constraints_covered() -> None:
     """All canonical MCP scopes are enforced by the migration CHECK guards."""
     text = MIGRATION_PATH.read_text()
     for scope in (
-        "mcp:workspaces:read",
+        "mcp:knowledge-bases:read",
         "mcp:knowledge:read",
         "mcp:knowledge:search",
         "mcp:knowledge:ask",
@@ -89,19 +89,19 @@ def test_schema_enforces_oauth_lineage_and_actor_shape() -> None:
     assert "secret_prefix varchar(32)" in text
 
 
-def test_grant_record_is_bound_to_one_boundary() -> None:
+def test_grant_record_is_user_level() -> None:
     grant = GrantRecord(
         id=__import__("uuid").uuid4(),
         user_id="user-1",
         client_id=__import__("uuid").uuid4(),
         canonical_resource="https://example.com/mcp",
-        workspace_id="workspace-1",
-        folder_root_id=None,
+        kb_id=None,
         scopes=("mcp:knowledge:read",),
         state=GrantState.ACTIVE,
         expires_at=datetime.now(UTC),
     )
     assert grant.canonical_resource == "https://example.com/mcp"
+    assert grant.kb_id is None
     assert grant.state is GrantState.ACTIVE
 
 

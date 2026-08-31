@@ -227,7 +227,7 @@ class AssignmentRequest(IdentityModel):
 
 
 class Assignment(IdentityModel):
-    workspace_id: str = Field(alias="workspaceId")
+    kb_id: str = Field(alias="kbId")
     workflow: Workflow
     profile_id: UUID = Field(alias="profileId")
     profile_version: int = Field(alias="profileVersion")
@@ -241,7 +241,7 @@ class AssignmentList(IdentityModel):
     items: tuple[Assignment, ...]
 
 
-class WorkspaceCapability(IdentityModel):
+class KbCapability(IdentityModel):
     workflow: Workflow
     alias: str
     description: str
@@ -251,7 +251,7 @@ class WorkspaceCapability(IdentityModel):
 
 
 class ImpactItem(IdentityModel):
-    workspace_id: str = Field(alias="workspaceId")
+    kb_id: str = Field(alias="kbId")
     workflow: Workflow
     current_model_id: UUID | None = Field(default=None, alias="currentModelId")
     current_dimension: int | None = Field(default=None, alias="currentDimension")

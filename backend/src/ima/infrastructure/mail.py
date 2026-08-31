@@ -48,10 +48,10 @@ class MailService:
         message = EmailMessage()
         message["From"] = self.settings.smtp_from or ""
         message["To"] = email
-        message["Subject"] = "Your Intranet IMA invitation"
+        message["Subject"] = "Your Intranet IMA account invitation"
         message.set_content(
-            f"Accept your invitation: {self.settings.public_origin}/api/v1/"
-            f"workspace-invitations/{token}/accept\n"
+            f"Set up your account: {self.settings.public_origin}/auth/accept-invite?"
+            f"token={token}\n"
             "The invitation expires in two days."
         )
         await aiosmtplib.send(

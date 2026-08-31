@@ -89,7 +89,7 @@ class ContentRow(ContractModel):
     title: str
     order_key: int = Field(alias="orderKey")
     version: int
-    lifecycle: Literal["active", "trashed"]
+    lifecycle: Literal["active"]
     file_state: Literal["pending", "ready", "failed"] | None = Field(
         default=None, alias="fileState"
     )
@@ -119,20 +119,15 @@ class MoveRequest(ContractModel):
     expected_version: int = Field(alias="expectedVersion", gt=0)
 
 
-class LifecycleRequest(ContractModel):
-    expected_version: int = Field(alias="expectedVersion", gt=0)
-    destination_folder_id: str | None = Field(default=None, alias="destinationFolderId")
-
-
 class DocumentResponse(ContractModel):
     id: UUID
-    workspace_id: str = Field(alias="workspaceId")
+    kb_id: str = Field(alias="kbId")
     folder_id: str = Field(alias="folderId")
     kind: Literal["file", "note"]
     title: str
     version: int
     current_content_version: int | None = Field(default=None, alias="currentContentVersion")
-    lifecycle: Literal["active", "trashed"]
+    lifecycle: Literal["active"]
     markdown: str | None = None
     file_state: Literal["pending", "ready", "failed"] = Field(alias="fileState")
     metadata: dict[str, object]
@@ -147,39 +142,3 @@ class VersionResponse(ContractModel):
     markdown: str | None = None
     digest: str
     created_at: datetime = Field(alias="createdAt")
-
-
-class TagResponse(ContractModel):
-    id: UUID
-    name: str
-    version: int
-    count: int = 0
-
-
-class TagCreateRequest(ContractModel):
-    name: str = Field(min_length=1, max_length=120)
-
-
-class TagPatchRequest(ContractModel):
-    name: str = Field(min_length=1, max_length=120)
-    expected_version: int = Field(alias="expectedVersion", gt=0)
-
-
-class TagDeleteRequest(ContractModel):
-    expected_version: int = Field(alias="expectedVersion", gt=0)
-
-
-class TagMergeRequest(ContractModel):
-    target_tag_id: UUID = Field(alias="targetTagId")
-    expected_version: int = Field(alias="expectedVersion", gt=0)
-    expected_target_version: int = Field(alias="expectedTargetVersion", gt=0)
-
-
-class TagAssignmentRequest(ContractModel):
-    tag_ids: tuple[UUID, ...] = Field(alias="tagIds")
-    expected_version: int = Field(alias="expectedVersion", gt=0)
-
-
-class TrashPage(ContractModel):
-    items: tuple[ContentRow, ...]
-    next_cursor: str | None = Field(default=None, alias="nextCursor")

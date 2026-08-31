@@ -556,7 +556,7 @@ async def test_existing_assignment_with_missing_model_is_denied_not_unassigned()
     service = ModelGovernanceService.__new__(ModelGovernanceService)
     service.engine = Engine()
     result = await service._execution_target(
-        "workspace-1", Workflow.TITLE_GENERATION, "chat", decrypt_secret=False
+        "kb-1", Workflow.TITLE_GENERATION, "chat", decrypt_secret=False
     )
     assert result == {
         "profile_id": "profile-1",

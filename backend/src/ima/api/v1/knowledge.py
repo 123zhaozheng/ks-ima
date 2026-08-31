@@ -18,17 +18,9 @@ from ima.api.v1.knowledge_contracts import (
     FileVersionPage,
     IngestionStatusResponse,
     KnowledgeCapabilities,
-    LifecycleRequest,
     MoveRequest,
     NoteCreateRequest,
     ReplaceFileRequest,
-    TagAssignmentRequest,
-    TagCreateRequest,
-    TagDeleteRequest,
-    TagMergeRequest,
-    TagPatchRequest,
-    TagResponse,
-    TrashPage,
     UploadCompleteRequest,
     UploadTicketRequest,
     UploadTicketResponse,
@@ -49,12 +41,12 @@ def storage(request: Request) -> StorageService:
 
 
 @router.get(
-    "/workspaces/{workspace_id}/knowledge-capabilities",
+    "/knowledge-bases/{kb_id}/knowledge-capabilities",
     response_model=KnowledgeCapabilities,
     operation_id="getKnowledgeCapabilities",
 )
-async def capabilities(workspace_id: str, request: Request, current: Current) -> dict[str, object]:
-    return await storage(request).capabilities(current[1].id, workspace_id)
+async def capabilities(kb_id: str, request: Request, current: Current) -> dict[str, object]:
+    return await storage(request).capabilities(current[1].id, kb_id)
 
 
 @router.post(
@@ -187,11 +179,8 @@ async def contents(
     cursor: str | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     kind: Annotated[str | None, Query(pattern="^(folder|file|note)$")] = None,
-    tag_id: Annotated[UUID | None, Query(alias="tagId")] = None,
 ) -> dict[str, object]:
-    return await service(request).list_contents(
-        current[1].id, folder_id, cursor, limit, kind, tag_id
-    )
+    return await service(request).list_contents(current[1].id, folder_id, cursor, limit, kind)
 
 
 @router.post(
@@ -249,30 +238,6 @@ async def move_document(
     )
 
 
-@router.post(
-    "/documents/{document_id}/trash", status_code=204, operation_id="trashKnowledgeDocument"
-)
-async def trash_document(
-    document_id: UUID, payload: LifecycleRequest, request: Request, current: Current
-) -> None:
-    session, actor = current
-    check_csrf(request, session)
-    await service(request).trash_document(actor.id, document_id, payload.expected_version)
-
-
-@router.post(
-    "/documents/{document_id}/restore", status_code=204, operation_id="restoreKnowledgeDocument"
-)
-async def restore_document(
-    document_id: UUID, payload: LifecycleRequest, request: Request, current: Current
-) -> None:
-    session, actor = current
-    check_csrf(request, session)
-    await service(request).restore_document(
-        actor.id, document_id, payload.expected_version, payload.destination_folder_id
-    )
-
-
 @router.delete("/documents/{document_id}", status_code=204, operation_id="deleteKnowledgeDocument")
 async def delete_document(document_id: UUID, request: Request, current: Current) -> None:
     session, actor = current
@@ -326,101 +291,3 @@ async def restore_version(
     return await service(request).restore_version(
         actor.id, document_id, version, payload.expected_version
     )
-
-
-@router.get(
-    "/workspaces/{workspace_id}/tags",
-    response_model=tuple[TagResponse, ...],
-    operation_id="listKnowledgeTags",
-)
-async def list_tags(
-    workspace_id: str, request: Request, current: Current
-) -> list[dict[str, object]]:
-    return await service(request).list_tags(current[1].id, workspace_id)
-
-
-@router.post(
-    "/workspaces/{workspace_id}/tags", response_model=TagResponse, operation_id="createKnowledgeTag"
-)
-async def create_tag(
-    workspace_id: str, payload: TagCreateRequest, request: Request, current: Current
-) -> dict[str, object]:
-    session, actor = current
-    check_recent_auth(request, session)
-    check_csrf(request, session)
-    return await service(request).create_tag(actor.id, workspace_id, payload.name)
-
-
-@router.patch(
-    "/workspaces/{workspace_id}/tags/{tag_id}",
-    response_model=TagResponse,
-    operation_id="updateKnowledgeTag",
-)
-async def update_tag(
-    workspace_id: str, tag_id: UUID, payload: TagPatchRequest, request: Request, current: Current
-) -> dict[str, object]:
-    session, actor = current
-    check_recent_auth(request, session)
-    check_csrf(request, session)
-    return await service(request).patch_tag(
-        actor.id, workspace_id, tag_id, payload.name, payload.expected_version
-    )
-
-
-@router.delete(
-    "/workspaces/{workspace_id}/tags/{tag_id}", status_code=204, operation_id="deleteKnowledgeTag"
-)
-async def delete_tag(
-    workspace_id: str, tag_id: UUID, payload: TagDeleteRequest, request: Request, current: Current
-) -> None:
-    session, actor = current
-    check_recent_auth(request, session)
-    check_csrf(request, session)
-    await service(request).delete_tag(actor.id, workspace_id, tag_id, payload.expected_version)
-
-
-@router.post(
-    "/workspaces/{workspace_id}/tags/{tag_id}/merge",
-    status_code=204,
-    operation_id="mergeKnowledgeTag",
-)
-async def merge_tag(
-    workspace_id: str, tag_id: UUID, payload: TagMergeRequest, request: Request, current: Current
-) -> None:
-    session, actor = current
-    check_recent_auth(request, session)
-    check_csrf(request, session)
-    await service(request).merge_tag(
-        actor.id,
-        workspace_id,
-        tag_id,
-        payload.target_tag_id,
-        payload.expected_version,
-        payload.expected_target_version,
-    )
-
-
-@router.put(
-    "/documents/{document_id}/tags", status_code=204, operation_id="replaceKnowledgeDocumentTags"
-)
-async def replace_tags(
-    document_id: UUID, payload: TagAssignmentRequest, request: Request, current: Current
-) -> None:
-    session, actor = current
-    check_csrf(request, session)
-    await service(request).assign_tags(
-        actor.id, document_id, payload.tag_ids, payload.expected_version
-    )
-
-
-@router.get(
-    "/workspaces/{workspace_id}/trash", response_model=TrashPage, operation_id="listKnowledgeTrash"
-)
-async def trash(
-    workspace_id: str,
-    request: Request,
-    current: Current,
-    cursor: str | None = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
-) -> dict[str, object]:
-    return await service(request).list_trash(current[1].id, workspace_id, cursor, limit)

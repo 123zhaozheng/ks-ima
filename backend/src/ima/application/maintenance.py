@@ -13,18 +13,17 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from ima.domain.authorization import AclAction
+from ima.domain.authorization import KbAction
 
 MAINTENANCE_WRITE_FREEZE = "MAINTENANCE_WRITE_FREEZE"
 
-#: ACL actions that mutate knowledge/state and must be refused during freeze.
+#: Knowledge actions that mutate state and must be refused during freeze.
 MUTATING_ACTIONS = frozenset(
     {
-        AclAction.CREATE_CHILD,
-        AclAction.EDIT,
-        AclAction.MOVE,
-        AclAction.DELETE,
-        AclAction.MANAGE_ACL,
+        KbAction.CREATE_CHILD,
+        KbAction.EDIT,
+        KbAction.MOVE,
+        KbAction.DELETE,
     }
 )
 
@@ -52,8 +51,8 @@ async def assert_writes_allowed(conn: AsyncConnection) -> None:
         raise MaintenanceFreezeError()
 
 
-async def assert_mutation_allowed(conn: AsyncConnection, action: AclAction) -> None:
-    """Refuse mutating ACL actions while the freeze is active; reads pass."""
+async def assert_mutation_allowed(conn: AsyncConnection, action: KbAction) -> None:
+    """Refuse mutating knowledge actions while the freeze is active; reads pass."""
     if action in MUTATING_ACTIONS:
         await assert_writes_allowed(conn)
 

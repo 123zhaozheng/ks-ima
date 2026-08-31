@@ -19,11 +19,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
-from ima.application.authorization import WorkspaceService
 from ima.application.knowledge import KnowledgeError, KnowledgeService
 from ima.config import Settings
-from ima.domain.authorization import AclAction
 from ima.infrastructure.db.engine import create_engine
+from ima.infrastructure.tasks.service import JobService
 
 DATABASE_URL = os.environ.get("IMA_TEST_DATABASE_URL")
 SYNC_URL = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://") if DATABASE_URL else None
@@ -55,58 +54,37 @@ def settings() -> Settings:
     )
 
 
-async def context(label: str) -> tuple[object, KnowledgeService, str, str, str]:
-    """Create an isolated workspace and users, cleaning a prior interrupted run."""
+async def context(label: str) -> tuple[object, KnowledgeService, str, str, str, str]:
+    """Create an isolated knowledge base and members, cleaning a prior run."""
     engine = create_engine(settings())
-    workspace_service = WorkspaceService(engine, settings())
     digest = hashlib.sha256(label.encode()).hexdigest()[:16]
     actor = f"knowledge-{digest}-a"
+    editor = f"knowledge-{digest}-e"
     viewer = f"knowledge-{digest}-v"
     stamp = datetime.now(UTC)
+    kb_id = uuid4().hex
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                """DELETE FROM ima.document_tags WHERE document_id IN
-                (SELECT id FROM ima.documents WHERE workspace_id IN
-                 (SELECT id FROM ima.workspaces WHERE created_by IN (:actor,:viewer)))"""
-            ),
-            {"actor": actor, "viewer": viewer},
-        )
-        await conn.execute(
-            text(
                 """DELETE FROM ima.document_versions WHERE document_id IN
-                (SELECT id FROM ima.documents WHERE workspace_id IN
-                 (SELECT id FROM ima.workspaces WHERE created_by IN (:actor,:viewer)))"""
+                (SELECT id FROM ima.documents WHERE kb_id IN
+                 (SELECT id FROM ima.knowledge_bases WHERE created_by IN (:actor,:editor,:viewer)))"""
             ),
-            {"actor": actor, "viewer": viewer},
+            {"actor": actor, "editor": editor, "viewer": viewer},
         )
         await conn.execute(
-            text(
-                """DELETE FROM ima.documents WHERE workspace_id IN
-                (SELECT id FROM ima.workspaces WHERE created_by IN (:actor,:viewer))"""
-            ),
-            {"actor": actor, "viewer": viewer},
+            text("DELETE FROM ima.knowledge_bases WHERE created_by IN (:actor,:editor,:viewer)"),
+            {"actor": actor, "editor": editor, "viewer": viewer},
         )
         await conn.execute(
-            text("DELETE FROM ima.workspaces WHERE created_by IN (:actor,:viewer)"),
-            {"actor": actor, "viewer": viewer},
+            text("DELETE FROM ima.audit_events WHERE actor_id IN (:actor,:editor,:viewer)"),
+            {"actor": actor, "editor": editor, "viewer": viewer},
         )
         await conn.execute(
-            text("DELETE FROM ima.audit_events WHERE actor_id IN (:actor,:viewer)"),
-            {"actor": actor, "viewer": viewer},
+            text("DELETE FROM ima.users WHERE id IN (:actor,:editor,:viewer)"),
+            {"actor": actor, "editor": editor, "viewer": viewer},
         )
-        await conn.execute(
-            text("DELETE FROM ima.platform_role_assignments WHERE user_id IN (:actor,:viewer)"),
-            {"actor": actor, "viewer": viewer},
-        )
-        await conn.execute(
-            text("DELETE FROM ima.users WHERE id IN (:actor,:viewer)"),
-            {"actor": actor, "viewer": viewer},
-        )
-        for user_id, email in (
-            (actor, f"{actor}@example.test"),
-            (viewer, f"{viewer}@example.test"),
-        ):
+        for user_id in (actor, editor, viewer):
             await conn.execute(
                 text(
                     """INSERT INTO ima.users
@@ -114,57 +92,65 @@ async def context(label: str) -> tuple[object, KnowledgeService, str, str, str]:
                      security_stamp,created_at,updated_at)
                     VALUES (:id,:email,:email,:id,true,false,:stamp,:now,:now)"""
                 ),
-                {"id": user_id, "email": email, "stamp": user_id, "now": stamp},
+                {"id": user_id, "email": f"{user_id}@example.test", "stamp": user_id, "now": stamp},
             )
         await conn.execute(
             text(
-                "INSERT INTO ima.platform_role_assignments(user_id,role,created_at) VALUES (:id,'platform_admin',:now)"
+                """INSERT INTO ima.knowledge_bases(id,name,is_active,created_by,created_at,updated_at)
+                VALUES (:kb,:name,true,:actor,:now,:now)"""
             ),
-            {"id": actor, "now": stamp},
+            {"kb": kb_id, "name": f"Knowledge {label}", "actor": actor, "now": stamp},
         )
-    workspace = await workspace_service.create_workspace(actor, f"Knowledge {label}", actor)
-    workspace_id = str(workspace["id"])
-    async with engine.begin() as conn:
+        for user_id, role in ((actor, "owner"), (editor, "editor"), (viewer, "viewer")):
+            await conn.execute(
+                text(
+                    """INSERT INTO ima.kb_members(kb_id,user_id,role,state,version,joined_at)
+                    VALUES (:kb,:user,:role,'active',1,:now)"""
+                ),
+                {"kb": kb_id, "user": user_id, "role": role, "now": stamp},
+            )
         await conn.execute(
             text(
-                """INSERT INTO ima.workspace_members
-                (workspace_id,user_id,role,state,joined_at,updated_at)
-                VALUES (:workspace,:viewer,'viewer','active',:now,:now)"""
+                """INSERT INTO ima.folders
+                (id,kb_id,parent_id,name,normalized_name,order_key,lifecycle,version,is_root,
+                 created_by,created_at,updated_at)
+                VALUES (:kb,:kb,NULL,'Knowledge','knowledge',0,'active',1,true,:actor,:now,:now)"""
             ),
-            {"workspace": workspace_id, "viewer": viewer, "now": stamp},
+            {"kb": kb_id, "actor": actor, "now": stamp},
         )
-    return engine, KnowledgeService(engine, workspace_service), workspace_id, actor, viewer
+        await conn.execute(
+            text(
+                """INSERT INTO ima.folder_closure(kb_id,ancestor_id,descendant_id,depth)
+                VALUES (:kb,:kb,:kb,0)"""
+            ),
+            {"kb": kb_id},
+        )
+    return (
+        engine,
+        KnowledgeService(engine, JobService(settings(), engine)),
+        kb_id,
+        actor,
+        editor,
+        viewer,
+    )
 
 
-async def close_context(engine: object, workspace_id: str, actor: str, viewer: str) -> None:
+async def close_context(engine: object, kb_id: str, actor: str, editor: str, viewer: str) -> None:
     async with engine.begin() as conn:  # type: ignore[attr-defined]
         await conn.execute(
             text(
-                "DELETE FROM ima.document_tags WHERE document_id IN (SELECT id FROM ima.documents WHERE workspace_id=:id)"
+                "DELETE FROM ima.document_versions WHERE document_id IN (SELECT id FROM ima.documents WHERE kb_id=:kb)"
             ),
-            {"id": workspace_id},
+            {"kb": kb_id},
+        )
+        await conn.execute(text("DELETE FROM ima.knowledge_bases WHERE id=:kb"), {"kb": kb_id})
+        await conn.execute(
+            text("DELETE FROM ima.audit_events WHERE actor_id IN (:actor,:editor,:viewer)"),
+            {"actor": actor, "editor": editor, "viewer": viewer},
         )
         await conn.execute(
-            text(
-                "DELETE FROM ima.document_versions WHERE document_id IN (SELECT id FROM ima.documents WHERE workspace_id=:id)"
-            ),
-            {"id": workspace_id},
-        )
-        await conn.execute(
-            text("DELETE FROM ima.documents WHERE workspace_id=:id"), {"id": workspace_id}
-        )
-        await conn.execute(text("DELETE FROM ima.workspaces WHERE id=:id"), {"id": workspace_id})
-        await conn.execute(
-            text("DELETE FROM ima.audit_events WHERE actor_id IN (:actor,:viewer)"),
-            {"actor": actor, "viewer": viewer},
-        )
-        await conn.execute(
-            text("DELETE FROM ima.platform_role_assignments WHERE user_id IN (:actor,:viewer)"),
-            {"actor": actor, "viewer": viewer},
-        )
-        await conn.execute(
-            text("DELETE FROM ima.users WHERE id IN (:actor,:viewer)"),
-            {"actor": actor, "viewer": viewer},
+            text("DELETE FROM ima.users WHERE id IN (:actor,:editor,:viewer)"),
+            {"actor": actor, "editor": editor, "viewer": viewer},
         )
     await engine.dispose()  # type: ignore[attr-defined]
 
@@ -185,11 +171,16 @@ def test_knowledge_migration_is_fresh_and_repeatable() -> None:
         for table in (
             "documents",
             "document_versions",
-            "tags",
-            "document_tags",
+            "knowledge_bases",
+            "kb_members",
             "legacy_knowledge_migration",
         ):
             assert connection.execute("SELECT to_regclass(%s)", (f"ima.{table}",)).fetchone()[0]
+        for removed in ("tags", "document_tags", "workspaces", "workspace_members"):
+            assert (
+                connection.execute("SELECT to_regclass(%s)", (f"ima.{removed}",)).fetchone()[0]
+                is None
+            )
         assert connection.execute(
             "SELECT 1 FROM pg_trigger WHERE tgname='trg_document_version_immutable'"
         ).fetchone()
@@ -198,9 +189,9 @@ def test_knowledge_migration_is_fresh_and_repeatable() -> None:
 @pytest.mark.postgres
 @pytest.mark.asyncio
 async def test_document_versions_are_immutable() -> None:
-    engine, service, workspace_id, actor, viewer = await context("immutable")
+    engine, service, kb_id, actor, editor, viewer = await context("immutable")
     try:
-        note = await service.create_note(actor, workspace_id, "Immutable", "# first")
+        note = await service.create_note(actor, kb_id, "Immutable", "# first")
         with pytest.raises(DBAPIError, match="immutable"):
             async with engine.begin() as conn:  # type: ignore[attr-defined]
                 await conn.execute(
@@ -220,15 +211,15 @@ async def test_document_versions_are_immutable() -> None:
                 == "# first"
             )
     finally:
-        await close_context(engine, workspace_id, actor, viewer)
+        await close_context(engine, kb_id, actor, editor, viewer)
 
 
 @pytest.mark.postgres
 @pytest.mark.asyncio
 async def test_concurrent_note_edits_return_one_typed_conflict() -> None:
-    engine, service, workspace_id, actor, viewer = await context("concurrent")
+    engine, service, kb_id, actor, editor, viewer = await context("concurrent")
     try:
-        note = await service.create_note(actor, workspace_id, "Concurrent", "one")
+        note = await service.create_note(actor, kb_id, "Concurrent", "one")
 
         async def edit(markdown: str) -> object:
             try:
@@ -250,13 +241,13 @@ async def test_concurrent_note_edits_return_one_typed_conflict() -> None:
         assert conflicts[0].code == "VERSION_CONFLICT"
         assert all(not isinstance(result, DBAPIError) for result in results)
     finally:
-        await close_context(engine, workspace_id, actor, viewer)
+        await close_context(engine, kb_id, actor, editor, viewer)
 
 
 @pytest.mark.postgres
 @pytest.mark.asyncio
 async def test_101_siblings_have_stable_cursor_and_stale_listing_conflict() -> None:
-    engine, service, workspace_id, actor, viewer = await context("pagination")
+    engine, service, kb_id, actor, editor, viewer = await context("pagination")
     try:
         now = datetime.now(UTC)
         async with engine.begin() as conn:  # type: ignore[attr-defined]
@@ -264,15 +255,15 @@ async def test_101_siblings_have_stable_cursor_and_stale_listing_conflict() -> N
                 await conn.execute(
                     text(
                         """INSERT INTO ima.documents
-                        (id,workspace_id,folder_id,kind,title,normalized_title,order_key,
+                        (id,kb_id,folder_id,kind,title,normalized_title,order_key,
                          current_version,created_by,updated_by,created_at,updated_at)
-                        VALUES (:id,:workspace,:folder,'file',:title,:normalized,:order_key,
+                        VALUES (:id,:kb,:folder,'file',:title,:normalized,:order_key,
                                 NULL,:actor,:actor,:now,:now)"""
                     ),
                     {
                         "id": uuid4(),
-                        "workspace": workspace_id,
-                        "folder": workspace_id,
+                        "kb": kb_id,
+                        "folder": kb_id,
                         "title": f"Sibling {index:03}",
                         "normalized": f"sibling {index:03}",
                         "order_key": index,
@@ -280,200 +271,88 @@ async def test_101_siblings_have_stable_cursor_and_stale_listing_conflict() -> N
                         "now": now,
                     },
                 )
-        folder_only = await service.list_contents(actor, workspace_id, None, 100, kind="folder")
+        folder_only = await service.list_contents(actor, kb_id, None, 100, kind="folder")
         assert folder_only["items"] == []
-        file_only = await service.list_contents(actor, workspace_id, None, 100, kind="file")
+        file_only = await service.list_contents(actor, kb_id, None, 100, kind="file")
         assert len(file_only["items"]) == 100
         assert all(item["kind"] == "file" for item in file_only["items"])
-        first = await service.list_contents(actor, workspace_id, None, 100)
+        first = await service.list_contents(actor, kb_id, None, 100)
         assert len(first["items"]) == 100
         assert first["nextCursor"]
-        second = await service.list_contents(actor, workspace_id, first["nextCursor"], 100)
+        second = await service.list_contents(actor, kb_id, first["nextCursor"], 100)
         assert len(second["items"]) == 1
-        await service.create_note(actor, workspace_id, "After page", "changed")
+        await service.create_note(actor, kb_id, "After page", "changed")
         with pytest.raises(KnowledgeError) as stale:
-            await service.list_contents(actor, workspace_id, first["nextCursor"], 100)
+            await service.list_contents(actor, kb_id, first["nextCursor"], 100)
         assert stale.value.code == "LISTING_CHANGED"
     finally:
-        await close_context(engine, workspace_id, actor, viewer)
+        await close_context(engine, kb_id, actor, editor, viewer)
 
 
 @pytest.mark.postgres
 @pytest.mark.asyncio
-async def test_acl_hides_document_tag_and_trash_metadata() -> None:
-    engine, service, workspace_id, actor, viewer = await context("privacy")
+async def test_member_role_is_the_single_authorization_vote() -> None:
+    engine, service, kb_id, actor, editor, viewer = await context("membership")
+    outsider = f"knowledge-outsider-{uuid4().hex[:8]}"
     try:
-        private = await WorkspaceService(engine, settings()).create_folder(
-            actor, workspace_id, workspace_id, "Private"
-        )
-        entries = [
-            {"subject_type": "role", "subject_id": "workspace_admin", "action": action.value}
-            for action in AclAction
-        ]
-        await WorkspaceService(engine, settings()).set_acl(
-            actor, workspace_id, private["id"], inherit=False, entries=entries
-        )
-        note = await service.create_note(actor, private["id"], "Hidden note", "secret")
-        tag = await service.create_tag(actor, workspace_id, "Restricted")
-        await service.assign_tags(
-            actor, UUID(str(note["id"])), (UUID(str(tag["id"])),), int(note["version"])
-        )
-        await service.trash_document(actor, UUID(str(note["id"])), int(note["version"]) + 1)
-        with pytest.raises(KnowledgeError) as hidden:
-            await service.get_document(viewer, UUID(str(note["id"])))
-        assert hidden.value.code == "DOCUMENT_NOT_FOUND"
-        assert all(
-            item["id"] != tag["id"] for item in await service.list_tags(viewer, workspace_id)
-        )
-        assert all(
-            item["id"] != str(note["id"])
-            for item in (await service.list_trash(viewer, workspace_id, None, 50))["items"]
-        )
+        note = await service.create_note(actor, kb_id, "Shared", "visible to members")
+        document_id = UUID(str(note["id"]))
+        # Viewer: read-only membership grants the whole tree, never writes.
+        assert (await service.get_document(viewer, document_id))["kbId"] == kb_id
+        assert (await service.list_contents(viewer, kb_id, None, 50))["items"]
+        with pytest.raises(KnowledgeError) as viewer_write:
+            await service.create_note(viewer, kb_id, "Viewer note", "denied")
+        assert viewer_write.value.code == "KB_NOT_FOUND"
+        with pytest.raises(KnowledgeError) as viewer_delete:
+            await service.delete_document(viewer, document_id)
+        assert viewer_delete.value.code == "KB_NOT_FOUND"
+        # Editor: writes allowed through the same membership decision.
+        created = await service.create_note(editor, kb_id, "Editor note", "allowed")
+        assert created["kbId"] == kb_id
+        # Non-member: every action is refused as not found.
+        with pytest.raises(KnowledgeError) as outsider_read:
+            await service.get_document(outsider, document_id)
+        assert outsider_read.value.code == "KB_NOT_FOUND"
+        with pytest.raises(KnowledgeError) as outsider_list:
+            await service.list_contents(outsider, kb_id, None, 50)
+        assert outsider_list.value.code == "KB_NOT_FOUND"
     finally:
-        await close_context(engine, workspace_id, actor, viewer)
+        await close_context(engine, kb_id, actor, editor, viewer)
 
 
 @pytest.mark.postgres
 @pytest.mark.asyncio
-async def test_unicode_tags_normalize_assign_and_enforce_role() -> None:
-    engine, service, workspace_id, actor, viewer = await context("tags")
+async def test_delete_document_is_immediate_and_physical() -> None:
+    engine, service, kb_id, actor, editor, viewer = await context("delete")
     try:
-        note = await service.create_note(actor, workspace_id, "Tagged", "text")
-        tag = await service.create_tag(actor, workspace_id, "  Café  ")
-        with pytest.raises(KnowledgeError) as duplicate:
-            await service.create_tag(actor, workspace_id, "CAFE\u0301")
-        assert duplicate.value.code == "NAME_CONFLICT"
-        await service.assign_tags(
-            actor, UUID(str(note["id"])), (UUID(str(tag["id"])),), int(note["version"])
-        )
-        listed = await service.list_tags(viewer, workspace_id)
-        assert [(item["name"], item["count"]) for item in listed] == [("Café", 1)]
-        with pytest.raises(KnowledgeError) as forbidden:
-            await service.create_tag(viewer, workspace_id, "viewer-owned")
-        assert forbidden.value.code == "TAG_FORBIDDEN"
-    finally:
-        await close_context(engine, workspace_id, actor, viewer)
-
-
-@pytest.mark.postgres
-@pytest.mark.asyncio
-async def test_tag_merge_and_delete_are_versioned_and_dependency_safe() -> None:
-    engine, service, workspace_id, actor, viewer = await context("tag-lifecycle")
-    try:
-        note = await service.create_note(actor, workspace_id, "Merge target", "text")
-        source = await service.create_tag(actor, workspace_id, "Source")
-        target = await service.create_tag(actor, workspace_id, "Target")
-        await service.assign_tags(
-            actor, UUID(str(note["id"])), (UUID(str(source["id"])),), int(note["version"])
-        )
-        with pytest.raises(KnowledgeError) as dependent:
-            await service.delete_tag(actor, workspace_id, UUID(str(source["id"])), 1)
-        assert dependent.value.code == "DEPENDENCY_EXISTS"
-        await service.merge_tag(
-            actor,
-            workspace_id,
-            UUID(str(source["id"])),
-            UUID(str(target["id"])),
-            1,
-            1,
-        )
+        note = await service.create_note(actor, kb_id, "Deleted", "gone")
+        document_id = UUID(str(note["id"]))
+        await service.delete_document(actor, document_id)
         async with engine.connect() as conn:  # type: ignore[attr-defined]
             assert (
                 await conn.scalar(
-                    text(
-                        "SELECT count(*) FROM ima.document_tags WHERE document_id=:document AND tag_id=:tag"
-                    ),
-                    {"document": note["id"], "tag": target["id"]},
+                    text("SELECT count(*) FROM ima.documents WHERE id=:id"),
+                    {"id": document_id},
                 )
-                == 1
+                == 0
             )
-        with pytest.raises(KnowledgeError) as hidden_source:
-            await service.delete_tag(actor, workspace_id, UUID(str(source["id"])), 2)
-        assert hidden_source.value.code == "TAG_NOT_FOUND"
-        with pytest.raises(KnowledgeError) as stale:
-            await service.delete_tag(actor, workspace_id, UUID(str(target["id"])), 2)
-        assert stale.value.code == "VERSION_CONFLICT"
-        other = await service.create_tag(actor, workspace_id, "Other")
-        with pytest.raises(KnowledgeError) as viewer_forbidden:
-            await service.merge_tag(
-                viewer,
-                workspace_id,
-                UUID(str(target["id"])),
-                UUID(str(other["id"])),
-                1,
-                1,
+            assert (
+                await conn.scalar(
+                    text("SELECT count(*) FROM ima.document_versions WHERE document_id=:id"),
+                    {"id": document_id},
+                )
+                == 0
             )
-        assert viewer_forbidden.value.code == "TAG_FORBIDDEN"
+        with pytest.raises(KnowledgeError) as gone:
+            await service.delete_document(actor, document_id)
+        assert gone.value.code == "DOCUMENT_NOT_FOUND"
     finally:
-        await close_context(engine, workspace_id, actor, viewer)
+        await close_context(engine, kb_id, actor, editor, viewer)
 
 
 @pytest.mark.postgres
-@pytest.mark.asyncio
-async def test_mixed_trash_lists_files_and_notes_and_restricts_version_delete() -> None:
-    engine, service, workspace_id, actor, viewer = await context("trash")
-    try:
-        note = await service.create_note(actor, workspace_id, "Trash note", "kept")
-        file_id = uuid4()
-        async with engine.begin() as conn:  # type: ignore[attr-defined]
-            await conn.execute(
-                text(
-                    """INSERT INTO ima.documents
-                    (id,workspace_id,folder_id,kind,title,normalized_title,file_state,
-                     created_by,updated_by,created_at,updated_at)
-                    VALUES (:id,:workspace,:folder,'file','Trash file','trash file','pending',:actor,:actor,:now,:now)"""
-                ),
-                {
-                    "id": file_id,
-                    "workspace": workspace_id,
-                    "folder": workspace_id,
-                    "actor": actor,
-                    "now": datetime.now(UTC),
-                },
-            )
-        await service.trash_document(actor, UUID(str(note["id"])), int(note["version"]))
-        await service.trash_document(actor, file_id, 1)
-        kinds = {
-            item["kind"]
-            for item in (await service.list_trash(actor, workspace_id, None, 50))["items"]
-        }
-        assert {"note", "file"} <= kinds
-        with pytest.raises(KnowledgeError) as dependency:
-            await service.delete_document(actor, UUID(str(note["id"])))
-        assert dependency.value.code == "DEPENDENCY_EXISTS"
-        await service.delete_document(actor, file_id)
-    finally:
-        await close_context(engine, workspace_id, actor, viewer)
-
-
-@pytest.mark.postgres
-@pytest.mark.asyncio
-async def test_trash_paginates_and_hides_versions_for_trashed_documents() -> None:
-    engine, service, workspace_id, actor, viewer = await context("trash-pagination")
-    try:
-        documents = [
-            await service.create_note(actor, workspace_id, f"Trash {index}", "hidden")
-            for index in range(3)
-        ]
-        for document in documents:
-            await service.trash_document(actor, UUID(str(document["id"])), int(document["version"]))
-        first = await service.list_trash(actor, workspace_id, None, 2)
-        assert len(first["items"]) == 2
-        assert first["nextCursor"]
-        second = await service.list_trash(actor, workspace_id, first["nextCursor"], 2)
-        assert len(second["items"]) == 1
-        assert {item["id"] for item in first["items"]}.isdisjoint(
-            item["id"] for item in second["items"]
-        )
-        with pytest.raises(KnowledgeError) as hidden:
-            await service.list_versions(viewer, UUID(str(documents[0]["id"])))
-        assert hidden.value.code == "DOCUMENT_NOT_FOUND"
-        active = await service.create_note(actor, workspace_id, "Active", "visible")
-        with pytest.raises(KnowledgeError) as active_delete:
-            await service.delete_document(actor, UUID(str(active["id"])))
-        assert active_delete.value.code == "VERSION_CONFLICT"
-    finally:
-        await close_context(engine, workspace_id, actor, viewer)
+def test_legacy_knowledge_checkpoint_table_is_repeatable() -> None:
+    migrate()
     assert SYNC_URL
     source_id = f"knowledge-checkpoint-{uuid4().hex[:12]}"
     with psycopg.connect(SYNC_URL) as connection:

@@ -1,4 +1,4 @@
-"""Stable knowledge documents, immutable note versions, tags, and migration checkpoints."""
+"""Stable knowledge documents, immutable note versions, and migration checkpoints."""
 
 # SQL statements remain readable as complete migration blocks.
 # ruff: noqa: E501
@@ -18,28 +18,26 @@ def upgrade() -> None:
 
         CREATE TABLE IF NOT EXISTS ima.documents (
           id uuid PRIMARY KEY,
-          workspace_id varchar(32) NOT NULL REFERENCES ima.workspaces(id) ON DELETE CASCADE,
+          kb_id varchar(32) NOT NULL REFERENCES ima.knowledge_bases(id) ON DELETE CASCADE,
           folder_id varchar(32) NOT NULL,
           kind varchar(16) NOT NULL CHECK(kind IN ('file','note')),
           title varchar(200) NOT NULL,
           normalized_title varchar(200) NOT NULL,
           order_key integer NOT NULL DEFAULT 0,
-          lifecycle varchar(16) NOT NULL DEFAULT 'active' CHECK(lifecycle IN ('active','trashed')),
-          original_folder_id varchar(32),
+          lifecycle varchar(16) NOT NULL DEFAULT 'active' CHECK(lifecycle='active'),
           version integer NOT NULL DEFAULT 1 CHECK(version > 0),
           current_version integer,
           file_state varchar(16) NOT NULL DEFAULT 'pending' CHECK(file_state IN ('pending','ready','failed')),
           mime_type varchar(255), size_bytes bigint CHECK(size_bytes IS NULL OR size_bytes >= 0),
           checksum varchar(128), storage_key varchar(1024),
           created_by varchar(32) REFERENCES ima.users(id), updated_by varchar(32) REFERENCES ima.users(id),
-          created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, trashed_at timestamptz,
-          UNIQUE(workspace_id,id),
-          FOREIGN KEY(workspace_id,folder_id) REFERENCES ima.folders(workspace_id,id) ON DELETE RESTRICT,
-          FOREIGN KEY(workspace_id,original_folder_id) REFERENCES ima.folders(workspace_id,id) ON DELETE RESTRICT
+          created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL,
+          UNIQUE(kb_id,id),
+          FOREIGN KEY(kb_id,folder_id) REFERENCES ima.folders(kb_id,id) ON DELETE RESTRICT
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS ux_documents_active_name
-          ON ima.documents(workspace_id,folder_id,kind,normalized_title) WHERE lifecycle='active';
-        CREATE INDEX IF NOT EXISTS ix_documents_folder ON ima.documents(workspace_id,folder_id,lifecycle,order_key,normalized_title,id);
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_documents_name
+          ON ima.documents(kb_id,folder_id,kind,normalized_title);
+        CREATE INDEX IF NOT EXISTS ix_documents_folder ON ima.documents(kb_id,folder_id,lifecycle,order_key,normalized_title,id);
 
         CREATE TABLE IF NOT EXISTS ima.document_versions (
           document_id uuid NOT NULL REFERENCES ima.documents(id) ON DELETE RESTRICT,
@@ -65,22 +63,6 @@ def upgrade() -> None:
         DROP TRIGGER IF EXISTS trg_document_version_immutable ON ima.document_versions;
         CREATE TRIGGER trg_document_version_immutable BEFORE UPDATE ON ima.document_versions
           FOR EACH ROW EXECUTE FUNCTION ima.reject_document_version_rewrite();
-
-        CREATE TABLE IF NOT EXISTS ima.tags (
-          id uuid PRIMARY KEY, workspace_id varchar(32) NOT NULL REFERENCES ima.workspaces(id) ON DELETE CASCADE,
-          name varchar(120) NOT NULL, normalized_name varchar(120) NOT NULL,
-          lifecycle varchar(16) NOT NULL DEFAULT 'active' CHECK(lifecycle IN ('active','disabled')),
-          version integer NOT NULL DEFAULT 1 CHECK(version > 0), created_by varchar(32) REFERENCES ima.users(id),
-          updated_by varchar(32) REFERENCES ima.users(id), created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS ux_tags_active_name ON ima.tags(workspace_id,normalized_name) WHERE lifecycle='active';
-        CREATE TABLE IF NOT EXISTS ima.document_tags (
-          document_id uuid NOT NULL REFERENCES ima.documents(id) ON DELETE RESTRICT,
-          tag_id uuid NOT NULL REFERENCES ima.tags(id) ON DELETE RESTRICT,
-          assigned_by varchar(32) REFERENCES ima.users(id), assigned_at timestamptz NOT NULL,
-          PRIMARY KEY(document_id,tag_id)
-        );
-        CREATE INDEX IF NOT EXISTS ix_document_tags_tag ON ima.document_tags(tag_id,document_id);
 
         CREATE TABLE IF NOT EXISTS ima.legacy_knowledge_migration (
           source_kind varchar(64) NOT NULL, source_id varchar(255) NOT NULL,
@@ -142,8 +124,6 @@ def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS ima.reject_document_version_rewrite()")
     for table in (
         "legacy_knowledge_migration",
-        "document_tags",
-        "tags",
         "document_versions",
         "documents",
     ):

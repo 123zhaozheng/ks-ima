@@ -171,7 +171,7 @@ async def register(payload: RegisterRequest, request: Request) -> IdentityUser:
     )[0]
 
 
-@router.post("/invitations/accept", response_model=IdentityUser, operation_id="authAcceptInvite")
+@router.post("/accept-invite", response_model=IdentityUser, operation_id="authAcceptInvite")
 async def accept_invite(payload: AcceptTokenRequest, request: Request) -> IdentityUser:
     check_pre_auth_origin(request)
     return await service(request).accept_invite(

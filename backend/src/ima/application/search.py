@@ -1,4 +1,4 @@
-"""ACL-first target retrieval and private grounded conversations."""
+"""Membership-gated target retrieval and private grounded conversations."""
 
 # ruff: noqa: E501
 
@@ -17,12 +17,11 @@ from uuid import UUID, uuid4
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from ima.application.authorization import WorkspaceService
+from ima.application.knowledge import effective_user_id, kb_membership, role_permits
 from ima.application.mcp_contracts import McpActor
 from ima.application.model_governance import ModelGovernanceError, ModelGovernanceService
-from ima.domain.authorization import AclAction
+from ima.domain.authorization import KbAction, KbRole
 from ima.domain.model_governance import GroundedAskConfig, Workflow, parse_profile_config
-from ima.infrastructure.db.authorization import accessible_folder_ids
 
 
 class SearchError(Exception):
@@ -67,21 +66,19 @@ def fuse_scores(
 
 
 class SearchService:
-    def __init__(
-        self, engine: AsyncEngine, workspace: WorkspaceService, models: ModelGovernanceService
-    ) -> None:
-        self.engine, self.workspace, self.models = engine, workspace, models
+    def __init__(self, engine: AsyncEngine, models: ModelGovernanceService) -> None:
+        self.engine, self.models = engine, models
 
-    async def _profile(self, conn: AsyncConnection, workspace_id: str) -> GroundedAskConfig:
+    async def _profile(self, conn: AsyncConnection, kb_id: str) -> GroundedAskConfig:
         row = (
             (
                 await conn.execute(
-                    text("""SELECT v.config FROM ima.workspace_profile_assignments a
+                    text("""SELECT v.config FROM ima.kb_profile_assignments a
                     JOIN ima.capability_profile_versions v ON v.profile_id=a.profile_id AND v.version=a.profile_version
                     JOIN ima.capability_profiles p ON p.id=a.profile_id
-                    WHERE a.workspace_id=:workspace AND a.workflow='grounded_ask'
+                    WHERE a.kb_id=:kb AND a.workflow='grounded_ask'
                       AND p.lifecycle='active' AND v.state='published'"""),
-                    {"workspace": workspace_id},
+                    {"kb": kb_id},
                 )
             )
             .mappings()
@@ -91,26 +88,23 @@ class SearchService:
             raise SearchError(409, "NO_ASSIGNMENT", "No grounded Ask profile is assigned")
         return cast(GroundedAskConfig, parse_profile_config(row["config"], Workflow.GROUNDED_ASK))
 
-    async def _folders(
+    async def _require_kb(
         self,
         conn: AsyncConnection,
         actor: str | McpActor,
-        workspace_id: str,
-        action: AclAction,
-    ) -> set[str]:
-        if isinstance(actor, McpActor):
-            folders = await self.workspace.delegated_folder_ids(conn, actor, workspace_id, action)
-            if not folders:
-                raise SearchError(404, "WORKSPACE_NOT_FOUND", "Workspace not found")
-            return folders
-        subject = (await self.workspace._require_member(conn, actor, workspace_id))["subject"]
-        folders = await accessible_folder_ids(conn, subject, action)
-        if not folders:
-            raise SearchError(404, "WORKSPACE_NOT_FOUND", "Workspace not found")
-        return folders
+        kb_id: str,
+        action: KbAction,
+    ) -> str:
+        """Require the actor's membership role to grant the action; return the kb name."""
+        user_id = await effective_user_id(conn, actor)
+        membership = await kb_membership(conn, user_id, kb_id) if user_id else None
+        if not role_permits(membership[0] if membership else None, action):
+            raise SearchError(404, "KB_NOT_FOUND", "Knowledge base not found")
+        assert membership is not None
+        return membership[1]
 
     async def _vector_target(
-        self, conn: AsyncConnection, workspace_id: str, config: GroundedAskConfig
+        self, conn: AsyncConnection, kb_id: str, config: GroundedAskConfig
     ) -> dict[str, Any]:
         if not config.embedding_model_id:
             raise SearchError(
@@ -121,10 +115,10 @@ class SearchService:
                 await conn.execute(
                     text("""SELECT i.*,m.embedding_dimension FROM ima.chunk_search_indexes i
                     JOIN ima.governed_models m ON m.id=i.model_id
-                    WHERE i.workspace_id=:workspace AND i.model_id=CAST(:model AS uuid)
+                    WHERE i.kb_id=:kb AND i.model_id=CAST(:model AS uuid)
                       AND i.model_version=m.version AND i.embedding_dimension=m.embedding_dimension
                       AND i.status='active'"""),
-                    {"workspace": workspace_id, "model": config.embedding_model_id},
+                    {"kb": kb_id, "model": config.embedding_model_id},
                 )
             )
             .mappings()
@@ -134,13 +128,14 @@ class SearchService:
             raise SearchError(409, "REINDEX_REQUIRED", "An exact active vector index is required")
         return dict(row)
 
-    async def build_vector_index(self, actor: str, workspace_id: str) -> dict[str, object]:
+    async def build_vector_index(self, actor: str, kb_id: str) -> dict[str, object]:
         """Build and atomically activate an exact-model HNSW index after source verification."""
         async with self.engine.begin() as conn:
-            membership = await self.workspace._require_member(conn, actor, workspace_id)
-            if membership["role"] != "workspace_admin":
-                raise SearchError(404, "WORKSPACE_NOT_FOUND", "Workspace not found")
-            config = await self._profile(conn, workspace_id)
+            user_id = await effective_user_id(conn, actor)
+            membership = await kb_membership(conn, user_id, kb_id) if user_id else None
+            if not membership or membership[0] != KbRole.OWNER.value:
+                raise SearchError(404, "KB_NOT_FOUND", "Knowledge base not found")
+            config = await self._profile(conn, kb_id)
             if not config.embedding_model_id:
                 raise SearchError(
                     409, "REINDEX_REQUIRED", "The grounded profile has no embedding assignment"
@@ -161,10 +156,10 @@ class SearchService:
             count = int(
                 await conn.scalar(
                     text("""SELECT count(*) FROM ima.document_chunks c JOIN ima.documents d ON d.id=c.document_id
-                    WHERE c.workspace_id=:workspace AND d.workspace_id=:workspace AND d.lifecycle='active' AND c.embedding_status='ready'
+                    WHERE c.kb_id=:kb AND d.kb_id=:kb AND d.lifecycle='active' AND c.embedding_status='ready'
                       AND c.model_id=:model AND c.model_version=:version AND c.embedding_dimension=:dimension"""),
                     {
-                        "workspace": workspace_id,
+                        "kb": kb_id,
                         "model": model["id"],
                         "version": model["version"],
                         "dimension": model["embedding_dimension"],
@@ -176,16 +171,14 @@ class SearchService:
                 raise SearchError(409, "REINDEX_REQUIRED", "No exact-model embeddings are ready")
             await conn.execute(
                 text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
-                {
-                    "key": f"{workspace_id}:{model['id']}:{model['version']}:{model['embedding_dimension']}"
-                },
+                {"key": f"{kb_id}:{model['id']}:{model['version']}:{model['embedding_dimension']}"},
             )
             building = await conn.scalar(
                 text("""SELECT EXISTS(SELECT 1 FROM ima.chunk_search_indexes
-                WHERE workspace_id=:workspace AND model_id=:model AND model_version=:version
+                WHERE kb_id=:kb AND model_id=:model AND model_version=:version
                   AND embedding_dimension=:dimension AND status='building')"""),
                 {
-                    "workspace": workspace_id,
+                    "kb": kb_id,
                     "model": model["id"],
                     "version": model["version"],
                     "dimension": model["embedding_dimension"],
@@ -198,9 +191,9 @@ class SearchService:
             generation = int(
                 await conn.scalar(
                     text("""SELECT COALESCE(max(generation),0)+1 FROM ima.chunk_search_indexes
-                    WHERE workspace_id=:workspace AND model_id=:model AND model_version=:version AND embedding_dimension=:dimension"""),
+                    WHERE kb_id=:kb AND model_id=:model AND model_version=:version AND embedding_dimension=:dimension"""),
                     {
-                        "workspace": workspace_id,
+                        "kb": kb_id,
                         "model": model["id"],
                         "version": model["version"],
                         "dimension": model["embedding_dimension"],
@@ -209,20 +202,20 @@ class SearchService:
                 or 1
             )
             index_name = (
-                f"ix_cv_{sha256(workspace_id.encode()).hexdigest()[:8]}_"
+                f"ix_cv_{sha256(kb_id.encode()).hexdigest()[:8]}_"
                 f"{str(model['id']).replace('-', '')[:10]}_{model['version']}_"
                 f"{model['embedding_dimension']}_{generation}"
             )
             index_id = uuid4()
             digest = sha256(
-                f"{workspace_id}:{model['id']}:{model['version']}:{model['embedding_dimension']}:{count}".encode()
+                f"{kb_id}:{model['id']}:{model['version']}:{model['embedding_dimension']}:{count}".encode()
             ).hexdigest()
             await conn.execute(
-                text("""INSERT INTO ima.chunk_search_indexes(id,workspace_id,model_id,model_version,embedding_dimension,generation,index_name,status,source_count,source_digest,created_at)
-                VALUES (:id,:workspace,:model,:version,:dimension,:generation,:name,'building',:count,:digest,:now)"""),
+                text("""INSERT INTO ima.chunk_search_indexes(id,kb_id,model_id,model_version,embedding_dimension,generation,index_name,status,source_count,source_digest,created_at)
+                VALUES (:id,:kb,:model,:version,:dimension,:generation,:name,'building',:count,:digest,:now)"""),
                 {
                     "id": index_id,
-                    "workspace": workspace_id,
+                    "kb": kb_id,
                     "model": model["id"],
                     "version": model["version"],
                     "dimension": model["embedding_dimension"],
@@ -234,10 +227,10 @@ class SearchService:
                 },
             )
         # Dimension and identifier originate from database-validated model metadata, never request data.
-        workspace_literal = workspace_id.replace("'", "''")
+        kb_literal = kb_id.replace("'", "''")
         statement = f"""CREATE INDEX IF NOT EXISTS {index_name} ON ima.document_chunks USING hnsw
           ((embedding::vector({int(model["embedding_dimension"])})) vector_cosine_ops)
-          WHERE workspace_id='{workspace_literal}' AND embedding_status='ready' AND model_id='{model["id"]}'::uuid
+          WHERE kb_id='{kb_literal}' AND embedding_status='ready' AND model_id='{model["id"]}'::uuid
             AND model_version={int(model["version"])} AND embedding_dimension={int(model["embedding_dimension"])}"""
         try:
             async with self.engine.connect() as raw_conn:
@@ -246,10 +239,10 @@ class SearchService:
             async with self.engine.begin() as conn:
                 await conn.execute(
                     text(
-                        "UPDATE ima.chunk_search_indexes SET status='retired',retired_at=:now WHERE workspace_id=:workspace AND model_id=:model AND model_version=:version AND embedding_dimension=:dimension AND status='active'"
+                        "UPDATE ima.chunk_search_indexes SET status='retired',retired_at=:now WHERE kb_id=:kb AND model_id=:model AND model_version=:version AND embedding_dimension=:dimension AND status='active'"
                     ),
                     {
-                        "workspace": workspace_id,
+                        "kb": kb_id,
                         "model": model["id"],
                         "version": model["version"],
                         "dimension": model["embedding_dimension"],
@@ -281,11 +274,9 @@ class SearchService:
     async def _keyword_candidates(
         self,
         conn: AsyncConnection,
-        workspace_id: str,
-        folders: set[str],
+        kb_id: str,
         query: str,
         folder_id: str | None,
-        tag_id: UUID | None,
         limit: int,
     ) -> list[dict[str, Any]]:
         rows = (
@@ -294,16 +285,14 @@ class SearchService:
                     text("""SELECT c.document_id,c.version,c.generation,c.ordinal,c.content_digest,left(c.text_content,4000) quote,d.title,
           ts_rank(c.search_vector, websearch_to_tsquery('ima.mixed', :query)) score
           FROM ima.document_chunks c JOIN ima.documents d ON d.id=c.document_id
-          WHERE c.workspace_id=:workspace AND d.workspace_id=:workspace AND d.lifecycle='active' AND d.folder_id=ANY(:folders)
+          WHERE c.kb_id=:kb AND d.kb_id=:kb AND d.lifecycle='active'
             AND c.version=COALESCE(d.current_version,c.version) AND c.search_vector @@ websearch_to_tsquery('ima.mixed', :query)
-            AND (:folder IS NULL OR d.folder_id=:folder) AND (CAST(:tag AS uuid) IS NULL OR EXISTS (SELECT 1 FROM ima.document_tags dt WHERE dt.document_id=d.id AND dt.tag_id=CAST(:tag AS uuid)))
+            AND (CAST(:folder AS varchar(32)) IS NULL OR d.folder_id=CAST(:folder AS varchar(32)))
           ORDER BY score DESC,d.id,c.version,c.generation,c.ordinal LIMIT :limit"""),
                     {
                         "query": query,
-                        "workspace": workspace_id,
-                        "folders": list(folders),
+                        "kb": kb_id,
                         "folder": folder_id,
-                        "tag": tag_id,
                         "limit": limit,
                     },
                 )
@@ -316,12 +305,10 @@ class SearchService:
     async def _vector_candidates(
         self,
         conn: AsyncConnection,
-        workspace_id: str,
-        folders: set[str],
+        kb_id: str,
         query_vector: tuple[float, ...],
         target: dict[str, Any],
         folder_id: str | None,
-        tag_id: UUID | None,
         limit: int,
     ) -> list[dict[str, Any]]:
         dimension = int(target["embedding_dimension"])
@@ -329,9 +316,9 @@ class SearchService:
         statement = f"""SELECT c.document_id,c.version,c.generation,c.ordinal,c.content_digest,left(c.text_content,4000) quote,d.title,
           1-(c.embedding::vector({dimension}) <=> CAST(:vector AS vector({dimension}))) score
           FROM ima.document_chunks c JOIN ima.documents d ON d.id=c.document_id
-          WHERE c.workspace_id=:workspace AND d.workspace_id=:workspace AND d.lifecycle='active' AND d.folder_id=ANY(:folders)
+          WHERE c.kb_id=:kb AND d.kb_id=:kb AND d.lifecycle='active'
             AND c.version=COALESCE(d.current_version,c.version) AND c.embedding_status='ready' AND c.model_id=:model AND c.model_version=:version AND c.embedding_dimension=:dimension
-            AND (:folder IS NULL OR d.folder_id=:folder) AND (CAST(:tag AS uuid) IS NULL OR EXISTS (SELECT 1 FROM ima.document_tags dt WHERE dt.document_id=d.id AND dt.tag_id=CAST(:tag AS uuid)))
+            AND (CAST(:folder AS varchar(32)) IS NULL OR d.folder_id=CAST(:folder AS varchar(32)))
           ORDER BY c.embedding::vector({dimension}) <=> CAST(:vector AS vector({dimension})),d.id,c.version,c.generation,c.ordinal LIMIT :limit"""
         rows = (
             (
@@ -339,13 +326,11 @@ class SearchService:
                     text(statement),
                     {
                         "vector": vector_literal,
-                        "workspace": workspace_id,
-                        "folders": list(folders),
+                        "kb": kb_id,
                         "model": target["model_id"],
                         "version": target["model_version"],
                         "dimension": target["embedding_dimension"],
                         "folder": folder_id,
-                        "tag": tag_id,
                         "limit": limit,
                     },
                 )
@@ -358,15 +343,14 @@ class SearchService:
     async def search(
         self,
         actor: str | McpActor,
-        workspace_id: str,
+        kb_id: str,
         query: str,
         *,
         mode: str = "keyword",
         top_k: int = 8,
         threshold: float = 0,
         folder_id: str | None = None,
-        tag_id: UUID | None = None,
-        action: AclAction = AclAction.VIEW_CONTENT,
+        action: KbAction = KbAction.VIEW_CONTENT,
     ) -> dict[str, object]:
         if not query.strip() or len(query) > 4000:
             raise SearchError(422, "INVALID_QUERY", "Query is invalid")
@@ -379,21 +363,26 @@ class SearchService:
         )
         async with self.engine.connect() as conn:
             await conn.execute(text("SET LOCAL statement_timeout = '3000ms'"))
-            config = await self._profile(conn, workspace_id)
-            folders = await self._folders(conn, actor, workspace_id, action)
-            if folder_id and folder_id not in folders:
-                raise SearchError(404, "FOLDER_NOT_FOUND", "Folder not found")
-            keyword_rows = (
-                await self._keyword_candidates(
-                    conn, workspace_id, folders, query, folder_id, tag_id, pool
+            config = await self._profile(conn, kb_id)
+            await self._require_kb(conn, actor, kb_id, action)
+            if folder_id:
+                folder_exists = await conn.scalar(
+                    text(
+                        "SELECT EXISTS(SELECT 1 FROM ima.folders WHERE id=:folder AND kb_id=:kb AND lifecycle='active')"
+                    ),
+                    {"folder": folder_id, "kb": kb_id},
                 )
+                if not folder_exists:
+                    raise SearchError(404, "FOLDER_NOT_FOUND", "Folder not found")
+            keyword_rows = (
+                await self._keyword_candidates(conn, kb_id, query, folder_id, pool)
                 if mode in {"keyword", "hybrid"}
                 else []
             )
             vector_rows: list[dict[str, Any]] = []
             if mode in {"vector", "hybrid"}:
-                target = await self._vector_target(conn, workspace_id, config)
-                vectors = await self.models.managed_embeddings(workspace_id, [query])
+                target = await self._vector_target(conn, kb_id, config)
+                vectors = await self.models.managed_embeddings(kb_id, [query])
                 if (
                     len(vectors) != 1
                     or len(vectors[0]) != int(target["embedding_dimension"])
@@ -403,7 +392,7 @@ class SearchService:
                         503, "INVALID_EMBEDDING_RESPONSE", "Embedding response is invalid"
                     )
                 vector_rows = await self._vector_candidates(
-                    conn, workspace_id, folders, vectors[0], target, folder_id, tag_id, pool
+                    conn, kb_id, vectors[0], target, folder_id, pool
                 )
             by_identity: dict[tuple[object, ...], dict[str, Any]] = {}
             keyword_scores: dict[tuple[object, ...], float] = {}
@@ -448,7 +437,7 @@ class SearchService:
             if config.rerank_model_id and ordered:
                 try:
                     reranked = await self.models.managed_rerank(
-                        workspace_id, query, [str(by_identity[key]["quote"]) for key in ordered]
+                        kb_id, query, [str(by_identity[key]["quote"]) for key in ordered]
                     )
                     values: dict[int, float] = {}
                     for index, score in reranked:
@@ -474,22 +463,13 @@ class SearchService:
                         )
                 except (ModelGovernanceError, ValueError):
                     degraded = "RERANK_UNAVAILABLE"
-            visible = await self._folders(conn, actor, workspace_id, action)
+            # Membership already grants the whole tree; retrieval re-ran the
+            # authorization check above, so ranked candidates stay visible.
             items = [
                 self._result(by_identity[key], scores[key], rank)
                 for rank, key in enumerate(ordered, 1)
-                if await self._document_visible(conn, cast(UUID, key[0]), visible)
             ][:top_k]
             return {"items": items, "degraded": degraded, "profileTopK": config.top_k}
-
-    async def _document_visible(
-        self, conn: AsyncConnection, document_id: UUID, folders: set[str]
-    ) -> bool:
-        folder = await conn.scalar(
-            text("SELECT folder_id FROM ima.documents WHERE id=:id AND lifecycle='active'"),
-            {"id": document_id},
-        )
-        return str(folder) in folders
 
     @staticmethod
     def _result(row: dict[str, Any], score: float, rank: int) -> dict[str, object]:
@@ -505,16 +485,18 @@ class SearchService:
             "rank": rank,
         }
 
-    async def list_conversations(self, actor: str, workspace_id: str) -> list[dict[str, object]]:
+    async def list_conversations(self, actor: str) -> list[dict[str, object]]:
+        """All conversations owned by the user, aggregated across knowledge bases."""
         async with self.engine.connect() as conn:
-            await self._folders(conn, actor, workspace_id, AclAction.VIEW_METADATA)
             rows = (
                 (
                     await conn.execute(
                         text(
-                            "SELECT id,workspace_id,title,lifecycle,version,created_at,updated_at FROM ima.conversations WHERE workspace_id=:workspace AND owner_user_id=:owner ORDER BY updated_at DESC,id"
+                            """SELECT c.id,c.kb_id,c.title,c.lifecycle,c.version,c.created_at,c.updated_at,kb.name AS kb_name
+                            FROM ima.conversations c JOIN ima.knowledge_bases kb ON kb.id=c.kb_id
+                            WHERE c.owner_user_id=:owner ORDER BY c.updated_at DESC,c.id"""
                         ),
-                        {"workspace": workspace_id, "owner": actor},
+                        {"owner": actor},
                     )
                 )
                 .mappings()
@@ -523,20 +505,18 @@ class SearchService:
             return [self._conversation(dict(row)) for row in rows]
 
     async def get_conversation(
-        self, actor: str, workspace_id: str, conversation_id: UUID
+        self, actor: str, kb_id: str, conversation_id: UUID
     ) -> dict[str, object]:
         async with self.engine.connect() as conn:
-            await self._folders(conn, actor, workspace_id, AclAction.VIEW_METADATA)
-            conversation = await self._owned_conversation(
-                conn, actor, workspace_id, conversation_id
-            )
+            await self._require_kb(conn, actor, kb_id, KbAction.VIEW_METADATA)
+            conversation = await self._owned_conversation(conn, actor, kb_id, conversation_id)
             rows = (
                 (
                     await conn.execute(
                         text(
-                            "SELECT id,role,status,content,sequence,version,created_at,updated_at,completed_at FROM ima.conversation_messages WHERE conversation_id=:id AND workspace_id=:workspace AND owner_user_id=:owner ORDER BY sequence"
+                            "SELECT id,role,status,content,sequence,version,created_at,updated_at,completed_at FROM ima.conversation_messages WHERE conversation_id=:id AND kb_id=:kb AND owner_user_id=:owner ORDER BY sequence"
                         ),
-                        {"id": conversation_id, "workspace": workspace_id, "owner": actor},
+                        {"id": conversation_id, "kb": kb_id, "owner": actor},
                     )
                 )
                 .mappings()
@@ -551,7 +531,7 @@ class SearchService:
         self,
         conn: AsyncConnection,
         actor: str,
-        workspace_id: str,
+        kb_id: str,
         conversation_id: UUID,
         *,
         for_update: bool = False,
@@ -560,10 +540,12 @@ class SearchService:
             (
                 await conn.execute(
                     text(
-                        "SELECT * FROM ima.conversations WHERE id=:id AND workspace_id=:workspace AND owner_user_id=:owner"
+                        """SELECT c.*,kb.name AS kb_name FROM ima.conversations c
+                        JOIN ima.knowledge_bases kb ON kb.id=c.kb_id
+                        WHERE c.id=:id AND c.kb_id=:kb AND c.owner_user_id=:owner"""
                         + (" FOR UPDATE" if for_update else "")
                     ),
-                    {"id": conversation_id, "workspace": workspace_id, "owner": actor},
+                    {"id": conversation_id, "kb": kb_id, "owner": actor},
                 )
             )
             .mappings()
@@ -576,7 +558,7 @@ class SearchService:
     async def update_conversation(
         self,
         actor: str,
-        workspace_id: str,
+        kb_id: str,
         conversation_id: UUID,
         title: str | None,
         archive: bool | None,
@@ -585,9 +567,9 @@ class SearchService:
         if title is not None and (not title.strip() or len(title) > 200):
             raise SearchError(422, "INVALID_TITLE", "Conversation title is invalid")
         async with self.engine.begin() as conn:
-            await self._folders(conn, actor, workspace_id, AclAction.VIEW_METADATA)
+            await self._require_kb(conn, actor, kb_id, KbAction.VIEW_METADATA)
             row = await self._owned_conversation(
-                conn, actor, workspace_id, conversation_id, for_update=True
+                conn, actor, kb_id, conversation_id, for_update=True
             )
             if int(row["version"]) != expected_version:
                 raise SearchError(409, "VERSION_CONFLICT", "Conversation has changed")
@@ -611,12 +593,12 @@ class SearchService:
             return self._conversation(row)
 
     async def delete_conversation(
-        self, actor: str, workspace_id: str, conversation_id: UUID, expected_version: int
+        self, actor: str, kb_id: str, conversation_id: UUID, expected_version: int
     ) -> None:
         async with self.engine.begin() as conn:
-            await self._folders(conn, actor, workspace_id, AclAction.VIEW_METADATA)
+            await self._require_kb(conn, actor, kb_id, KbAction.VIEW_METADATA)
             row = await self._owned_conversation(
-                conn, actor, workspace_id, conversation_id, for_update=True
+                conn, actor, kb_id, conversation_id, for_update=True
             )
             if int(row["version"]) != expected_version:
                 raise SearchError(409, "VERSION_CONFLICT", "Conversation has changed")
@@ -638,24 +620,24 @@ class SearchService:
     async def retry(
         self,
         actor: str,
-        workspace_id: str,
+        kb_id: str,
         conversation_id: UUID,
         message_id: UUID,
         expected_version: int,
     ) -> AsyncIterator[bytes]:
         async with self.engine.connect() as conn:
-            await self._folders(conn, actor, workspace_id, AclAction.ASK)
-            await self._owned_conversation(conn, actor, workspace_id, conversation_id)
+            await self._require_kb(conn, actor, kb_id, KbAction.ASK)
+            await self._owned_conversation(conn, actor, kb_id, conversation_id)
             row = (
                 (
                     await conn.execute(
                         text(
-                            "SELECT content,version FROM ima.conversation_messages WHERE id=:id AND conversation_id=:conversation AND workspace_id=:workspace AND owner_user_id=:owner AND role='user'"
+                            "SELECT content,version FROM ima.conversation_messages WHERE id=:id AND conversation_id=:conversation AND kb_id=:kb AND owner_user_id=:owner AND role='user'"
                         ),
                         {
                             "id": message_id,
                             "conversation": conversation_id,
-                            "workspace": workspace_id,
+                            "kb": kb_id,
                             "owner": actor,
                         },
                     )
@@ -670,12 +652,12 @@ class SearchService:
                     "Message is unavailable",
                 )
             question = str(row["content"])
-        return await self.ask(actor, workspace_id, question, conversation_id)
+        return await self.ask(actor, kb_id, question, conversation_id)
 
     async def ask_bounded(
         self,
         actor: str,
-        workspace_id: str,
+        kb_id: str,
         question: str,
         conversation_id: UUID | None = None,
         *,
@@ -683,7 +665,7 @@ class SearchService:
         max_citations: int = 20,
         timeout_seconds: float = 30,
     ) -> BoundedAskResult:
-        """Run grounded Ask without SSE while preserving target persistence and ACLs."""
+        """Run grounded Ask without SSE while preserving target persistence and membership."""
         if not question.strip() or len(question) > 20000:
             raise SearchError(422, "INVALID_QUESTION", "Question is invalid")
         if (
@@ -693,17 +675,16 @@ class SearchService:
         ):
             raise SearchError(422, "INVALID_BOUNDS", "Ask bounds are invalid")
         async with self.engine.begin() as conn:
-            await self._folders(conn, actor, workspace_id, AclAction.ASK)
+            kb_name = await self._require_kb(conn, actor, kb_id, KbAction.ASK)
             if conversation_id:
-                conversation = await self._owned_conversation(
-                    conn, actor, workspace_id, conversation_id
-                )
+                conversation = await self._owned_conversation(conn, actor, kb_id, conversation_id)
                 if conversation["lifecycle"] != "active":
                     raise SearchError(409, "CONVERSATION_ARCHIVED", "Conversation is archived")
             else:
                 conversation = {
                     "id": uuid4(),
-                    "workspace_id": workspace_id,
+                    "kb_id": kb_id,
+                    "kb_name": kb_name,
                     "owner_user_id": actor,
                     "title": question.strip()[:200],
                     "lifecycle": "active",
@@ -713,7 +694,7 @@ class SearchService:
                 }
                 await conn.execute(
                     text(
-                        "INSERT INTO ima.conversations(id,workspace_id,owner_user_id,title,lifecycle,version,created_at,updated_at) VALUES (:id,:workspace_id,:owner_user_id,:title,:lifecycle,:version,:created_at,:updated_at)"
+                        "INSERT INTO ima.conversations(id,kb_id,owner_user_id,title,lifecycle,version,created_at,updated_at) VALUES (:id,:kb_id,:owner_user_id,:title,:lifecycle,:version,:created_at,:updated_at)"
                     ),
                     conversation,
                 )
@@ -733,12 +714,12 @@ class SearchService:
             ):
                 await conn.execute(
                     text(
-                        "INSERT INTO ima.conversation_messages(id,conversation_id,workspace_id,owner_user_id,role,status,content,sequence,created_at,updated_at,completed_at) VALUES (:id,:conversation,:workspace,:owner,:role,:status,:content,:sequence,:now,:now,:completed)"
+                        "INSERT INTO ima.conversation_messages(id,conversation_id,kb_id,owner_user_id,role,status,content,sequence,created_at,updated_at,completed_at) VALUES (:id,:conversation,:kb,:owner,:role,:status,:content,:sequence,:now,:now,:completed)"
                     ),
                     {
                         "id": values[0],
                         "conversation": conversation["id"],
-                        "workspace": workspace_id,
+                        "kb": kb_id,
                         "owner": actor,
                         "role": values[1],
                         "status": values[2],
@@ -751,14 +732,14 @@ class SearchService:
         try:
             async with asyncio.timeout(timeout_seconds):
                 async with self.engine.connect() as conn:
-                    config = await self._profile(conn, workspace_id)
+                    config = await self._profile(conn, kb_id)
                 results = await self.search(
                     actor,
-                    workspace_id,
+                    kb_id,
                     question,
                     mode=config.retrieval_mode,
                     top_k=min(config.top_k, max_citations),
-                    action=AclAction.ASK,
+                    action=KbAction.ASK,
                 )
                 citations = cast(list[dict[str, object]], results["items"])[:max_citations]
                 if not citations:
@@ -773,11 +754,11 @@ class SearchService:
                     )
                 checked = await self.search(
                     actor,
-                    workspace_id,
+                    kb_id,
                     question,
                     mode=config.retrieval_mode,
                     top_k=min(config.top_k, max_citations),
-                    action=AclAction.ASK,
+                    action=KbAction.ASK,
                 )
                 checked_citations = cast(list[dict[str, object]], checked["items"])[:max_citations]
                 if not checked_citations:
@@ -788,7 +769,7 @@ class SearchService:
                 await self._persist_citations(assistant_id, checked_citations)
                 await self._status(assistant_id, "streaming")
                 response = await self.models.managed_chat(
-                    workspace_id,
+                    kb_id,
                     Workflow.GROUNDED_ASK,
                     [
                         {
@@ -809,11 +790,11 @@ class SearchService:
                     raise SearchError(502, "INVALID_MODEL_RESPONSE", "Model response is invalid")
                 final_check = await self.search(
                     actor,
-                    workspace_id,
+                    kb_id,
                     question,
                     mode=config.retrieval_mode,
                     top_k=min(config.top_k, max_citations),
-                    action=AclAction.ASK,
+                    action=KbAction.ASK,
                 )
                 final_ids = {
                     (item["documentId"], item["chunkDigest"])
@@ -848,22 +829,21 @@ class SearchService:
             raise
 
     async def ask(
-        self, actor: str, workspace_id: str, question: str, conversation_id: UUID | None
+        self, actor: str, kb_id: str, question: str, conversation_id: UUID | None
     ) -> AsyncIterator[bytes]:
         if not question.strip() or len(question) > 20000:
             raise SearchError(422, "INVALID_QUESTION", "Question is invalid")
         async with self.engine.begin() as conn:
-            await self._folders(conn, actor, workspace_id, AclAction.ASK)
+            kb_name = await self._require_kb(conn, actor, kb_id, KbAction.ASK)
             if conversation_id:
-                conversation = await self._owned_conversation(
-                    conn, actor, workspace_id, conversation_id
-                )
+                conversation = await self._owned_conversation(conn, actor, kb_id, conversation_id)
                 if conversation["lifecycle"] != "active":
                     raise SearchError(409, "CONVERSATION_ARCHIVED", "Conversation is archived")
             else:
                 conversation = {
                     "id": uuid4(),
-                    "workspace_id": workspace_id,
+                    "kb_id": kb_id,
+                    "kb_name": kb_name,
                     "owner_user_id": actor,
                     "title": question.strip()[:200],
                     "lifecycle": "active",
@@ -873,7 +853,7 @@ class SearchService:
                 }
                 await conn.execute(
                     text(
-                        "INSERT INTO ima.conversations(id,workspace_id,owner_user_id,title,lifecycle,version,created_at,updated_at) VALUES (:id,:workspace_id,:owner_user_id,:title,:lifecycle,:version,:created_at,:updated_at)"
+                        "INSERT INTO ima.conversations(id,kb_id,owner_user_id,title,lifecycle,version,created_at,updated_at) VALUES (:id,:kb_id,:owner_user_id,:title,:lifecycle,:version,:created_at,:updated_at)"
                     ),
                     conversation,
                 )
@@ -893,12 +873,12 @@ class SearchService:
             ):
                 await conn.execute(
                     text(
-                        "INSERT INTO ima.conversation_messages(id,conversation_id,workspace_id,owner_user_id,role,status,content,sequence,created_at,updated_at,completed_at) VALUES (:id,:conversation,:workspace,:owner,:role,:status,:content,:sequence,:now,:now,:completed)"
+                        "INSERT INTO ima.conversation_messages(id,conversation_id,kb_id,owner_user_id,role,status,content,sequence,created_at,updated_at,completed_at) VALUES (:id,:conversation,:kb,:owner,:role,:status,:content,:sequence,:now,:now,:completed)"
                     ),
                     {
                         "id": values[0],
                         "conversation": conversation["id"],
-                        "workspace": workspace_id,
+                        "kb": kb_id,
                         "owner": actor,
                         "role": values[1],
                         "status": values[2],
@@ -909,15 +889,15 @@ class SearchService:
                     },
                 )
         async with self.engine.connect() as conn:
-            ask_config = await self._profile(conn, workspace_id)
+            ask_config = await self._profile(conn, kb_id)
         retrieval_mode = ask_config.retrieval_mode
         results = await self.search(
             actor,
-            workspace_id,
+            kb_id,
             question,
             mode=retrieval_mode,
             top_k=ask_config.top_k,
-            action=AclAction.ASK,
+            action=KbAction.ASK,
         )
         citations = cast(list[dict[str, object]], results["items"])
 
@@ -943,11 +923,11 @@ class SearchService:
                 return
             checked = await self.search(
                 actor,
-                workspace_id,
+                kb_id,
                 question,
                 mode=retrieval_mode,
                 top_k=ask_config.top_k,
-                action=AclAction.ASK,
+                action=KbAction.ASK,
             )
             checked_citations = cast(list[dict[str, object]], checked["items"])
             if not checked_citations:
@@ -964,7 +944,7 @@ class SearchService:
                 )
                 answer = ""
                 async for raw in self.models.managed_chat_stream(
-                    workspace_id,
+                    kb_id,
                     Workflow.GROUNDED_ASK,
                     [
                         {
@@ -1048,20 +1028,20 @@ class SearchService:
                 )
 
     async def resolve_citation(
-        self, actor: str, workspace_id: str, message_id: UUID, ordinal: int
+        self, actor: str, kb_id: str, message_id: UUID, ordinal: int
     ) -> dict[str, object]:
         async with self.engine.connect() as conn:
-            folders = await self._folders(conn, actor, workspace_id, AclAction.VIEW_CONTENT)
+            await self._require_kb(conn, actor, kb_id, KbAction.VIEW_CONTENT)
             row = (
                 (
                     await conn.execute(
                         text("""SELECT c.* FROM ima.message_citations c JOIN ima.conversation_messages m ON m.id=c.message_id
                 JOIN ima.document_chunks chunk ON chunk.document_id=c.document_id AND chunk.version=c.document_version AND chunk.generation=c.file_generation AND chunk.ordinal=c.chunk_ordinal AND chunk.content_digest=c.chunk_digest
-                WHERE c.message_id=:message AND c.ordinal=:ordinal AND m.workspace_id=:workspace AND m.owner_user_id=:owner"""),
+                WHERE c.message_id=:message AND c.ordinal=:ordinal AND m.kb_id=:kb AND m.owner_user_id=:owner"""),
                         {
                             "message": message_id,
                             "ordinal": ordinal,
-                            "workspace": workspace_id,
+                            "kb": kb_id,
                             "owner": actor,
                         },
                     )
@@ -1069,7 +1049,7 @@ class SearchService:
                 .mappings()
                 .first()
             )
-            if not row or not await self._document_visible(conn, row["document_id"], folders):
+            if not row:
                 raise SearchError(404, "CITATION_NOT_FOUND", "Citation not found")
             return {
                 "documentId": row["document_id"],
@@ -1086,7 +1066,8 @@ class SearchService:
     def _conversation(row: dict[str, Any]) -> dict[str, object]:
         return {
             "id": row["id"],
-            "workspaceId": row["workspace_id"],
+            "kbId": row["kb_id"],
+            "kbName": row.get("kb_name"),
             "title": row["title"],
             "lifecycle": row["lifecycle"],
             "version": row["version"],

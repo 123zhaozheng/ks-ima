@@ -29,7 +29,7 @@ from ima.config import Settings
 
 
 def test_scope_enum_values_are_canonical() -> None:
-    assert McpScope.WORKSPACES_READ.value == "mcp:workspaces:read"
+    assert McpScope.KNOWLEDGE_BASES_READ.value == "mcp:knowledge-bases:read"
     assert McpScope.KNOWLEDGE_READ.value == "mcp:knowledge:read"
     assert McpScope.KNOWLEDGE_SEARCH.value == "mcp:knowledge:search"
     assert McpScope.KNOWLEDGE_ASK.value == "mcp:knowledge:ask"
@@ -74,6 +74,17 @@ def test_tools_for_scopes_union_matches_tool_map() -> None:
     )
 
 
+def test_tool_inventory_is_user_level_knowledge_base_tools() -> None:
+    all_tools = {tool for tools in SCOPE_TOOL_MAP.values() for tool in tools}
+    assert len(all_tools) == 13
+    assert "kb_list_knowledge_bases" in all_tools
+    # Workspace and tag concepts are gone from the MCP surface.
+    assert "kb_list_workspaces" not in all_tools
+    assert "kb_list_tags" not in all_tools
+    assert "kb_set_tags" not in all_tools
+    assert SCOPE_TOOL_MAP[McpScope.KNOWLEDGE_BASES_READ.value] == ("kb_list_knowledge_bases",)
+
+
 def test_every_scope_maps_to_at_least_one_tool() -> None:
     for scope in ALL_MCP_SCOPES:
         assert SCOPE_TOOL_MAP[scope.value], f"{scope.value} maps to no tools"
@@ -92,7 +103,6 @@ def test_redaction_handles_nested_structures() -> None:
         "model": McpActor(
             actor_type="human",
             user_id="u1",
-            workspace_id="w1",
             correlationId="c1",
             scopes=("mcp:knowledge:read",),
         ),
@@ -112,7 +122,7 @@ def test_redaction_is_case_insensitive() -> None:
 
 
 def test_redact_never_touches_unrelated_fields() -> None:
-    payload = {"workspace_id": "w1", "path": "/a/b"}
+    payload = {"kb_id": "kb1", "path": "/a/b"}
     assert redact_value(payload) == payload
 
 
@@ -145,7 +155,7 @@ def test_metadata_contracts_serialize() -> None:
         grant_types_supported=("authorization_code", "refresh_token"),
         code_challenge_methods_supported=("S256",),
         token_endpoint_auth_methods_supported=("none",),
-        scopes_supported=("mcp:workspaces:read",),
+        scopes_supported=("mcp:knowledge-bases:read",),
     )
     data = as_meta.model_dump(by_alias=True)
     assert data["response_types_supported"] == ("code",)
@@ -154,7 +164,7 @@ def test_metadata_contracts_serialize() -> None:
     pr = ProtectedResourceMetadata(
         resource="https://example.com/mcp",
         authorization_servers=("https://example.com",),
-        scopes_supported=("mcp:workspaces:read",),
+        scopes_supported=("mcp:knowledge-bases:read",),
     )
     assert pr.model_dump(by_alias=True)["authorization_servers"] == ("https://example.com",)
     assert pr.model_dump(by_alias=True)["bearer_methods_supported"] == ("header",)
@@ -166,16 +176,34 @@ def test_mcp_actor_requires_bound_fields() -> None:
             actor_type="human",
             user_id=None,
             principal_id=None,
-            workspace_id="w1",
             scopes=("mcp:knowledge:read",),
         )
     with pytest.raises(ValidationError):
         McpActor(
             actor_type="human",
             principal_id="p1",
+            scopes=("mcp:knowledge:read",),
+        )
+
+
+def test_mcp_actor_is_user_level() -> None:
+    # Grants no longer carry a workspace/folder boundary; such fields are rejected.
+    with pytest.raises(ValidationError):
+        McpActor(
+            actor_type="human",
+            user_id="u1",
             workspace_id="w1",
             scopes=("mcp:knowledge:read",),
         )
+    with pytest.raises(ValidationError):
+        McpActor(
+            actor_type="human",
+            user_id="u1",
+            folder_root_id="f1",
+            scopes=("mcp:knowledge:read",),
+        )
+    with pytest.raises(ValidationError):
+        McpActor(actor_type="human", user_id="u1", scopes=())
 
 
 # ---------------------------------------------------------------------------

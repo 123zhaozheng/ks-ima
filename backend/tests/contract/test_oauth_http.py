@@ -52,7 +52,7 @@ def app_client(*, legacy_alias: bool = False) -> tuple[TestClient, object]:
     app.state.mcp_authorization_service = oauth
     app.state.mcp_runtime_box["value"] = McpRuntime(
         authorization=oauth,
-        workspace=SimpleNamespace(),
+        kb=SimpleNamespace(),
         knowledge=SimpleNamespace(),
         storage=SimpleNamespace(),
         search=SimpleNamespace(),
@@ -70,7 +70,7 @@ def test_discovery_is_canonical_and_does_not_advertise_registration() -> None:
         "resource": RESOURCE,
         "authorization_servers": [ORIGIN],
         "scopes_supported": [
-            "mcp:workspaces:read",
+            "mcp:knowledge-bases:read",
             "mcp:knowledge:read",
             "mcp:knowledge:search",
             "mcp:knowledge:ask",
@@ -123,7 +123,6 @@ def test_authenticated_python_alias_emits_safe_deprecation_audit() -> None:
     oauth.authenticate_bearer.return_value = McpActor(
         actor_type="service_principal",
         principal_id="principal-1",
-        workspace_id="workspace-1",
         scopes=("mcp:knowledge:read",),
     )
 
@@ -290,8 +289,6 @@ def test_consent_preview_and_submit_keep_exact_redirect_state_and_issuer() -> No
         client=SimpleNamespace(client_id="desktop", client_name="Desktop"),
         redirect_uri="http://localhost:8765/callback?existing=1",
         resource=RESOURCE,
-        workspace_id="workspace-1",
-        folder_root_id=None,
         scopes=("mcp:knowledge:read",),
         grant_expires_at=expires,
         consent_required=True,
@@ -306,7 +303,6 @@ def test_consent_preview_and_submit_keep_exact_redirect_state_and_issuer() -> No
         "client_id": "desktop",
         "redirect_uri": context.redirect_uri,
         "resource": RESOURCE,
-        "workspace_id": "workspace-1",
         "scope": "mcp:knowledge:read",
         "state": "state-1",
         "code_challenge": CHALLENGE,
@@ -326,8 +322,6 @@ def test_consent_preview_and_submit_keep_exact_redirect_state_and_issuer() -> No
             "clientId": "desktop",
             "redirectUri": context.redirect_uri,
             "resource": RESOURCE,
-            "workspaceId": "workspace-1",
-            "folderRootId": None,
             "scope": "mcp:knowledge:read",
             "state": "state-1",
             "codeChallenge": CHALLENGE,
@@ -363,8 +357,6 @@ def test_form_decision_returns_to_local_consent_when_recent_auth_is_required() -
             "client_id": "desktop",
             "redirect_uri": "http://localhost:8765/callback",
             "resource": RESOURCE,
-            "workspace_id": "workspace-1",
-            "folder_root_id": "",
             "scope": "mcp:knowledge:read",
             "state": "state-1",
             "code_challenge": CHALLENGE,
@@ -405,7 +397,6 @@ def test_consent_denial_does_not_require_recent_authentication() -> None:
             "client_id": "desktop",
             "redirect_uri": context.redirect_uri,
             "resource": RESOURCE,
-            "workspace_id": "workspace-1",
             "scope": "mcp:knowledge:read",
             "state": context.state,
             "code_challenge": CHALLENGE,
@@ -440,7 +431,6 @@ def test_authorize_error_redirects_only_to_an_exact_registered_uri() -> None:
         "response_type": "code",
         "client_id": "desktop",
         "resource": RESOURCE,
-        "workspace_id": "workspace-1",
         "scope": "bad:scope",
         "state": "state-1",
         "code_challenge": CHALLENGE,
@@ -475,9 +465,7 @@ def test_openapi_has_stable_public_and_admin_operations() -> None:
         in schema["paths"]["/oauth/token"]["post"]["requestBody"]["content"]
     )
     assert (
-        schema["paths"]["/api/v1/workspaces/{workspace_id}/service-principals"]["post"][
-            "operationId"
-        ]
+        schema["paths"]["/api/v1/service-principals"]["post"]["operationId"]
         == "createServicePrincipal"
     )
     assert "/mcp" not in schema["paths"]
@@ -513,8 +501,6 @@ def test_one_time_service_secret_response_is_no_store_and_digest_free() -> None:
         ),
         principal=SimpleNamespace(
             id=principal_id,
-            workspace_id="workspace-1",
-            folder_root_id=None,
             display_name="CI",
             purpose="Ingestion",
             owner_user_id="owner-1",
@@ -528,7 +514,7 @@ def test_one_time_service_secret_response_is_no_store_and_digest_free() -> None:
     )
     client.cookies.set("ima_csrf", "csrf-value")
     response = client.post(
-        "/api/v1/workspaces/workspace-1/service-principals",
+        "/api/v1/service-principals",
         headers={"Origin": ORIGIN, "X-CSRF-Token": "csrf-value"},
         json={
             "displayName": "CI",
@@ -570,6 +556,6 @@ def test_auth_capabilities_is_advertised_with_stable_operation_id() -> None:
     schema = client.app.openapi()
     operation = schema["paths"]["/api/v1/auth/capabilities"]["get"]
     assert operation["operationId"] == "authCapabilities"
-    assert operation["responses"]["200"]["content"]["application/json"]["schema"][
-        "$ref"
-    ].endswith("/AuthCapabilities")
+    assert operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/AuthCapabilities"
+    )

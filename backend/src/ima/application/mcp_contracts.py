@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 class McpScope(str, Enum):
     """OAuth scopes enforced for MCP tool discovery and use."""
 
-    WORKSPACES_READ = "mcp:workspaces:read"
+    KNOWLEDGE_BASES_READ = "mcp:knowledge-bases:read"
     KNOWLEDGE_READ = "mcp:knowledge:read"
     KNOWLEDGE_SEARCH = "mcp:knowledge:search"
     KNOWLEDGE_ASK = "mcp:knowledge:ask"
@@ -33,7 +33,7 @@ class McpScope(str, Enum):
 
 
 ALL_MCP_SCOPES: tuple[McpScope, ...] = (
-    McpScope.WORKSPACES_READ,
+    McpScope.KNOWLEDGE_BASES_READ,
     McpScope.KNOWLEDGE_READ,
     McpScope.KNOWLEDGE_SEARCH,
     McpScope.KNOWLEDGE_ASK,
@@ -42,13 +42,12 @@ ALL_MCP_SCOPES: tuple[McpScope, ...] = (
 
 # Each scope enables a family of tools; a tool may require a single scope.
 SCOPE_TOOL_MAP: dict[str, tuple[str, ...]] = {
-    McpScope.WORKSPACES_READ.value: ("kb_list_workspaces",),
+    McpScope.KNOWLEDGE_BASES_READ.value: ("kb_list_knowledge_bases",),
     McpScope.KNOWLEDGE_READ.value: (
         "kb_list_dir",
         "kb_get_tree",
         "kb_get_note",
         "kb_get_file",
-        "kb_list_tags",
     ),
     McpScope.KNOWLEDGE_SEARCH.value: ("kb_search",),
     McpScope.KNOWLEDGE_ASK.value: ("kb_ask",),
@@ -58,7 +57,6 @@ SCOPE_TOOL_MAP: dict[str, tuple[str, ...]] = {
         "kb_update_note",
         "kb_upload_file",
         "kb_move",
-        "kb_set_tags",
         "kb_delete",
     ),
 }
@@ -113,8 +111,9 @@ class McpActor(BaseModel):
     """Normalized caller identity for a single MCP request.
 
     One of ``user_id`` (interactive grant) or ``principal_id`` (service
-    principal) is set.  ``workspace_id`` and ``folder_root_id`` are the
-    authorization boundary for the call.
+    principal) is set.  Authorization is user-level: grants no longer bind a
+    single knowledge base, so every tool call verifies membership and role
+    against its target knowledge base in real time.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -122,8 +121,6 @@ class McpActor(BaseModel):
     actor_type: Literal["human", "service_principal"]
     user_id: str | None = None
     principal_id: str | None = None
-    workspace_id: str
-    folder_root_id: str | None = None
     scopes: tuple[str, ...] = ()
     correlation_id: str = Field(default="", alias="correlationId")
     token_id: str | None = Field(default=None, exclude=True, repr=False)

@@ -18,39 +18,60 @@ from starlette.types import Receive, Scope, Send
 import ima.api.app as app_module
 from ima.application.mcp import AuthenticatedMcpApp, McpRuntime, McpTransport, _current_actor
 from ima.application.mcp_contracts import KNOWN_TOOLS, McpActor
-from ima.application.oauth import McpAuthorizationError
+from ima.application.oauth import (
+    KB_ROLE_RANK,
+    TOOL_MIN_ROLE,
+    McpAuthorizationError,
+)
 from ima.application.search import BoundedAskResult
 from ima.config import Settings
+
+# user-1 can edit one knowledge base, view a second one, and is a member of
+# nothing else.  The transport stub enforces the same scope+role matrix the
+# real McpAuthorizationService applies per tool call.
+KB_ROLES = {"kb-editor": "editor", "kb-viewer": "viewer"}
+KB_SUMMARIES = [
+    {"id": "kb-editor", "name": "Editable", "role": "editor", "owned": True},
+    {"id": "kb-viewer", "name": "Read-only", "role": "viewer", "owned": False},
+]
+
+DOC_ID = "00000000-0000-0000-0000-000000000001"
 
 
 def runtime_for(scopes: tuple[str, ...]) -> tuple[McpRuntime, object]:
     actor = McpActor(
         actor_type="human",
         user_id="user-1",
-        workspace_id="workspace-1",
         scopes=scopes,
         correlationId="corr-1",
     )
 
-    async def authorize_tool(call_actor: McpActor, tool_name: str, **_: object) -> None:
+    async def authorize_tool(
+        call_actor: McpActor, tool_name: str, *, target_kb_id: str | None = None
+    ) -> None:
         required = KNOWN_TOOLS.get(tool_name)
         if required is None or required not in call_actor.scopes:
             raise McpAuthorizationError("insufficient_scope", "Tool scope is not granted")
+        if target_kb_id is not None:
+            role = KB_ROLES.get(target_kb_id)
+            if role is None:
+                raise McpAuthorizationError("policy_denied", "Knowledge base is not accessible")
+            if KB_ROLE_RANK[role] < KB_ROLE_RANK[TOOL_MIN_ROLE.get(tool_name, "viewer")]:
+                raise McpAuthorizationError("policy_denied", "Knowledge base role is insufficient")
+
+    async def effective_user_id(call_actor: McpActor) -> str:
+        return "user-1" if call_actor.actor_type == "human" else "owner-1"
 
     authorization = SimpleNamespace(
         authenticate_bearer=AsyncMock(return_value=actor),
         authorize_tool=AsyncMock(side_effect=authorize_tool),
+        effective_user_id=AsyncMock(side_effect=effective_user_id),
         acquire_tool_lease=AsyncMock(return_value=UUID("00000000-0000-0000-0000-000000000099")),
         release_tool_lease=AsyncMock(),
         repository=SimpleNamespace(append_audit=AsyncMock()),
     )
-    workspace = SimpleNamespace(
-        list_workspaces=AsyncMock(
-            return_value=[
-                {"id": "workspace-1", "name": "Allowed"},
-                {"id": "workspace-2", "name": "Hidden"},
-            ]
-        ),
+    kb = SimpleNamespace(
+        list_knowledge_bases=AsyncMock(return_value=KB_SUMMARIES),
         create_folder=AsyncMock(),
         folder=AsyncMock(),
         breadcrumbs=AsyncMock(),
@@ -59,12 +80,10 @@ def runtime_for(scopes: tuple[str, ...]) -> tuple[McpRuntime, object]:
     knowledge = SimpleNamespace(
         list_contents=AsyncMock(),
         get_document=AsyncMock(),
-        list_tags=AsyncMock(),
         create_note=AsyncMock(),
         patch_document=AsyncMock(),
         move_document=AsyncMock(),
-        assign_tags=AsyncMock(),
-        trash_document=AsyncMock(),
+        delete_document=AsyncMock(),
     )
     storage = SimpleNamespace(download=AsyncMock(), upload_ticket=AsyncMock())
     search = SimpleNamespace(
@@ -82,14 +101,14 @@ def runtime_for(scopes: tuple[str, ...]) -> tuple[McpRuntime, object]:
     return (
         McpRuntime(
             authorization=authorization,
-            workspace=workspace,
+            kb=kb,
             knowledge=knowledge,
             storage=storage,
             search=search,
         ),
         SimpleNamespace(
             authorization=authorization,
-            workspace=workspace,
+            kb=kb,
             knowledge=knowledge,
             storage=storage,
             search=search,
@@ -98,8 +117,8 @@ def runtime_for(scopes: tuple[str, ...]) -> tuple[McpRuntime, object]:
 
 
 @pytest.mark.asyncio
-async def test_official_client_initializes_filters_tools_and_calls_target_service() -> None:
-    runtime, calls = runtime_for(("mcp:workspaces:read",))
+async def test_official_client_enumerates_all_user_knowledge_bases() -> None:
+    runtime, calls = runtime_for(("mcp:knowledge-bases:read",))
     settings = Settings(environment="test", public_origin="http://testserver")
     transport = McpTransport(lambda: runtime, settings)
     http = httpx2.AsyncClient(
@@ -117,11 +136,12 @@ async def test_official_client_initializes_filters_tools_and_calls_target_servic
                     initialized = await session.initialize()
                     assert initialized.server_info.name == "intranet-ima"
                     tools = await session.list_tools()
-                    assert [tool.name for tool in tools.tools] == ["kb_list_workspaces"]
-                    result = await session.call_tool("kb_list_workspaces", {})
+                    assert [tool.name for tool in tools.tools] == ["kb_list_knowledge_bases"]
+                    result = await session.call_tool("kb_list_knowledge_bases", {})
     assert result.is_error is False
-    assert result.structured_content == {"items": [{"id": "workspace-1", "name": "Allowed"}]}
-    calls.workspace.list_workspaces.assert_awaited_once_with("user-1")
+    # Owned and shared knowledge bases are both visible at user level.
+    assert result.structured_content == {"items": KB_SUMMARIES}
+    calls.kb.list_knowledge_bases.assert_awaited_once_with("user-1")
     calls.knowledge.get_document.assert_not_awaited()
     assert calls.authorization.authenticate_bearer.await_count >= 3
     calls.authorization.acquire_tool_lease.assert_awaited_once()
@@ -130,10 +150,11 @@ async def test_official_client_initializes_filters_tools_and_calls_target_servic
 
 
 @pytest.mark.asyncio
-async def test_write_tool_calls_only_target_knowledge_service() -> None:
+async def test_write_tool_allowed_on_editable_knowledge_base() -> None:
     runtime, calls = runtime_for(("mcp:knowledge:write",))
     calls.knowledge.create_note.return_value = {
-        "id": "00000000-0000-0000-0000-000000000001",
+        "id": DOC_ID,
+        "kbId": "kb-editor",
         "folderId": "folder-1",
         "kind": "note",
         "title": "Title",
@@ -155,14 +176,94 @@ async def test_write_tool_calls_only_target_knowledge_service() -> None:
                     assert "kb_search" not in {tool.name for tool in tools.tools}
                     result = await session.call_tool(
                         "kb_create_note",
-                        {"folder_id": "folder-1", "title": "Title", "markdown": "Body"},
+                        {
+                            "kb_id": "kb-editor",
+                            "folder_id": "folder-1",
+                            "title": "Title",
+                            "markdown": "Body",
+                        },
                     )
     assert result.is_error is False
     authorize_call = calls.authorization.authorize_tool.await_args
     assert authorize_call.args[1] == "kb_create_note"
-    assert authorize_call.kwargs == {"target_folder_id": "folder-1"}
+    assert authorize_call.kwargs == {"target_kb_id": "kb-editor"}
     calls.knowledge.create_note.assert_awaited_once_with("user-1", "folder-1", "Title", "Body")
-    calls.workspace.create_folder.assert_not_awaited()
+    calls.kb.create_folder.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_write_tool_rejected_on_read_only_knowledge_base() -> None:
+    runtime, calls = runtime_for(("mcp:knowledge:write",))
+    settings = Settings(environment="test", public_origin="http://testserver")
+    transport = McpTransport(lambda: runtime, settings)
+    http = httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=transport.app),
+        base_url="http://testserver",
+        headers={"Authorization": "Bearer opaque-access"},
+    )
+    async with transport.sdk_app.router.lifespan_context(transport.sdk_app):
+        async with http:
+            async with streamable_http_client("http://testserver/mcp", http_client=http) as streams:
+                async with ClientSession(streams[0], streams[1]) as session:
+                    await session.initialize()
+                    result = await session.call_tool(
+                        "kb_create_note",
+                        {
+                            "kb_id": "kb-viewer",
+                            "folder_id": "folder-1",
+                            "title": "Title",
+                            "markdown": "Body",
+                        },
+                    )
+    assert result.is_error is True
+    calls.knowledge.create_note.assert_not_awaited()
+    calls.authorization.acquire_tool_lease.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_read_tool_allowed_on_read_only_knowledge_base() -> None:
+    runtime, calls = runtime_for(("mcp:knowledge:read",))
+    calls.knowledge.list_contents.return_value = {"items": [], "nextCursor": None}
+    settings = Settings(environment="test", public_origin="http://testserver")
+    transport = McpTransport(lambda: runtime, settings)
+    http = httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=transport.app),
+        base_url="http://testserver",
+        headers={"Authorization": "Bearer opaque-access"},
+    )
+    async with transport.sdk_app.router.lifespan_context(transport.sdk_app):
+        async with http:
+            async with streamable_http_client("http://testserver/mcp", http_client=http) as streams:
+                async with ClientSession(streams[0], streams[1]) as session:
+                    await session.initialize()
+                    result = await session.call_tool(
+                        "kb_list_dir", {"kb_id": "kb-viewer", "folder_id": "folder-1"}
+                    )
+    assert result.is_error is False
+    calls.knowledge.list_contents.assert_awaited_once_with("user-1", "folder-1", None, 50, None)
+    assert calls.authorization.authorize_tool.await_args.kwargs == {"target_kb_id": "kb-viewer"}
+
+
+@pytest.mark.asyncio
+async def test_tool_call_to_foreign_knowledge_base_is_denied() -> None:
+    runtime, calls = runtime_for(("mcp:knowledge:read",))
+    settings = Settings(environment="test", public_origin="http://testserver")
+    transport = McpTransport(lambda: runtime, settings)
+    http = httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=transport.app),
+        base_url="http://testserver",
+        headers={"Authorization": "Bearer opaque-access"},
+    )
+    async with transport.sdk_app.router.lifespan_context(transport.sdk_app):
+        async with http:
+            async with streamable_http_client("http://testserver/mcp", http_client=http) as streams:
+                async with ClientSession(streams[0], streams[1]) as session:
+                    await session.initialize()
+                    result = await session.call_tool(
+                        "kb_get_tree", {"kb_id": "kb-foreign", "folder_id": "folder-1"}
+                    )
+    assert result.is_error is True
+    calls.kb.folder.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -183,7 +284,12 @@ async def test_target_exception_releases_concurrency_lease() -> None:
                     await session.initialize()
                     result = await session.call_tool(
                         "kb_create_note",
-                        {"folder_id": "folder-1", "title": "Title", "markdown": "Body"},
+                        {
+                            "kb_id": "kb-editor",
+                            "folder_id": "folder-1",
+                            "title": "Title",
+                            "markdown": "Body",
+                        },
                     )
     assert result.is_error is True
     calls.authorization.acquire_tool_lease.assert_awaited_once()
@@ -206,7 +312,9 @@ async def test_target_cancellation_releases_concurrency_lease() -> None:
     actor = await calls.authorization.authenticate_bearer()
     context = _current_actor.set(actor)
     try:
-        task = asyncio.create_task(transport.adapter.create_note("folder-1", "Title", "Body"))
+        task = asyncio.create_task(
+            transport.adapter.create_note("kb-editor", "folder-1", "Title", "Body")
+        )
         await started.wait()
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
@@ -232,25 +340,35 @@ async def test_ask_tool_calls_bounded_service_without_sse_parsing() -> None:
             async with streamable_http_client("http://testserver/mcp", http_client=http) as streams:
                 async with ClientSession(streams[0], streams[1]) as session:
                     await session.initialize()
-                    result = await session.call_tool("kb_ask", {"question": "Question?"})
+                    result = await session.call_tool(
+                        "kb_ask", {"kb_id": "kb-editor", "question": "Question?"}
+                    )
     assert result.is_error is False
     calls.search.ask_bounded.assert_awaited_once()
     assert calls.search.ask_bounded.await_args.args[:3] == (
         "user-1",
-        "workspace-1",
+        "kb-editor",
         "Question?",
     )
     calls.search.search.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_tag_write_carries_expected_version_to_locked_target_mutation() -> None:
+async def test_update_note_rechecks_knowledge_base_from_document() -> None:
     runtime, calls = runtime_for(("mcp:knowledge:write",))
     calls.knowledge.get_document.return_value = {
-        "id": "00000000-0000-0000-0000-000000000001",
+        "id": DOC_ID,
+        "kbId": "kb-editor",
         "folderId": "folder-1",
         "kind": "note",
         "version": 7,
+    }
+    calls.knowledge.patch_document.return_value = {
+        "id": DOC_ID,
+        "kbId": "kb-editor",
+        "folderId": "folder-1",
+        "kind": "note",
+        "version": 8,
     }
     settings = Settings(environment="test", public_origin="http://testserver")
     transport = McpTransport(lambda: runtime, settings)
@@ -265,21 +383,28 @@ async def test_tag_write_carries_expected_version_to_locked_target_mutation() ->
                 async with ClientSession(streams[0], streams[1]) as session:
                     await session.initialize()
                     result = await session.call_tool(
-                        "kb_set_tags",
+                        "kb_update_note",
                         {
-                            "document_id": "00000000-0000-0000-0000-000000000001",
-                            "tag_ids": ["00000000-0000-0000-0000-000000000002"],
+                            "document_id": DOC_ID,
                             "expected_version": 7,
+                            "expected_content_version": 3,
+                            "markdown": "New body",
                         },
                     )
     assert result.is_error is False
-    calls.knowledge.assign_tags.assert_awaited_once()
-    assert calls.knowledge.assign_tags.await_args.args[-1] == 7
+    calls.knowledge.patch_document.assert_awaited_once()
+    patch_kwargs = calls.knowledge.patch_document.await_args.kwargs
+    assert patch_kwargs["expected_version"] == 7
+    assert patch_kwargs["expected_content_version"] == 3
+    # The scope gate runs first, then the knowledge-base check from the document.
+    assert calls.authorization.authorize_tool.await_args_list[-1].kwargs == {
+        "target_kb_id": "kb-editor"
+    }
 
 
 @pytest.mark.asyncio
 async def test_transport_rejects_missing_and_query_bearers_before_sdk() -> None:
-    runtime, calls = runtime_for(("mcp:workspaces:read",))
+    runtime, calls = runtime_for(("mcp:knowledge-bases:read",))
     settings = Settings(environment="test", public_origin="http://testserver")
     transport = McpTransport(lambda: runtime, settings)
     async with httpx2.AsyncClient(
@@ -298,7 +423,7 @@ async def test_transport_rejects_missing_and_query_bearers_before_sdk() -> None:
 async def test_transport_rejects_rebinding_duplicate_auth_and_casefolded_query_before_auth() -> (
     None
 ):
-    runtime, calls = runtime_for(("mcp:workspaces:read",))
+    runtime, calls = runtime_for(("mcp:knowledge-bases:read",))
     settings = Settings(environment="test", public_origin="http://testserver")
     transport = McpTransport(lambda: runtime, settings)
     async with httpx2.AsyncClient(
@@ -323,7 +448,7 @@ async def test_transport_rejects_rebinding_duplicate_auth_and_casefolded_query_b
 
 @pytest.mark.asyncio
 async def test_hidden_tool_call_is_denied_before_target_document_lookup() -> None:
-    runtime, calls = runtime_for(("mcp:workspaces:read",))
+    runtime, calls = runtime_for(("mcp:knowledge-bases:read",))
     settings = Settings(environment="test", public_origin="http://testserver")
     transport = McpTransport(lambda: runtime, settings)
     http = httpx2.AsyncClient(
@@ -336,9 +461,7 @@ async def test_hidden_tool_call_is_denied_before_target_document_lookup() -> Non
             async with streamable_http_client("http://testserver/mcp", http_client=http) as streams:
                 async with ClientSession(streams[0], streams[1]) as session:
                     await session.initialize()
-                    result = await session.call_tool(
-                        "kb_get_note", {"document_id": "00000000-0000-0000-0000-000000000001"}
-                    )
+                    result = await session.call_tool("kb_get_note", {"document_id": DOC_ID})
     assert result.is_error is True
     calls.knowledge.get_document.assert_not_awaited()
     assert transport.actors == {}
@@ -346,7 +469,7 @@ async def test_hidden_tool_call_is_denied_before_target_document_lookup() -> Non
 
 @pytest.mark.asyncio
 async def test_sdk_request_body_limit_runs_after_bearer_authentication() -> None:
-    runtime, calls = runtime_for(("mcp:workspaces:read",))
+    runtime, calls = runtime_for(("mcp:knowledge-bases:read",))
     settings = Settings(
         environment="test", public_origin="http://testserver", mcp_request_max_bytes=128
     )
@@ -383,22 +506,21 @@ def test_app_lifespan_disposes_engine_when_job_start_fails(
 
 
 @pytest.mark.asyncio
-async def test_service_principal_never_falls_back_to_owner_identity() -> None:
+async def test_service_principal_acts_as_owner_user_identity() -> None:
     runtime, calls = runtime_for(("mcp:knowledge:read",))
     principal_actor = McpActor(
         actor_type="service_principal",
         principal_id="11111111-1111-1111-1111-111111111111",
-        workspace_id="workspace-1",
-        folder_root_id="root-1",
         scopes=("mcp:knowledge:read",),
     )
     calls.authorization.authenticate_bearer.return_value = principal_actor
     calls.knowledge.get_document.return_value = {
-        "id": "00000000-0000-0000-0000-000000000001",
+        "id": DOC_ID,
+        "kbId": "kb-editor",
         "folderId": "folder-1",
         "kind": "note",
         "title": "Delegated",
-        "markdown": "Visible through principal policy",
+        "markdown": "Visible through the owner's membership",
     }
     settings = Settings(environment="test", public_origin="http://testserver")
     transport = McpTransport(lambda: runtime, settings)
@@ -413,41 +535,31 @@ async def test_service_principal_never_falls_back_to_owner_identity() -> None:
                 async with ClientSession(streams[0], streams[1]) as session:
                     await session.initialize()
                     tools = await session.list_tools()
-                    result = await session.call_tool(
-                        "kb_get_note", {"document_id": "00000000-0000-0000-0000-000000000001"}
-                    )
-    assert "kb_get_note" in {tool.name for tool in tools.tools}
-    assert "kb_list_tags" not in {tool.name for tool in tools.tools}
-    assert "kb_create_note" not in {tool.name for tool in tools.tools}
+                    result = await session.call_tool("kb_get_note", {"document_id": DOC_ID})
+    names = {tool.name for tool in tools.tools}
+    assert "kb_get_note" in names
+    # Tag tools are gone and write/ask scopes are not granted to this principal.
+    assert "kb_list_tags" not in names
+    assert "kb_set_tags" not in names
+    assert "kb_create_note" not in names
+    assert "kb_ask" not in names
     assert result.is_error is False
+    # Target services receive the owner's user id, never the raw actor.
     assert calls.knowledge.get_document.await_count == 2
-    assert all(
-        call.args[0] is principal_actor for call in calls.knowledge.get_document.await_args_list
-    )
-    calls.workspace.list_workspaces.assert_not_awaited()
+    assert all(call.args[0] == "owner-1" for call in calls.knowledge.get_document.await_args_list)
+    calls.kb.list_knowledge_bases.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_service_principal_search_and_download_keep_delegated_actor() -> None:
-    runtime, calls = runtime_for(("mcp:knowledge:read", "mcp:knowledge:search"))
+async def test_service_principal_write_follows_owner_role() -> None:
+    runtime, calls = runtime_for(("mcp:knowledge:write",))
     principal_actor = McpActor(
         actor_type="service_principal",
         principal_id="11111111-1111-1111-1111-111111111111",
-        workspace_id="workspace-1",
-        scopes=("mcp:knowledge:read", "mcp:knowledge:search"),
+        scopes=("mcp:knowledge:write",),
     )
     calls.authorization.authenticate_bearer.return_value = principal_actor
-    calls.search.search.return_value = {"items": []}
-    calls.knowledge.get_document.return_value = {
-        "id": "00000000-0000-0000-0000-000000000001",
-        "folderId": "folder-1",
-        "kind": "file",
-        "title": "File",
-    }
-    calls.storage.download.return_value = {
-        "url": "https://storage.example/presigned",
-        "expiresAt": "2026-08-27T13:00:00Z",
-    }
+    calls.knowledge.create_note.return_value = {"id": DOC_ID, "kbId": "kb-editor"}
     settings = Settings(environment="test", public_origin="http://testserver")
     transport = McpTransport(lambda: runtime, settings)
     http = httpx2.AsyncClient(
@@ -460,25 +572,32 @@ async def test_service_principal_search_and_download_keep_delegated_actor() -> N
             async with streamable_http_client("http://testserver/mcp", http_client=http) as streams:
                 async with ClientSession(streams[0], streams[1]) as session:
                     await session.initialize()
-                    search_result = await session.call_tool(
-                        "kb_search", {"query": "needle", "folder_id": "folder-1"}
+                    allowed = await session.call_tool(
+                        "kb_create_note",
+                        {
+                            "kb_id": "kb-editor",
+                            "folder_id": "folder-1",
+                            "title": "Title",
+                            "markdown": "Body",
+                        },
                     )
-                    file_result = await session.call_tool(
-                        "kb_get_file",
-                        {"document_id": "00000000-0000-0000-0000-000000000001"},
+                    denied = await session.call_tool(
+                        "kb_create_note",
+                        {
+                            "kb_id": "kb-viewer",
+                            "folder_id": "folder-1",
+                            "title": "Title",
+                            "markdown": "Body",
+                        },
                     )
-    assert search_result.is_error is False
-    assert file_result.is_error is False
-    assert calls.search.search.await_args.args[0] is principal_actor
-    assert calls.storage.download.await_args.args[0] is principal_actor
-    assert all(
-        call.args[0] is principal_actor for call in calls.knowledge.get_document.await_args_list
-    )
+    assert allowed.is_error is False
+    assert denied.is_error is True
+    calls.knowledge.create_note.assert_awaited_once_with("owner-1", "folder-1", "Title", "Body")
 
 
 @pytest.mark.asyncio
 async def test_authenticated_boundary_strips_raw_credentials_before_sdk_dispatch() -> None:
-    runtime, calls = runtime_for(("mcp:workspaces:read",))
+    runtime, calls = runtime_for(("mcp:knowledge-bases:read",))
     captured: dict[str, object] = {}
 
     async def downstream(scope: Scope, _receive: Receive, send: Send) -> None:

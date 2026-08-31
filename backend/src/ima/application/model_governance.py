@@ -1262,13 +1262,11 @@ class ModelGovernanceService:
     async def delete_profile(self, actor_id: str, profile_id: UUID) -> None:
         async with self.engine.begin() as conn:
             if await conn.scalar(
-                text(
-                    "SELECT 1 FROM ima.workspace_profile_assignments WHERE profile_id=:id LIMIT 1"
-                ),
+                text("SELECT 1 FROM ima.kb_profile_assignments WHERE profile_id=:id LIMIT 1"),
                 {"id": profile_id},
             ):
                 raise ModelGovernanceError(
-                    409, "DEPENDENCY_CONFLICT", "Profile has workspace assignments"
+                    409, "DEPENDENCY_CONFLICT", "Profile has knowledge base assignments"
                 )
             row = await conn.scalar(
                 text("SELECT lifecycle FROM ima.capability_profiles WHERE id=:id FOR UPDATE"),
@@ -1448,7 +1446,7 @@ class ModelGovernanceService:
                             h.next_check_at current_next_check_at,h.consecutive_failures current_failures
                             FROM ima.governed_models m
                             LEFT JOIN ima.model_gateway_health h ON h.gateway_id=m.gateway_id AND h.capability=m.capability
-                            WHERE m.gateway_id=:id AND (:capability IS NULL OR m.capability=:capability)
+                            WHERE m.gateway_id=:id AND (CAST(:capability AS varchar) IS NULL OR m.capability=:capability)
                             ORDER BY m.capability,m.remote_name"""
                         ),
                         {"id": gateway_id, "capability": capability.value if capability else None},
@@ -1525,7 +1523,7 @@ class ModelGovernanceService:
     async def assign_profile(
         self,
         actor_id: str,
-        workspace_id: str,
+        kb_id: str,
         workflow: Workflow,
         profile_id: UUID,
         profile_version: int,
@@ -1549,17 +1547,17 @@ class ModelGovernanceService:
                     409, "PROFILE_UNAVAILABLE", "Only active published profiles can be assigned"
                 )
             if not await conn.scalar(
-                text("SELECT 1 FROM ima.workspaces WHERE id=:id AND is_active"),
-                {"id": workspace_id},
+                text("SELECT 1 FROM ima.knowledge_bases WHERE id=:id AND is_active"),
+                {"id": kb_id},
             ):
-                raise ModelGovernanceError(404, "WORKSPACE_NOT_FOUND", "Workspace not found")
+                raise ModelGovernanceError(404, "KB_NOT_FOUND", "Knowledge base not found")
             current = (
                 (
                     await conn.execute(
                         text(
-                            "SELECT * FROM ima.workspace_profile_assignments WHERE workspace_id=:workspace AND workflow=:workflow FOR UPDATE"
+                            "SELECT * FROM ima.kb_profile_assignments WHERE kb_id=:kb AND workflow=:workflow FOR UPDATE"
                         ),
-                        {"workspace": workspace_id, "workflow": workflow.value},
+                        {"kb": kb_id, "workflow": workflow.value},
                     )
                 )
                 .mappings()
@@ -1575,18 +1573,18 @@ class ModelGovernanceService:
                 affected = (
                     await conn.scalar(
                         text(
-                            "SELECT count(*) FROM ima.model_dependency_index WHERE active AND model_id IS NOT NULL AND dependency_kind IN ('target_index','legacy_index') AND workspace_id=:workspace"
+                            "SELECT count(*) FROM ima.model_dependency_index WHERE active AND model_id IS NOT NULL AND dependency_kind IN ('target_index','legacy_index') AND kb_id=:kb"
                         ),
-                        {"workspace": workspace_id},
+                        {"kb": kb_id},
                     )
                     or 0
                 )
                 if affected:
                     old_dim = await conn.scalar(
                         text(
-                            "SELECT dimension FROM ima.model_dependency_index WHERE workspace_id=:workspace AND active ORDER BY updated_at DESC LIMIT 1"
+                            "SELECT dimension FROM ima.model_dependency_index WHERE kb_id=:kb AND active ORDER BY updated_at DESC LIMIT 1"
                         ),
-                        {"workspace": workspace_id},
+                        {"kb": kb_id},
                     )
                     if old_dim != dimension:
                         raise ModelGovernanceError(
@@ -1598,10 +1596,10 @@ class ModelGovernanceService:
             version = int(current["version"]) + 1 if current else 1
             await conn.execute(
                 text(
-                    """INSERT INTO ima.workspace_profile_assignments(workspace_id,workflow,profile_id,profile_version,version,availability,availability_reason,assigned_by,assigned_at) VALUES (:workspace,:workflow,:profile,:profile_version,:version,'available',NULL,:actor,:now) ON CONFLICT(workspace_id,workflow) DO UPDATE SET profile_id=EXCLUDED.profile_id,profile_version=EXCLUDED.profile_version,version=EXCLUDED.version,availability=EXCLUDED.availability,availability_reason=NULL,assigned_by=EXCLUDED.assigned_by,assigned_at=EXCLUDED.assigned_at"""
+                    """INSERT INTO ima.kb_profile_assignments(kb_id,workflow,profile_id,profile_version,version,availability,availability_reason,assigned_by,assigned_at) VALUES (:kb,:workflow,:profile,:profile_version,:version,'available',NULL,:actor,:now) ON CONFLICT(kb_id,workflow) DO UPDATE SET profile_id=EXCLUDED.profile_id,profile_version=EXCLUDED.profile_version,version=EXCLUDED.version,availability=EXCLUDED.availability,availability_reason=NULL,assigned_by=EXCLUDED.assigned_by,assigned_at=EXCLUDED.assigned_at"""
                 ),
                 {
-                    "workspace": workspace_id,
+                    "kb": kb_id,
                     "workflow": workflow.value,
                     "profile": profile_id,
                     "profile_version": profile_version,
@@ -1614,17 +1612,17 @@ class ModelGovernanceService:
                 conn,
                 actor_id,
                 "model.assignment.updated",
-                target_type="workspace",
-                target_id=workspace_id,
+                target_type="knowledge_base",
+                target_id=kb_id,
                 metadata={"workflow": workflow.value, "profileVersion": profile_version},
             )
             result = (
                 (
                     await conn.execute(
                         text(
-                            "SELECT * FROM ima.workspace_profile_assignments WHERE workspace_id=:workspace AND workflow=:workflow"
+                            "SELECT * FROM ima.kb_profile_assignments WHERE kb_id=:kb AND workflow=:workflow"
                         ),
-                        {"workspace": workspace_id, "workflow": workflow.value},
+                        {"kb": kb_id, "workflow": workflow.value},
                     )
                 )
                 .mappings()
@@ -1635,7 +1633,7 @@ class ModelGovernanceService:
     async def remove_assignment(
         self,
         actor_id: str,
-        workspace_id: str,
+        kb_id: str,
         workflow: Workflow,
         expected_version: int | None = None,
     ) -> None:
@@ -1644,9 +1642,9 @@ class ModelGovernanceService:
                 (
                     await conn.execute(
                         text(
-                            "SELECT * FROM ima.workspace_profile_assignments WHERE workspace_id=:workspace AND workflow=:workflow FOR UPDATE"
+                            "SELECT * FROM ima.kb_profile_assignments WHERE kb_id=:kb AND workflow=:workflow FOR UPDATE"
                         ),
-                        {"workspace": workspace_id, "workflow": workflow.value},
+                        {"kb": kb_id, "workflow": workflow.value},
                     )
                 )
                 .mappings()
@@ -1660,35 +1658,35 @@ class ModelGovernanceService:
                 )
             await conn.execute(
                 text(
-                    "DELETE FROM ima.workspace_profile_assignments WHERE workspace_id=:workspace AND workflow=:workflow"
+                    "DELETE FROM ima.kb_profile_assignments WHERE kb_id=:kb AND workflow=:workflow"
                 ),
-                {"workspace": workspace_id, "workflow": workflow.value},
+                {"kb": kb_id, "workflow": workflow.value},
             )
             await self._audit(
                 conn,
                 actor_id,
                 "model.assignment.removed",
-                target_type="workspace",
-                target_id=workspace_id,
+                target_type="knowledge_base",
+                target_id=kb_id,
                 metadata={"workflow": workflow.value},
             )
 
-    async def workspace_capabilities(self, user_id: str, workspace_id: str) -> list[dict[str, Any]]:
+    async def kb_capabilities(self, user_id: str, kb_id: str) -> list[dict[str, Any]]:
         async with self.engine.connect() as conn:
             if not await conn.scalar(
                 text(
-                    "SELECT 1 FROM ima.workspace_members m JOIN ima.users u ON u.id=m.user_id JOIN ima.workspaces w ON w.id=m.workspace_id WHERE m.user_id=:user AND m.workspace_id=:workspace AND m.state='active' AND u.is_active AND w.is_active"
+                    "SELECT 1 FROM ima.kb_members m JOIN ima.users u ON u.id=m.user_id JOIN ima.knowledge_bases kb ON kb.id=m.kb_id WHERE m.user_id=:user AND m.kb_id=:kb AND m.state='active' AND u.is_active AND kb.is_active"
                 ),
-                {"user": user_id, "workspace": workspace_id},
+                {"user": user_id, "kb": kb_id},
             ):
-                raise ModelGovernanceError(404, "WORKSPACE_NOT_FOUND", "Workspace not found")
+                raise ModelGovernanceError(404, "KB_NOT_FOUND", "Knowledge base not found")
             rows = (
                 (
                     await conn.execute(
                         text(
-                            """SELECT a.workflow,p.business_alias,p.description,p.current_version,a.profile_version,a.availability,a.availability_reason,p.lifecycle,v.state FROM ima.workspace_profile_assignments a JOIN ima.capability_profiles p ON p.id=a.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=a.profile_id AND v.version=a.profile_version WHERE a.workspace_id=:workspace ORDER BY a.workflow"""
+                            """SELECT a.workflow,p.business_alias,p.description,p.current_version,a.profile_version,a.availability,a.availability_reason,p.lifecycle,v.state FROM ima.kb_profile_assignments a JOIN ima.capability_profiles p ON p.id=a.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=a.profile_id AND v.version=a.profile_version WHERE a.kb_id=:kb ORDER BY a.workflow"""
                         ),
-                        {"workspace": workspace_id},
+                        {"kb": kb_id},
                     )
                 )
                 .mappings()
@@ -1707,7 +1705,7 @@ class ModelGovernanceService:
             target = None
             if row["lifecycle"] == "active" and row["state"] == "published":
                 target = await self._execution_target(
-                    workspace_id, workflow, operation_for_workflow[workflow], decrypt_secret=False
+                    kb_id, workflow, operation_for_workflow[workflow], decrypt_secret=False
                 )
             if not target or target.get("reason"):
                 status = "unavailable"
@@ -1729,7 +1727,7 @@ class ModelGovernanceService:
 
     async def _execution_target(
         self,
-        workspace_id: str,
+        kb_id: str,
         workflow: Workflow,
         operation: str,
         *,
@@ -1748,8 +1746,8 @@ class ModelGovernanceService:
                     conn,
                     None,
                     "model.execution.denied",
-                    target_type="workspace",
-                    target_id=workspace_id,
+                    target_type="knowledge_base",
+                    target_id=kb_id,
                     result="failed",
                     reason="WORKFLOW_OPERATION_MISMATCH",
                     metadata={"workflow": workflow.value, "operation": operation},
@@ -1762,10 +1760,10 @@ class ModelGovernanceService:
                 (
                     await conn.execute(
                         text(
-                            """SELECT a.*,p.workflow,p.lifecycle,v.state,v.config,g.id gateway_id,g.normalized_base_url,g.insecure_private,g.enabled gateway_enabled,g.secret_id,g.custom_ca_ref,g.allowed_hosts,g.allowed_cidrs,g.max_response_bytes,g.connect_timeout_ms,g.read_timeout_ms,g.write_timeout_ms,g.pool_timeout_ms,m.id model_id,m.remote_name,m.capability,m.enabled model_enabled,m.validated,COALESCE(h.state,'unknown') health_state FROM ima.workspace_profile_assignments a JOIN ima.capability_profiles p ON p.id=a.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=a.profile_id AND v.version=a.profile_version JOIN ima.governed_models m ON m.id=CAST(CASE WHEN :operation='chat' THEN v.config->>'chatModelId' WHEN :operation='embedding' THEN v.config->>'embeddingModelId' WHEN :operation='rerank' THEN v.config->>'rerankModelId' END AS uuid) JOIN ima.model_gateways g ON g.id=m.gateway_id LEFT JOIN ima.model_gateway_health h ON h.gateway_id=g.id AND h.capability=m.capability WHERE a.workspace_id=:workspace AND a.workflow=:workflow"""
+                            """SELECT a.*,p.workflow,p.lifecycle,v.state,v.config,g.id gateway_id,g.normalized_base_url,g.insecure_private,g.enabled gateway_enabled,g.secret_id,g.custom_ca_ref,g.allowed_hosts,g.allowed_cidrs,g.max_response_bytes,g.connect_timeout_ms,g.read_timeout_ms,g.write_timeout_ms,g.pool_timeout_ms,m.id model_id,m.remote_name,m.capability,m.enabled model_enabled,m.validated,COALESCE(h.state,'unknown') health_state FROM ima.kb_profile_assignments a JOIN ima.capability_profiles p ON p.id=a.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=a.profile_id AND v.version=a.profile_version JOIN ima.governed_models m ON m.id=CAST(CASE WHEN :operation='chat' THEN v.config->>'chatModelId' WHEN :operation='embedding' THEN v.config->>'embeddingModelId' WHEN :operation='rerank' THEN v.config->>'rerankModelId' END AS uuid) JOIN ima.model_gateways g ON g.id=m.gateway_id LEFT JOIN ima.model_gateway_health h ON h.gateway_id=g.id AND h.capability=m.capability WHERE a.kb_id=:kb AND a.workflow=:workflow"""
                         ),
                         {
-                            "workspace": workspace_id,
+                            "kb": kb_id,
                             "workflow": workflow.value,
                             "operation": operation,
                         },
@@ -1784,9 +1782,9 @@ class ModelGovernanceService:
                     (
                         await conn.execute(
                             text(
-                                "SELECT profile_id,profile_version FROM ima.workspace_profile_assignments WHERE workspace_id=:workspace AND workflow=:workflow"
+                                "SELECT profile_id,profile_version FROM ima.kb_profile_assignments WHERE kb_id=:kb AND workflow=:workflow"
                             ),
-                            {"workspace": workspace_id, "workflow": workflow.value},
+                            {"kb": kb_id, "workflow": workflow.value},
                         )
                     )
                     .mappings()
@@ -1803,8 +1801,8 @@ class ModelGovernanceService:
                     conn,
                     None,
                     "model.execution.denied",
-                    target_type="workspace",
-                    target_id=workspace_id,
+                    target_type="knowledge_base",
+                    target_id=kb_id,
                     result="failed",
                     reason="NO_ASSIGNMENT",
                     metadata={"workflow": workflow.value, "operation": operation},
@@ -1825,8 +1823,8 @@ class ModelGovernanceService:
                     conn,
                     None,
                     "model.execution.denied",
-                    target_type="workspace",
-                    target_id=workspace_id,
+                    target_type="knowledge_base",
+                    target_id=kb_id,
                     result="failed",
                     reason="UNAVAILABLE",
                     metadata={"workflow": workflow.value, "operation": operation},
@@ -1839,12 +1837,12 @@ class ModelGovernanceService:
 
     async def managed_chat(
         self,
-        workspace_id: str,
+        kb_id: str,
         workflow: Workflow,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
     ) -> dict[str, object]:
-        row = await self._execution_target(workspace_id, workflow, "chat")
+        row = await self._execution_target(kb_id, workflow, "chat")
         if not row:
             raise ModelGovernanceError(
                 409, "NO_ASSIGNMENT", "No managed workflow assignment exists"
@@ -1876,12 +1874,12 @@ class ModelGovernanceService:
 
     async def managed_chat_stream(
         self,
-        workspace_id: str,
+        kb_id: str,
         workflow: Workflow,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[bytes]:
-        row = await self._execution_target(workspace_id, workflow, "chat")
+        row = await self._execution_target(kb_id, workflow, "chat")
         if not row:
             raise ModelGovernanceError(
                 409, "NO_ASSIGNMENT", "No managed workflow assignment exists"
@@ -1911,9 +1909,9 @@ class ModelGovernanceService:
             yield chunk
 
     async def managed_embeddings(
-        self, workspace_id: str, inputs: list[str]
+        self, kb_id: str, inputs: list[str]
     ) -> tuple[tuple[float, ...], ...]:
-        row = await self._execution_target(workspace_id, Workflow.EMBEDDING, "embedding")
+        row = await self._execution_target(kb_id, Workflow.EMBEDDING, "embedding")
         if not row:
             raise ModelGovernanceError(
                 409, "NO_ASSIGNMENT", "No managed embedding assignment exists"
@@ -1932,9 +1930,9 @@ class ModelGovernanceService:
         )
 
     async def managed_rerank(
-        self, workspace_id: str, query: str, documents: list[str]
+        self, kb_id: str, query: str, documents: list[str]
     ) -> tuple[tuple[int, float], ...]:
-        row = await self._execution_target(workspace_id, Workflow.RERANKING, "rerank")
+        row = await self._execution_target(kb_id, Workflow.RERANKING, "rerank")
         if not row:
             raise ModelGovernanceError(
                 409, "NO_ASSIGNMENT", "No managed reranking assignment exists"
@@ -2010,7 +2008,7 @@ class ModelGovernanceService:
                 (
                     await conn.execute(
                         text(
-                            """SELECT a.workspace_id,a.workflow,a.profile_version,m.id current_model_id,m.embedding_dimension current_dimension,count(d.id) affected_indexes,coalesce(array_agg(d.source_id) FILTER (WHERE d.source_id IS NOT NULL),'{}') affected_source_ids FROM ima.workspace_profile_assignments a JOIN ima.capability_profile_versions v ON v.profile_id=a.profile_id AND v.version=a.profile_version LEFT JOIN ima.governed_models m ON m.id=CAST(v.config->>'embeddingModelId' AS uuid) LEFT JOIN ima.model_dependency_index d ON d.workspace_id=a.workspace_id AND d.active AND d.dependency_kind IN ('target_index','legacy_index') WHERE a.workflow='embedding' GROUP BY a.workspace_id,a.workflow,a.profile_version,m.id,m.embedding_dimension"""
+                            """SELECT a.kb_id,a.workflow,a.profile_version,m.id current_model_id,m.embedding_dimension current_dimension,count(d.id) affected_indexes,coalesce(array_agg(d.source_id) FILTER (WHERE d.source_id IS NOT NULL),'{}') affected_source_ids FROM ima.kb_profile_assignments a JOIN ima.capability_profile_versions v ON v.profile_id=a.profile_id AND v.version=a.profile_version LEFT JOIN ima.governed_models m ON m.id=CAST(v.config->>'embeddingModelId' AS uuid) LEFT JOIN ima.model_dependency_index d ON d.kb_id=a.kb_id AND d.active AND d.dependency_kind IN ('target_index','legacy_index') WHERE a.workflow='embedding' GROUP BY a.kb_id,a.workflow,a.profile_version,m.id,m.embedding_dimension"""
                         )
                     )
                 )
@@ -2025,7 +2023,7 @@ class ModelGovernanceService:
             ):
                 affected.append(
                     {
-                        "workspaceId": row["workspace_id"],
+                        "kbId": row["kb_id"],
                         "workflow": row["workflow"],
                         "currentModelId": row["current_model_id"],
                         "currentDimension": row["current_dimension"],

@@ -1,10 +1,9 @@
-"""PostgreSQL authorization gate for the target workspace slice."""
+"""PostgreSQL authorization gate for the knowledge base slice."""
 
 # ruff: noqa: E501, ASYNC221
 
 from __future__ import annotations
 
-import asyncio
 import os
 import subprocess
 from datetime import UTC, datetime
@@ -13,13 +12,16 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
-from ima.application.authorization import WorkspaceError, WorkspaceService
+from ima.application.authorization import KbError, KbService
 from ima.config import Settings
-from ima.domain.authorization import AclAction, MembershipState, WorkspaceRole
-from ima.infrastructure.db.authorization import accessible_folder_ids, folder_decision, load_subject
 from ima.infrastructure.db.engine import create_engine
 
 DATABASE_URL = os.environ.get("IMA_TEST_DATABASE_URL")
+
+OWNER_ID = "authz-admin"
+VIEWER_ID = "authz-viewer"
+JOINER_ID = "authz-joiner"
+USER_IDS = (OWNER_ID, VIEWER_ID, JOINER_ID)
 
 
 def integration_settings() -> Settings:
@@ -35,27 +37,26 @@ def integration_settings() -> Settings:
     )
 
 
-async def create_fixture(engine: object, service: WorkspaceService) -> tuple[str, str, str]:
+async def create_fixture(engine: object, service: KbService) -> tuple[str, str, str]:
     stamp = datetime.now(UTC)
-    actor_id, viewer_id, invitee_id = "authz-admin", "authz-viewer", "authz-invitee"
     async with engine.begin() as conn:  # type: ignore[attr-defined]
         await conn.execute(
-            text("DELETE FROM ima.audit_events WHERE actor_id IN (:actor,:viewer,:invitee)"),
-            {"actor": actor_id, "viewer": viewer_id, "invitee": invitee_id},
+            text("DELETE FROM ima.audit_events WHERE actor_id IN (:owner,:viewer,:joiner)"),
+            {"owner": OWNER_ID, "viewer": VIEWER_ID, "joiner": JOINER_ID},
         )
         await conn.execute(
-            text("DELETE FROM ima.workspaces WHERE created_by IN (:actor,:viewer,:invitee)"),
-            {"actor": actor_id, "viewer": viewer_id, "invitee": invitee_id},
+            text("DELETE FROM ima.knowledge_bases WHERE created_by IN (:owner,:viewer,:joiner)"),
+            {"owner": OWNER_ID, "viewer": VIEWER_ID, "joiner": JOINER_ID},
         )
-        await conn.execute(text("DELETE FROM ima.workspaces WHERE id LIKE 'authz-%'"))
+        await conn.execute(text("DELETE FROM ima.knowledge_bases WHERE id LIKE 'authz-%'"))
         await conn.execute(
-            text("DELETE FROM ima.users WHERE id IN (:actor,:viewer,:invitee)"),
-            {"actor": actor_id, "viewer": viewer_id, "invitee": invitee_id},
+            text("DELETE FROM ima.users WHERE id IN (:owner,:viewer,:joiner)"),
+            {"owner": OWNER_ID, "viewer": VIEWER_ID, "joiner": JOINER_ID},
         )
         for user_id, email in (
-            (actor_id, "authz-admin@example.test"),
-            (viewer_id, "authz-viewer@example.test"),
-            (invitee_id, "authz-invitee@example.test"),
+            (OWNER_ID, "authz-admin@example.test"),
+            (VIEWER_ID, "authz-viewer@example.test"),
+            (JOINER_ID, "authz-joiner@example.test"),
         ):
             await conn.execute(
                 text(
@@ -67,21 +68,21 @@ async def create_fixture(engine: object, service: WorkspaceService) -> tuple[str
             text(
                 "INSERT INTO ima.platform_role_assignments(user_id,role,created_at) VALUES (:id,'platform_admin',:now)"
             ),
-            {"id": actor_id, "now": stamp},
+            {"id": OWNER_ID, "now": stamp},
         )
-    workspace = await service.create_workspace(actor_id, "Authorization Fixture", actor_id)
-    workspace_id = str(workspace["id"])
+    knowledge_base = await service.create_knowledge_base(OWNER_ID, "Authorization Fixture")
+    kb_id = str(knowledge_base["id"])
     async with engine.begin() as conn:  # type: ignore[attr-defined]
         await conn.execute(
             text(
-                "INSERT INTO ima.workspace_members(workspace_id,user_id,role,state,joined_at,updated_at) VALUES (:w,:u,'viewer','active',:now,:now)"
+                "INSERT INTO ima.kb_members(kb_id,user_id,role,state,version,joined_at) VALUES (:kb,:u,'viewer','active',1,:now)"
             ),
-            {"w": workspace_id, "u": viewer_id, "now": stamp},
+            {"kb": kb_id, "u": VIEWER_ID, "now": stamp},
         )
-    return workspace_id, actor_id, viewer_id
+    return kb_id, OWNER_ID, VIEWER_ID
 
 
-async def cleanup(engine: object, workspace_id: str, user_ids: tuple[str, ...]) -> None:
+async def cleanup(engine: object, kb_id: str, user_ids: tuple[str, ...]) -> None:
     async with engine.begin() as conn:  # type: ignore[attr-defined]
         await conn.execute(
             text("DELETE FROM ima.audit_events WHERE actor_id IN :ids").bindparams(
@@ -89,7 +90,11 @@ async def cleanup(engine: object, workspace_id: str, user_ids: tuple[str, ...]) 
             ),
             {"ids": user_ids},
         )
-        await conn.execute(text("DELETE FROM ima.workspaces WHERE id=:id"), {"id": workspace_id})
+        await conn.execute(text("DELETE FROM ima.kb_share_links WHERE kb_id=:kb"), {"kb": kb_id})
+        await conn.execute(text("DELETE FROM ima.kb_members WHERE kb_id=:kb"), {"kb": kb_id})
+        await conn.execute(text("DELETE FROM ima.folder_closure WHERE kb_id=:kb"), {"kb": kb_id})
+        await conn.execute(text("DELETE FROM ima.folders WHERE kb_id=:kb"), {"kb": kb_id})
+        await conn.execute(text("DELETE FROM ima.knowledge_bases WHERE id=:kb"), {"kb": kb_id})
         await conn.execute(
             text("DELETE FROM ima.platform_role_assignments WHERE user_id IN :ids").bindparams(
                 __import__("sqlalchemy").bindparam("ids", expanding=True)
@@ -107,7 +112,7 @@ async def cleanup(engine: object, workspace_id: str, user_ids: tuple[str, ...]) 
 @pytest.mark.postgres
 @pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
 @pytest.mark.asyncio
-async def test_authorization_schema_policy_hidden_revoke_and_archive() -> None:
+async def test_kb_role_matrix_hidden_membership_and_archive() -> None:
     assert DATABASE_URL is not None
     root = Path(__file__).parents[2]
     env = {
@@ -128,249 +133,184 @@ async def test_authorization_schema_policy_hidden_revoke_and_archive() -> None:
     )
     settings = integration_settings()
     engine = create_engine(settings)
-    service = WorkspaceService(engine, settings)
-    workspace_id, actor_id, viewer_id = await create_fixture(engine, service)
+    service = KbService(engine, settings)
+    kb_id, actor_id, viewer_id = await create_fixture(engine, service)
     try:
-        child = await service.create_folder(actor_id, workspace_id, workspace_id, "Private")
-        await service.set_acl(
-            actor_id,
-            workspace_id,
-            child["id"],
-            inherit=False,
-            entries=[
-                {"subject_type": "role", "subject_id": "workspace_admin", "action": "manage_acl"},
-                {
-                    "subject_type": "role",
-                    "subject_id": "workspace_admin",
-                    "action": "view_metadata",
-                },
-                {"subject_type": "role", "subject_id": "workspace_admin", "action": "view_content"},
-                {"subject_type": "role", "subject_id": "viewer", "action": "view_metadata"},
-                {"subject_type": "role", "subject_id": "viewer", "action": "view_content"},
-            ],
-        )
-        async with engine.connect() as conn:
-            assert (
-                await conn.scalar(
-                    text("SELECT version FROM ima.folder_acls WHERE folder_id=:id"),
-                    {"id": child["id"]},
-                )
-                == 1
-            )
-        await service.set_acl(
-            actor_id,
-            workspace_id,
-            child["id"],
-            inherit=False,
-            entries=[
-                {"subject_type": "role", "subject_id": "workspace_admin", "action": "manage_acl"},
-                {
-                    "subject_type": "role",
-                    "subject_id": "workspace_admin",
-                    "action": "view_metadata",
-                },
-                {"subject_type": "role", "subject_id": "workspace_admin", "action": "view_content"},
-            ],
-            expected_version=1,
-        )
-        async with engine.connect() as conn:
-            assert (
-                await conn.scalar(
-                    text("SELECT version FROM ima.folder_acls WHERE folder_id=:id"),
-                    {"id": child["id"]},
-                )
-                == 2
-            )
-        async with engine.connect() as conn:
-            subject = await load_subject(conn, viewer_id, workspace_id)
-            assert subject is not None
-            visible = await accessible_folder_ids(conn, subject, AclAction.ASK)
-            assert child["id"] not in visible
-            decision = await folder_decision(conn, subject, child["id"], AclAction.DOWNLOAD)
-            assert not decision.allowed
-        with pytest.raises(WorkspaceError, match="Folder not found"):
-            await service.acl(viewer_id, workspace_id, child["id"])
-        with pytest.raises(WorkspaceError, match="Folder not found|permission preview"):
-            await service.permission_preview(viewer_id, workspace_id, viewer_id)
-        await service.mutate_member(
-            actor_id, workspace_id, viewer_id, state=MembershipState.DISABLED, expected_version=1
-        )
-        async with engine.connect() as conn:
-            assert await load_subject(conn, viewer_id, workspace_id) is None
-        async with engine.begin() as conn:
-            await conn.execute(
-                text("UPDATE ima.workspaces SET is_active=false,archived_at=now() WHERE id=:id"),
-                {"id": workspace_id},
-            )
-            subject = await load_subject(conn, actor_id, workspace_id)
-            assert subject is not None
-            assert not await accessible_folder_ids(conn, subject, AclAction.VIEW_CONTENT)
+        # Viewers read the tree but never mutate it.
+        assert await service.folders(viewer_id, kb_id)
+        with pytest.raises(KbError, match="Folder not found"):
+            await service.create_folder(viewer_id, kb_id, kb_id, "Blocked")
+        # Non-members cannot even see the knowledge base.
+        with pytest.raises(KbError, match="Knowledge base not found"):
+            await service.folders(JOINER_ID, kb_id)
+        # Only the owner manages members, and the owner role is protected.
+        with pytest.raises(KbError, match="owner access is required"):
+            await service.update_member_role(viewer_id, kb_id, viewer_id, "editor")
+        with pytest.raises(KbError, match="owner role cannot be changed"):
+            await service.update_member_role(actor_id, kb_id, actor_id, "viewer")
+        promoted = await service.update_member_role(actor_id, kb_id, viewer_id, "editor")
+        assert promoted["role"] == "editor"
+        editor_folder = await service.create_folder(viewer_id, kb_id, kb_id, "Editor Space")
+        assert editor_folder["kbId"] == kb_id
+        # Archival hides the knowledge base from every member read.
+        await service.archive_knowledge_base(actor_id, kb_id)
+        with pytest.raises(KbError, match="Knowledge base not found"):
+            await service.folders(viewer_id, kb_id)
+        with pytest.raises(KbError, match="Knowledge base not found"):
+            await service.folders(actor_id, kb_id)
+        # The owner keeps restore authority while everyone else stays hidden.
+        await service.restore_knowledge_base(actor_id, kb_id)
+        assert await service.folders(viewer_id, kb_id)
     finally:
-        await cleanup(engine, workspace_id, (actor_id, viewer_id, "authz-invitee"))
+        await cleanup(engine, kb_id, USER_IDS)
         await engine.dispose()
 
 
 @pytest.mark.postgres
 @pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
 @pytest.mark.asyncio
-async def test_authorization_move_closure_acl_dependencies_and_last_admin() -> None:
+async def test_kb_move_closure_and_owner_protection() -> None:
     settings = integration_settings()
     engine = create_engine(settings)
-    service = WorkspaceService(engine, settings)
-    workspace_id, actor_id, viewer_id = await create_fixture(engine, service)
+    service = KbService(engine, settings)
+    kb_id, actor_id, viewer_id = await create_fixture(engine, service)
     try:
-        first = await service.create_folder(actor_id, workspace_id, workspace_id, "First")
-        second = await service.create_folder(actor_id, workspace_id, workspace_id, "Second")
-        nested = await service.create_folder(actor_id, workspace_id, first["id"], "Nested")
-        moved = await service.move_folder(actor_id, workspace_id, nested["id"], second["id"], 1)
-        assert moved["parent_id"] == second["id"]
+        first = await service.create_folder(actor_id, kb_id, kb_id, "First")
+        second = await service.create_folder(actor_id, kb_id, kb_id, "Second")
+        nested = await service.create_folder(actor_id, kb_id, first["id"], "Nested")
+        moved = await service.move_folder(actor_id, kb_id, nested["id"], second["id"], 1)
+        assert moved["parentId"] == second["id"]
         async with engine.connect() as conn:
             closure = (
                 await conn.execute(
                     text(
-                        "SELECT ancestor_id,depth FROM ima.folder_closure WHERE workspace_id=:w AND descendant_id=:d ORDER BY depth"
+                        "SELECT ancestor_id,depth FROM ima.folder_closure WHERE kb_id=:kb AND descendant_id=:d ORDER BY depth"
                     ),
-                    {"w": workspace_id, "d": nested["id"]},
+                    {"kb": kb_id, "d": nested["id"]},
                 )
             ).all()
-            assert (workspace_id, 2) in {(str(row[0]), int(row[1])) for row in closure}
-        with pytest.raises(WorkspaceError, match="administrable"):
-            await service.set_acl(
-                actor_id,
-                workspace_id,
-                second["id"],
-                inherit=False,
-                entries=[
-                    {"subject_type": "role", "subject_id": "viewer", "action": "view_content"}
-                ],
-                expected_version=1,
+            assert (kb_id, 2) in {(str(row[0]), int(row[1])) for row in closure}
+        # The single owner cannot be removed, demoted, or leave.
+        with pytest.raises(KbError, match="owner cannot be removed"):
+            await service.remove_member(actor_id, kb_id, actor_id)
+        with pytest.raises(KbError, match="owner cannot leave"):
+            await service.leave_knowledge_base(actor_id, kb_id)
+        # Removing a non-owner member deletes the membership row.
+        await service.remove_member(actor_id, kb_id, viewer_id)
+        async with engine.connect() as conn:
+            assert (
+                await conn.scalar(
+                    text("SELECT count(*) FROM ima.kb_members WHERE kb_id=:kb AND user_id=:u"),
+                    {"kb": kb_id, "u": viewer_id},
+                )
+                == 0
             )
-        await service.mutate_member(
-            actor_id,
-            workspace_id,
-            viewer_id,
-            role=WorkspaceRole.WORKSPACE_ADMIN,
-            expected_version=1,
-        )
-        await service.mutate_member(
-            actor_id, workspace_id, actor_id, role=WorkspaceRole.VIEWER, expected_version=1
-        )
+    finally:
+        await cleanup(engine, kb_id, USER_IDS)
+        await engine.dispose()
+
+
+@pytest.mark.postgres
+@pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
+@pytest.mark.asyncio
+async def test_share_link_join_is_idempotent_and_revocable() -> None:
+    settings = integration_settings()
+    engine = create_engine(settings)
+    service = KbService(engine, settings)
+    kb_id, actor_id, _viewer_id = await create_fixture(engine, service)
+    try:
+        link = await service.create_share_link(actor_id, kb_id, "viewer")
+        token = str(link["url"]).rsplit("/", 1)[-1]
+        joined = await service.accept_share_link(JOINER_ID, token)
+        assert joined["role"] == "viewer"
+        # Accepting again is idempotent and never demotes the member.
+        again = await service.accept_share_link(JOINER_ID, token)
+        assert again["role"] == "viewer"
         async with engine.connect() as conn:
             assert (
                 await conn.scalar(
                     text(
-                        "SELECT count(*) FROM ima.workspace_members WHERE workspace_id=:w AND role='workspace_admin' AND state='active'"
+                        "SELECT count(*) FROM ima.kb_members WHERE kb_id=:kb AND user_id=:u AND state='active'"
                     ),
-                    {"w": workspace_id},
+                    {"kb": kb_id, "u": JOINER_ID},
+                )
+                == 1
+            )
+        # Revocation blocks new joiners but keeps joined members.
+        await service.revoke_share_link(actor_id, kb_id, str(link["id"]))
+        with pytest.raises(KbError, match="invalid or has been revoked"):
+            await service.accept_share_link(VIEWER_ID, token)
+        async with engine.connect() as conn:
+            assert (
+                await conn.scalar(
+                    text(
+                        "SELECT count(*) FROM ima.kb_members WHERE kb_id=:kb AND user_id=:u AND state='active'"
+                    ),
+                    {"kb": kb_id, "u": JOINER_ID},
                 )
                 == 1
             )
     finally:
-        await cleanup(engine, workspace_id, (actor_id, viewer_id, "authz-invitee"))
+        await cleanup(engine, kb_id, USER_IDS)
         await engine.dispose()
 
 
 @pytest.mark.postgres
 @pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
 @pytest.mark.asyncio
-async def test_authorization_invitation_is_single_use_and_concurrent_admin_guard() -> None:
+async def test_archived_kb_delete_refuses_content_then_removes_target_authorization() -> None:
     settings = integration_settings()
     engine = create_engine(settings)
-    service = WorkspaceService(engine, settings)
-    workspace_id, actor_id, _viewer_id = await create_fixture(engine, service)
+    service = KbService(engine, settings)
+    kb_id, actor_id, _viewer_id = await create_fixture(engine, service)
     try:
-        invitation = await service.issue_invitation(
-            actor_id, workspace_id, "authz-invitee", WorkspaceRole.VIEWER
-        )
-        assert invitation["delivery"] == "manual"
-        await service.accept_invitation("authz-invitee", invitation["boundLink"].rsplit("/", 1)[-1])
-        with pytest.raises(WorkspaceError, match="expired, revoked"):
-            await service.accept_invitation(
-                "authz-invitee", invitation["boundLink"].rsplit("/", 1)[-1]
-            )
-        await service.mutate_member(
-            actor_id,
-            workspace_id,
-            "authz-viewer",
-            role=WorkspaceRole.WORKSPACE_ADMIN,
-            expected_version=1,
-        )
-
-        async def demote(user_id: str, expected_version: int) -> object:
-            try:
-                return await service.mutate_member(
-                    actor_id,
-                    workspace_id,
-                    user_id,
-                    role=WorkspaceRole.VIEWER,
-                    expected_version=expected_version,
-                )
-            except WorkspaceError as exc:
-                return exc
-
-        results = await asyncio.gather(demote(actor_id, 1), demote("authz-viewer", 2))
-        assert any(isinstance(result, WorkspaceError) for result in results)
+        await service.create_folder(actor_id, kb_id, kb_id, "Retained")
+        await service.archive_knowledge_base(actor_id, kb_id)
+        with pytest.raises(KbError, match="content dependencies"):
+            await service.delete_archived_knowledge_base(actor_id, kb_id)
     finally:
-        await cleanup(engine, workspace_id, (actor_id, "authz-viewer", "authz-invitee"))
-        await engine.dispose()
-
-
-@pytest.mark.postgres
-@pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
-@pytest.mark.asyncio
-async def test_archived_workspace_delete_refuses_content_then_removes_target_authorization() -> (
-    None
-):
-    settings = integration_settings()
-    engine = create_engine(settings)
-    service = WorkspaceService(engine, settings)
-    workspace_id, actor_id, viewer_id = await create_fixture(engine, service)
-    try:
-        child = await service.create_folder(actor_id, workspace_id, workspace_id, "Retained")
-        async with engine.begin() as conn:
-            await conn.execute(
-                text("UPDATE ima.workspaces SET is_active=false,archived_at=now() WHERE id=:id"),
-                {"id": workspace_id},
-            )
-        with pytest.raises(WorkspaceError, match="folder content"):
-            await service.delete_archived_workspace(actor_id, workspace_id)
-        # Recreate a clean target-only workspace for the successful deletion path.
-    finally:
+        await cleanup(engine, kb_id, USER_IDS)
         await engine.dispose()
 
     engine = create_engine(settings)
-    service = WorkspaceService(engine, settings)
-    workspace_id, actor_id, viewer_id = await create_fixture(engine, service)
+    service = KbService(engine, settings)
+    kb_id, actor_id, _viewer_id = await create_fixture(engine, service)
     try:
-        child = await service.create_folder(actor_id, workspace_id, workspace_id, "Removed")
-        await service.trash_folder(actor_id, workspace_id, child["id"], child["version"])
-        await service.delete_folder(actor_id, workspace_id, child["id"], child["version"] + 1)
-        async with engine.begin() as conn:
-            await conn.execute(
-                text("UPDATE ima.workspaces SET is_active=false,archived_at=now() WHERE id=:id"),
-                {"id": workspace_id},
-            )
-        await service.delete_archived_workspace(actor_id, workspace_id)
+        child = await service.create_folder(actor_id, kb_id, kb_id, "Removed")
+        await service.delete_folder(actor_id, kb_id, child["id"], child["version"])
+        await service.archive_knowledge_base(actor_id, kb_id)
+        await service.delete_archived_knowledge_base(actor_id, kb_id)
         async with engine.connect() as conn:
             assert (
                 await conn.scalar(
-                    text("SELECT 1 FROM ima.workspaces WHERE id=:id"), {"id": workspace_id}
+                    text("SELECT 1 FROM ima.knowledge_bases WHERE id=:kb"), {"kb": kb_id}
                 )
                 is None
             )
+            assert (
+                await conn.scalar(
+                    text("SELECT count(*) FROM ima.kb_members WHERE kb_id=:kb"), {"kb": kb_id}
+                )
+                == 0
+            )
     finally:
         await engine.dispose()
-        # The successful path has no workspace left; clean users and audit rows.
+        # The successful path has no knowledge base left; clean users and audit rows.
         cleanup_engine = create_engine(settings)
         async with cleanup_engine.begin() as conn:
             await conn.execute(
                 text(
-                    "DELETE FROM ima.audit_events WHERE actor_id IN ('authz-admin','authz-viewer','authz-invitee')"
+                    "DELETE FROM ima.audit_events WHERE actor_id IN ('authz-admin','authz-viewer','authz-joiner')"
                 )
             )
             await conn.execute(
                 text(
-                    "DELETE FROM ima.users WHERE id IN ('authz-admin','authz-viewer','authz-invitee')"
+                    "DELETE FROM ima.platform_role_assignments WHERE user_id IN ('authz-admin','authz-viewer','authz-joiner')"
+                )
+            )
+            await conn.execute(
+                text(
+                    "DELETE FROM ima.users WHERE id IN ('authz-admin','authz-viewer','authz-joiner')"
                 )
             )
         await cleanup_engine.dispose()
@@ -379,11 +319,11 @@ async def test_archived_workspace_delete_refuses_content_then_removes_target_aut
 @pytest.mark.postgres
 @pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
 @pytest.mark.asyncio
-async def test_authorization_closure_query_plan_uses_target_indexes() -> None:
+async def test_kb_closure_query_plan_uses_target_indexes() -> None:
     settings = integration_settings()
     engine = create_engine(settings)
-    service = WorkspaceService(engine, settings)
-    workspace_id, actor_id, viewer_id = await create_fixture(engine, service)
+    service = KbService(engine, settings)
+    kb_id, actor_id, viewer_id = await create_fixture(engine, service)
     try:
         async with engine.begin() as conn:
             await conn.execute(text("SET LOCAL enable_seqscan=off"))
@@ -391,9 +331,9 @@ async def test_authorization_closure_query_plan_uses_target_indexes() -> None:
                 (
                     await conn.execute(
                         text(
-                            "EXPLAIN SELECT descendant_id FROM ima.folder_closure WHERE workspace_id=:w AND ancestor_id=:w"
+                            "EXPLAIN SELECT descendant_id FROM ima.folder_closure WHERE kb_id=:kb AND ancestor_id=:kb"
                         ),
-                        {"w": workspace_id},
+                        {"kb": kb_id},
                     )
                 )
                 .scalars()
@@ -401,5 +341,5 @@ async def test_authorization_closure_query_plan_uses_target_indexes() -> None:
             )
             assert "Index" in " ".join(str(line) for line in plan)
     finally:
-        await cleanup(engine, workspace_id, (actor_id, viewer_id, "authz-invitee"))
+        await cleanup(engine, kb_id, (actor_id, viewer_id, JOINER_ID))
         await engine.dispose()

@@ -16,15 +16,15 @@ def upgrade() -> None:
         """
         CREATE TABLE ima.document_file_versions (
           document_id uuid NOT NULL REFERENCES ima.documents(id) ON DELETE RESTRICT,
-          version integer NOT NULL CHECK(version > 0), workspace_id varchar(32) NOT NULL,
+          version integer NOT NULL CHECK(version > 0), kb_id varchar(32) NOT NULL,
           generation integer NOT NULL DEFAULT 1 CHECK(generation > 0), object_state varchar(16) NOT NULL CHECK(object_state IN ('pending','verified','failed','orphaned')),
           object_key varchar(1024) NOT NULL, checksum_algorithm varchar(16) NOT NULL DEFAULT 'sha256' CHECK(checksum_algorithm='sha256'), checksum varchar(64) NOT NULL CHECK(checksum ~ '^[0-9a-f]{64}$'),
           size_bytes bigint NOT NULL CHECK(size_bytes >= 0), mime_type varchar(255) NOT NULL, original_filename varchar(255) NOT NULL,
           source_fingerprint varchar(128), created_by varchar(32) REFERENCES ima.users(id), created_at timestamptz NOT NULL, verified_at timestamptz,
-          PRIMARY KEY(document_id, version), UNIQUE(workspace_id, object_key),
-          FOREIGN KEY(workspace_id, document_id) REFERENCES ima.documents(workspace_id, id) ON DELETE RESTRICT
+          PRIMARY KEY(document_id, version), UNIQUE(kb_id, object_key),
+          FOREIGN KEY(kb_id, document_id) REFERENCES ima.documents(kb_id, id) ON DELETE RESTRICT
         );
-        CREATE INDEX ix_document_file_versions_object ON ima.document_file_versions(workspace_id, checksum, size_bytes, mime_type) WHERE object_state='verified';
+        CREATE INDEX ix_document_file_versions_object ON ima.document_file_versions(kb_id, checksum, size_bytes, mime_type) WHERE object_state='verified';
         CREATE TABLE ima.document_derived_text (
           document_id uuid NOT NULL, version integer NOT NULL, generation integer NOT NULL, parser_name varchar(32) NOT NULL, parser_version varchar(32) NOT NULL,
           source_checksum varchar(64) NOT NULL, text_digest varchar(64) NOT NULL, text_content text NOT NULL, status varchar(16) NOT NULL CHECK(status IN ('ready','failed','unsupported')),

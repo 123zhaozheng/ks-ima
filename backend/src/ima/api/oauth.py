@@ -174,8 +174,6 @@ async def authorization_context(
     client_id: str | None,
     redirect_uri: str | None,
     resource: str | None,
-    workspace_id: str | None,
-    folder_root_id: str | None,
     scope: str | None,
     state: str | None,
     code_challenge: str | None,
@@ -186,8 +184,6 @@ async def authorization_context(
         (client_id, 128),
         (redirect_uri, 512),
         (resource, 512),
-        (workspace_id, 32),
-        (folder_root_id, 32),
         (scope, 512),
         (state, 128),
         (code_challenge, 128),
@@ -196,7 +192,7 @@ async def authorization_context(
     if any(value is not None and len(value) > limit for value, limit in bounded_values):
         raise McpAuthorizationError("invalid_request", "Authorization parameter is oversized")
     if response_type is None or not all(
-        (client_id, redirect_uri, resource, workspace_id, scope, state, code_challenge)
+        (client_id, redirect_uri, resource, scope, state, code_challenge)
     ):
         raise McpAuthorizationError("invalid_request", "Incomplete authorization request")
     if expires_at is None:
@@ -209,8 +205,6 @@ async def authorization_context(
         client_id=cast(str, client_id),
         redirect_uri=cast(str, redirect_uri),
         resource=cast(str, resource),
-        workspace_id=cast(str, workspace_id),
-        folder_root_id=folder_root_id,
         scope=cast(str, scope),
         state=cast(str, state),
         code_challenge=cast(str, code_challenge),
@@ -231,8 +225,6 @@ async def authorize_preview(
     client_id: Annotated[str | None, Query()] = None,
     redirect_uri: Annotated[str | None, Query()] = None,
     resource: Annotated[str | None, Query()] = None,
-    workspace_id: Annotated[str | None, Query()] = None,
-    folder_root_id: Annotated[str | None, Query()] = None,
     scope: Annotated[str | None, Query()] = None,
     state: Annotated[str | None, Query()] = None,
     code_challenge: Annotated[str | None, Query()] = None,
@@ -248,8 +240,6 @@ async def authorize_preview(
             client_id=client_id,
             redirect_uri=redirect_uri,
             resource=resource,
-            workspace_id=workspace_id,
-            folder_root_id=folder_root_id,
             scope=scope,
             state=state,
             code_challenge=code_challenge,
@@ -277,8 +267,6 @@ async def authorize_preview(
         clientName=context.client.client_name,
         redirectUri=context.redirect_uri,
         resource=context.resource,
-        workspaceId=context.workspace_id,
-        folderRootId=context.folder_root_id,
         scopes=context.scopes,
         writeAccess="mcp:knowledge:write" in context.scopes,
         expiresAt=context.grant_expires_at,
@@ -303,8 +291,6 @@ async def authorize_submit(
             client_id=payload.client_id,
             redirect_uri=payload.redirect_uri,
             resource=payload.resource,
-            workspace_id=payload.workspace_id,
-            folder_root_id=payload.folder_root_id,
             scope=payload.scope,
             state=payload.state,
             code_challenge=payload.code_challenge,
@@ -375,8 +361,6 @@ async def authorize_form_decision(
                 "clientId": form_string(form, "client_id") or "",
                 "redirectUri": form_string(form, "redirect_uri") or "",
                 "resource": form_string(form, "resource") or "",
-                "workspaceId": form_string(form, "workspace_id") or "",
-                "folderRootId": form_string(form, "folder_root_id"),
                 "scope": form_string(form, "scope") or "",
                 "state": form_string(form, "state") or "",
                 "codeChallenge": form_string(form, "code_challenge") or "",
@@ -410,8 +394,6 @@ async def authorize_form_decision(
                 "client_id": payload.client_id,
                 "redirect_uri": payload.redirect_uri,
                 "resource": payload.resource,
-                "workspace_id": payload.workspace_id,
-                "folder_root_id": payload.folder_root_id or "",
                 "scope": payload.scope,
                 "state": payload.state,
                 "code_challenge": payload.code_challenge,
@@ -604,25 +586,24 @@ async def revoke_connected_grant(
 
 
 @admin_router.get(
-    "/workspaces/{workspace_id}/service-principals",
+    "/service-principals",
     response_model=tuple[ServicePrincipalResponse, ...],
     operation_id="listServicePrincipals",
 )
 async def list_service_principals(
-    workspace_id: str, request: Request, response: Response, current: Current
+    request: Request, response: Response, current: Current
 ) -> tuple[ServicePrincipalResponse, ...]:
     set_no_store(response)
-    values = await oauth_service(request).list_service_principals(current[1].id, workspace_id)
+    values = await oauth_service(request).list_service_principals(current[1].id)
     return tuple(ServicePrincipalResponse.model_validate(value) for value in values)
 
 
 @admin_router.post(
-    "/workspaces/{workspace_id}/service-principals",
+    "/service-principals",
     response_model=CredentialIssueResponse,
     operation_id="createServicePrincipal",
 )
 async def create_service_principal(
-    workspace_id: str,
     payload: ServicePrincipalCreate,
     request: Request,
     response: Response,
@@ -634,8 +615,6 @@ async def create_service_principal(
     check_recent_auth(request, session)
     value = await oauth_service(request).create_service_principal(
         actor_id=actor.id,
-        workspace_id=workspace_id,
-        folder_root_id=payload.folder_root_id,
         display_name=payload.display_name,
         purpose=payload.purpose,
         owner_user_id=payload.owner_user_id,
@@ -650,12 +629,11 @@ async def create_service_principal(
 
 
 @admin_router.get(
-    "/workspaces/{workspace_id}/service-principals/{principal_id}",
+    "/service-principals/{principal_id}",
     response_model=ServicePrincipalDetailResponse,
     operation_id="getServicePrincipal",
 )
 async def get_service_principal(
-    workspace_id: str,
     principal_id: UUID,
     request: Request,
     response: Response,
@@ -663,8 +641,6 @@ async def get_service_principal(
 ) -> ServicePrincipalDetailResponse:
     set_no_store(response)
     value = await oauth_service(request).get_service_principal(current[1].id, principal_id)
-    if value.workspace_id != workspace_id:
-        raise McpAuthorizationError("invalid_principal", "Service principal not found")
     credentials = await oauth_service(request).list_service_credentials(current[1].id, principal_id)
     return ServicePrincipalDetailResponse(
         **ServicePrincipalResponse.model_validate(value).model_dump(),
@@ -675,12 +651,11 @@ async def get_service_principal(
 
 
 @admin_router.post(
-    "/workspaces/{workspace_id}/service-principals/{principal_id}/credentials/{credential_id}/rotate",
+    "/service-principals/{principal_id}/credentials/{credential_id}/rotate",
     response_model=CredentialIssueResponse,
     operation_id="rotateServiceCredential",
 )
 async def rotate_service_credential(
-    workspace_id: str,
     principal_id: UUID,
     credential_id: str,
     payload: CredentialRotate,
@@ -692,9 +667,7 @@ async def rotate_service_credential(
     session, actor = current
     check_csrf(request, session)
     check_recent_auth(request, session)
-    principal = await oauth_service(request).get_service_principal(actor.id, principal_id)
-    if principal.workspace_id != workspace_id:
-        raise McpAuthorizationError("invalid_principal", "Service principal not found")
+    await oauth_service(request).get_service_principal(actor.id, principal_id)
     value = await oauth_service(request).rotate_service_credential(
         actor_id=actor.id,
         principal_id=principal_id,
@@ -707,12 +680,11 @@ async def rotate_service_credential(
 
 
 @admin_router.delete(
-    "/workspaces/{workspace_id}/service-principals/{principal_id}/credentials/{credential_id}",
+    "/service-principals/{principal_id}/credentials/{credential_id}",
     response_model=LifecycleResult,
     operation_id="revokeServiceCredential",
 )
 async def revoke_service_credential(
-    workspace_id: str,
     principal_id: UUID,
     credential_id: str,
     request: Request,
@@ -723,9 +695,7 @@ async def revoke_service_credential(
     session, actor = current
     check_csrf(request, session)
     check_recent_auth(request, session)
-    principal = await oauth_service(request).get_service_principal(actor.id, principal_id)
-    if principal.workspace_id != workspace_id:
-        raise McpAuthorizationError("invalid_principal", "Service principal not found")
+    await oauth_service(request).get_service_principal(actor.id, principal_id)
     await oauth_service(request).revoke_service_credential(
         actor_id=actor.id,
         principal_id=principal_id,
@@ -736,12 +706,11 @@ async def revoke_service_credential(
 
 
 @admin_router.delete(
-    "/workspaces/{workspace_id}/service-principals/{principal_id}",
+    "/service-principals/{principal_id}",
     response_model=LifecycleResult,
     operation_id="revokeServicePrincipal",
 )
 async def revoke_service_principal(
-    workspace_id: str,
     principal_id: UUID,
     request: Request,
     response: Response,
@@ -751,9 +720,7 @@ async def revoke_service_principal(
     session, actor = current
     check_csrf(request, session)
     check_recent_auth(request, session)
-    principal = await oauth_service(request).get_service_principal(actor.id, principal_id)
-    if principal.workspace_id != workspace_id:
-        raise McpAuthorizationError("invalid_principal", "Service principal not found")
+    await oauth_service(request).get_service_principal(actor.id, principal_id)
     await oauth_service(request).revoke_service_principal(
         actor_id=actor.id, principal_id=principal_id
     )

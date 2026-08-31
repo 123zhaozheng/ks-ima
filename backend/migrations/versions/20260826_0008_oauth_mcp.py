@@ -13,7 +13,7 @@ depends_on = None
 # Canonical MCP scope values enforced by CHECK constraints.  Keeping the list in
 # one place lets guards stay in sync with ima.application.mcp_contracts.McpScope.
 _MCP_SCOPES = (
-    "mcp:workspaces:read",
+    "mcp:knowledge-bases:read",
     "mcp:knowledge:read",
     "mcp:knowledge:search",
     "mcp:knowledge:ask",
@@ -57,9 +57,7 @@ def upgrade() -> None:
           user_id varchar(32) NOT NULL REFERENCES ima.users(id) ON DELETE RESTRICT,
           client_id uuid NOT NULL REFERENCES ima.mcp_clients(id) ON DELETE RESTRICT,
           canonical_resource varchar(512) NOT NULL,
-          workspace_id varchar(32) NOT NULL REFERENCES ima.workspaces(id) ON DELETE RESTRICT,
-          folder_root_id varchar(32),
-          folder_root_key varchar(32) GENERATED ALWAYS AS (COALESCE(folder_root_id,'')) STORED,
+          kb_id varchar(32) REFERENCES ima.knowledge_bases(id) ON DELETE RESTRICT,
           scopes text[] NOT NULL CHECK(cardinality(scopes) > 0 AND scopes <@ ARRAY[{_SCOPE_LITERAL}]::text[]),
           state varchar(16) NOT NULL DEFAULT 'active' CHECK(state IN ('active','revoked')),
           revocation_epoch integer NOT NULL DEFAULT 0 CHECK(revocation_epoch >= 0),
@@ -69,11 +67,10 @@ def upgrade() -> None:
           last_used_at timestamptz,
           revoked_at timestamptz,
           revoke_reason varchar(64),
-          consent_granted_by varchar(32) REFERENCES ima.users(id),
-          FOREIGN KEY(workspace_id,folder_root_id) REFERENCES ima.folders(workspace_id,id) ON DELETE RESTRICT
+          consent_granted_by varchar(32) REFERENCES ima.users(id)
         );
         CREATE UNIQUE INDEX ux_mcp_grants_active_boundary
-          ON ima.mcp_grants(user_id,client_id,canonical_resource,workspace_id,folder_root_key) WHERE state='active';
+          ON ima.mcp_grants(user_id,client_id,canonical_resource) WHERE state='active';
         CREATE INDEX ix_mcp_grants_user ON ima.mcp_grants(user_id,state,expires_at);
 
         CREATE TABLE ima.mcp_authorization_codes (
@@ -84,8 +81,6 @@ def upgrade() -> None:
           client_id uuid NOT NULL REFERENCES ima.mcp_clients(id) ON DELETE RESTRICT,
           redirect_uri varchar(512) NOT NULL,
           canonical_resource varchar(512) NOT NULL,
-          workspace_id varchar(32) NOT NULL,
-          folder_root_id varchar(32),
           scopes text[] NOT NULL CHECK(cardinality(scopes) > 0 AND scopes <@ ARRAY[{_SCOPE_LITERAL}]::text[]),
           code_challenge varchar(128) NOT NULL,
           code_challenge_method varchar(16) NOT NULL DEFAULT 'S256' CHECK(code_challenge_method IN ('S256')),
@@ -120,8 +115,6 @@ def upgrade() -> None:
           grant_id uuid NOT NULL REFERENCES ima.mcp_grants(id) ON DELETE RESTRICT,
           client_id uuid NOT NULL REFERENCES ima.mcp_clients(id) ON DELETE RESTRICT,
           canonical_resource varchar(512) NOT NULL,
-          workspace_id varchar(32) NOT NULL,
-          folder_root_id varchar(32),
           scopes text[] NOT NULL CHECK(cardinality(scopes) > 0 AND scopes <@ ARRAY[{_SCOPE_LITERAL}]::text[]),
           issued_at timestamptz NOT NULL,
           expires_at timestamptz NOT NULL,
@@ -137,8 +130,6 @@ def upgrade() -> None:
 
         CREATE TABLE ima.mcp_service_principals (
           id uuid PRIMARY KEY,
-          workspace_id varchar(32) NOT NULL REFERENCES ima.workspaces(id) ON DELETE RESTRICT,
-          folder_root_id varchar(32),
           display_name varchar(200) NOT NULL,
           purpose varchar(500) NOT NULL,
           owner_user_id varchar(32) NOT NULL REFERENCES ima.users(id) ON DELETE RESTRICT,
@@ -152,10 +143,9 @@ def upgrade() -> None:
           created_at timestamptz NOT NULL,
           updated_at timestamptz NOT NULL,
           revoked_at timestamptz,
-          revoke_reason varchar(64),
-          FOREIGN KEY(workspace_id,folder_root_id) REFERENCES ima.folders(workspace_id,id) ON DELETE RESTRICT
+          revoke_reason varchar(64)
         );
-        CREATE INDEX ix_mcp_service_principals_workspace ON ima.mcp_service_principals(workspace_id,state);
+        CREATE INDEX ix_mcp_service_principals_owner ON ima.mcp_service_principals(owner_user_id,state);
 
         CREATE TABLE ima.mcp_credentials (
           id uuid PRIMARY KEY,
@@ -182,8 +172,6 @@ def upgrade() -> None:
           principal_id uuid REFERENCES ima.mcp_service_principals(id) ON DELETE RESTRICT,
           client_id uuid REFERENCES ima.mcp_clients(id) ON DELETE RESTRICT,
           canonical_resource varchar(512) NOT NULL,
-          workspace_id varchar(32) NOT NULL REFERENCES ima.workspaces(id) ON DELETE RESTRICT,
-          folder_root_id varchar(32),
           scopes text[] NOT NULL CHECK(cardinality(scopes) > 0 AND scopes <@ ARRAY[{_SCOPE_LITERAL}]::text[]),
           security_stamp varchar(128),
           expires_at timestamptz NOT NULL,

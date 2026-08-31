@@ -19,8 +19,6 @@ class ConsentView(BaseModel):
     client_name: str = Field(alias="clientName")
     redirect_uri: str = Field(alias="redirectUri")
     resource: str
-    workspace_id: str = Field(alias="workspaceId")
-    folder_root_id: str | None = Field(default=None, alias="folderRootId")
     scopes: tuple[str, ...]
     write_access: bool = Field(alias="writeAccess")
     expires_at: datetime = Field(alias="expiresAt")
@@ -35,8 +33,6 @@ class ConsentSubmit(BaseModel):
     client_id: str = Field(alias="clientId", min_length=1, max_length=128)
     redirect_uri: str = Field(alias="redirectUri", min_length=1, max_length=512)
     resource: str = Field(min_length=1, max_length=512)
-    workspace_id: str = Field(alias="workspaceId", min_length=1, max_length=32)
-    folder_root_id: str | None = Field(default=None, alias="folderRootId")
     scope: str = Field(min_length=1, max_length=512)
     state: str = Field(min_length=1, max_length=128)
     code_challenge: str = Field(alias="codeChallenge", min_length=43, max_length=43, repr=False)
@@ -50,7 +46,6 @@ class ServicePrincipalCreate(BaseModel):
     display_name: str = Field(alias="displayName", min_length=1, max_length=200)
     purpose: str = Field(min_length=1, max_length=500)
     owner_user_id: str = Field(alias="ownerUserId", min_length=1, max_length=32)
-    folder_root_id: str | None = Field(default=None, alias="folderRootId", max_length=32)
     scopes: tuple[BoundedScope, ...] = Field(min_length=1, max_length=5)
     expires_at: datetime = Field(alias="expiresAt")
     rate_limit: int = Field(default=300, alias="rateLimit", ge=1)
@@ -77,8 +72,6 @@ class ServicePrincipalResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
     id: UUID
-    workspace_id: str = Field(alias="workspaceId")
-    folder_root_id: str | None = Field(alias="folderRootId")
     display_name: str = Field(alias="displayName")
     purpose: str
     owner_user_id: str = Field(alias="ownerUserId")
@@ -99,8 +92,6 @@ class ConnectedGrantResponse(BaseModel):
 
     id: UUID
     client_name: str = Field(alias="clientName")
-    workspace_id: str = Field(alias="workspaceId")
-    folder_root_id: str | None = Field(alias="folderRootId")
     scopes: tuple[str, ...]
     expires_at: datetime = Field(alias="expiresAt")
 

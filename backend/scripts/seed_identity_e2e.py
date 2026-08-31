@@ -13,7 +13,6 @@ import psycopg
 import pyotp
 
 from ima.application.identity import new_legacy_id
-from ima.domain.authorization import DEFAULT_ROLE_GRANTS
 from ima.infrastructure.auth.security import digest, encrypt_secret, hash_password
 
 PASSWORD = "E2E-password-123"
@@ -130,46 +129,34 @@ def main() -> None:
                         ),
                     )
                 if kind == "oauth":
-                    workspace_id = f"e2e-oauth-{project_name}-ws"
-                    if len(workspace_id) > 32:
+                    kb_id = f"e2e-oauth-{project_name}-kb"
+                    if len(kb_id) > 32:
                         raise ValueError(
-                            f"E2E OAuth workspace ID exceeds 32 characters: {workspace_id}"
+                            f"E2E OAuth knowledge base ID exceeds 32 characters: {kb_id}"
                         )
                     cursor.execute(
-                        "INSERT INTO ima.workspaces(id,name,is_active,created_by,created_at,updated_at) VALUES (%s,%s,true,%s,%s,%s)",
-                        (workspace_id, f"OAuth Workspace ({project_name})", user_id, now, now),
+                        "INSERT INTO ima.knowledge_bases(id,name,is_active,created_by,created_at,updated_at) VALUES (%s,%s,true,%s,%s,%s)",
+                        (kb_id, f"OAuth Knowledge Base ({project_name})", user_id, now, now),
                     )
                     cursor.execute(
-                        "INSERT INTO ima.folders(id,workspace_id,parent_id,name,normalized_name,is_root,acl_anchor_id,created_by,created_at,updated_at) VALUES (%s,%s,NULL,%s,%s,true,%s,%s,%s,%s)",
+                        "INSERT INTO ima.folders(id,kb_id,parent_id,name,normalized_name,is_root,created_by,created_at,updated_at) VALUES (%s,%s,NULL,%s,%s,true,%s,%s,%s)",
                         (
-                            workspace_id,
-                            workspace_id,
-                            f"OAuth Workspace ({project_name})",
-                            f"oauth workspace ({project_name})",
-                            workspace_id,
+                            kb_id,
+                            kb_id,
+                            f"OAuth Knowledge Base ({project_name})",
+                            f"oauth knowledge base ({project_name})",
                             user_id,
                             now,
                             now,
                         ),
                     )
                     cursor.execute(
-                        "INSERT INTO ima.folder_closure(workspace_id,ancestor_id,descendant_id,depth) VALUES (%s,%s,%s,0)",
-                        (workspace_id, workspace_id, workspace_id),
+                        "INSERT INTO ima.folder_closure(kb_id,ancestor_id,descendant_id,depth) VALUES (%s,%s,%s,0)",
+                        (kb_id, kb_id, kb_id),
                     )
-                    acl_id = uuid4()
                     cursor.execute(
-                        "INSERT INTO ima.folder_acls(id,folder_id,created_by,updated_by,created_at,updated_at) VALUES (%s,%s,%s,%s,%s,%s)",
-                        (acl_id, workspace_id, user_id, user_id, now, now),
-                    )
-                    for role, actions in DEFAULT_ROLE_GRANTS.items():
-                        for action in sorted(actions):
-                            cursor.execute(
-                                "INSERT INTO ima.folder_acl_entries(acl_id,subject_type,subject_id,action) VALUES (%s,'role',%s,%s)",
-                                (acl_id, role.value, action.value),
-                            )
-                    cursor.execute(
-                        "INSERT INTO ima.workspace_members(workspace_id,user_id,role,state,granted_by,joined_at,updated_at) VALUES (%s,%s,'workspace_admin','active',%s,%s,%s)",
-                        (workspace_id, user_id, user_id, now, now),
+                        "INSERT INTO ima.kb_members(kb_id,user_id,role,state,joined_at) VALUES (%s,%s,'owner','active',%s)",
+                        (kb_id, user_id, now),
                     )
             cursor.execute(
                 "UPDATE ima.system_settings SET allow_registration=false,updated_at=%s WHERE id=true",

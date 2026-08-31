@@ -16,31 +16,36 @@ from uuid import UUID, uuid4
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from ima.application.authorization import WorkspaceError, WorkspaceService
 from ima.application.ingestion import ParseError, validate_upload_type
-from ima.application.knowledge import KnowledgeError, now
+from ima.application.knowledge import (
+    KnowledgeError,
+    effective_user_id,
+    kb_membership,
+    now,
+    role_permits,
+)
 from ima.application.maintenance import assert_mutation_allowed
 from ima.application.mcp_contracts import McpActor
 from ima.config import Settings
-from ima.domain.authorization import AclAction
+from ima.domain.authorization import KbAction
 from ima.domain.knowledge import normalize_name
 from ima.infrastructure.storage import ObjectStorageClient, StorageClientError
 from ima.infrastructure.tasks.service import JobService
 
 
 class StorageService:
-    def __init__(
-        self, settings: Settings, engine: AsyncEngine, workspace: WorkspaceService, jobs: JobService
-    ) -> None:
+    def __init__(self, settings: Settings, engine: AsyncEngine, jobs: JobService) -> None:
         self.settings = settings
         self.engine = engine
-        self.workspace = workspace
         self.jobs = jobs
         self.client = ObjectStorageClient(settings)
 
-    async def capabilities(self, actor: str, workspace_id: str) -> dict[str, Any]:
+    async def capabilities(self, actor: str, kb_id: str) -> dict[str, Any]:
         async with self.engine.connect() as conn:
-            await self.workspace._require_member(conn, actor, workspace_id)
+            user_id = await effective_user_id(conn, actor)
+            membership = await kb_membership(conn, user_id, kb_id) if user_id else None
+            if membership is None:
+                raise KnowledgeError(404, "KB_NOT_FOUND", "Knowledge base not found")
         available = (
             {"status": "available"}
             if self.client.enabled
@@ -69,18 +74,18 @@ class StorageService:
         key = self.client.object_key(document_id, version)
         async with self.engine.begin() as conn:
             folder = await self._folder(conn, folder_id)
-            await self._authorize(conn, actor, folder, AclAction.CREATE_CHILD)
+            await self._authorize(conn, actor, folder, KbAction.CREATE_CHILD)
             try:
                 url = self.client.presigned_put(key, checksum, size_bytes, mime_type)
             except StorageClientError as exc:
                 raise KnowledgeError(503, exc.code, "File storage is unavailable") from exc
             await conn.execute(
                 text(
-                    """INSERT INTO ima.documents(id,workspace_id,folder_id,kind,title,normalized_title,current_version,file_state,mime_type,size_bytes,checksum,storage_key,created_by,updated_by,created_at,updated_at) VALUES (:id,:workspace,:folder,'file',:title,:normalized,1,'pending',:mime,:size,:checksum,:key,:actor,:actor,:now,:now)"""
+                    """INSERT INTO ima.documents(id,kb_id,folder_id,kind,title,normalized_title,current_version,file_state,mime_type,size_bytes,checksum,storage_key,created_by,updated_by,created_at,updated_at) VALUES (:id,:kb,:folder,'file',:title,:normalized,1,'pending',:mime,:size,:checksum,:key,:actor,:actor,:now,:now)"""
                 ),
                 {
                     "id": document_id,
-                    "workspace": folder["workspace_id"],
+                    "kb": folder["kb_id"],
                     "folder": folder_id,
                     "title": display,
                     "normalized": normalized,
@@ -94,11 +99,11 @@ class StorageService:
             )
             await conn.execute(
                 text(
-                    """INSERT INTO ima.document_file_versions(document_id,version,workspace_id,object_state,object_key,checksum,size_bytes,mime_type,original_filename,created_by,created_at) VALUES (:document,1,:workspace,'pending',:key,:checksum,:size,:mime,:filename,:actor,:now)"""
+                    """INSERT INTO ima.document_file_versions(document_id,version,kb_id,object_state,object_key,checksum,size_bytes,mime_type,original_filename,created_by,created_at) VALUES (:document,1,:kb,'pending',:key,:checksum,:size,:mime,:filename,:actor,:now)"""
                 ),
                 {
                     "document": document_id,
-                    "workspace": folder["workspace_id"],
+                    "kb": folder["kb_id"],
                     "key": key,
                     "checksum": checksum,
                     "size": size_bytes,
@@ -150,7 +155,7 @@ class StorageService:
             if not document:
                 raise KnowledgeError(404, "DOCUMENT_NOT_FOUND", "Document not found")
             folder = await self._folder(conn, str(document["folder_id"]))
-            await self._authorize(conn, actor, folder, AclAction.EDIT)
+            await self._authorize(conn, actor, folder, KbAction.EDIT)
             if (
                 int(document["version"]) != expected_version
                 or int(document["current_version"] or 0) != expected_content_version
@@ -175,12 +180,12 @@ class StorageService:
             ts = now()
             await conn.execute(
                 text(
-                    """INSERT INTO ima.document_file_versions(document_id,version,workspace_id,object_state,object_key,checksum,size_bytes,mime_type,original_filename,created_by,created_at) VALUES (:document,:version,:workspace,'pending',:key,:checksum,:size,:mime,:filename,:actor,:now)"""
+                    """INSERT INTO ima.document_file_versions(document_id,version,kb_id,object_state,object_key,checksum,size_bytes,mime_type,original_filename,created_by,created_at) VALUES (:document,:version,:kb,'pending',:key,:checksum,:size,:mime,:filename,:actor,:now)"""
                 ),
                 {
                     "document": document_id,
                     "version": version,
-                    "workspace": document["workspace_id"],
+                    "kb": document["kb_id"],
                     "key": key,
                     "checksum": checksum,
                     "size": size_bytes,
@@ -207,7 +212,7 @@ class StorageService:
         async with self.engine.begin() as conn:
             row = await self._file_row(conn, document_id, version, lock=True)
             folder = await self._folder(conn, str(row["folder_id"]))
-            await self._authorize(conn, actor, folder, AclAction.EDIT)
+            await self._authorize(conn, actor, folder, KbAction.EDIT)
             if row["object_state"] == "verified":
                 return await self.status(actor, document_id)
             try:
@@ -268,7 +273,7 @@ class StorageService:
             row = await self._file_row(conn, document_id, None)
             folder = await self._folder(conn, str(row["folder_id"]))
             await self._authorize(
-                conn, actor, folder, AclAction.VIEW_CONTENT if preview else AclAction.DOWNLOAD
+                conn, actor, folder, KbAction.VIEW_CONTENT if preview else KbAction.DOWNLOAD
             )
         if row["object_state"] != "verified":
             raise KnowledgeError(409, "FILE_NOT_READY", "File is not ready")
@@ -290,7 +295,7 @@ class StorageService:
         async with self.engine.connect() as conn:
             row = await self._file_row(conn, document_id, None)
             folder = await self._folder(conn, str(row["folder_id"]))
-            await self._authorize(conn, actor, folder, AclAction.VIEW_METADATA)
+            await self._authorize(conn, actor, folder, KbAction.VIEW_METADATA)
             versions = (
                 (
                     await conn.execute(
@@ -320,7 +325,7 @@ class StorageService:
         async with self.engine.begin() as conn:
             row = await self._file_row(conn, document_id, None, lock=True)
             folder = await self._folder(conn, str(row["folder_id"]))
-            await self._authorize(conn, actor, folder, AclAction.EDIT)
+            await self._authorize(conn, actor, folder, KbAction.EDIT)
             stages = (
                 (
                     await conn.execute(
@@ -365,7 +370,7 @@ class StorageService:
         async with self.engine.begin() as conn:
             row = await self._file_row(conn, document_id, None, lock=True)
             folder = await self._folder(conn, str(row["folder_id"]))
-            await self._authorize(conn, actor, folder, AclAction.EDIT)
+            await self._authorize(conn, actor, folder, KbAction.EDIT)
             updated = await conn.scalar(
                 text(
                     "UPDATE ima.ingestion_jobs SET status='cancel_requested',updated_at=:now WHERE document_id=:id AND version=:version AND status IN ('queued','running','retryable') RETURNING 1"
@@ -380,7 +385,7 @@ class StorageService:
         async with self.engine.connect() as conn:
             row = await self._file_row(conn, document_id, None)
             folder = await self._folder(conn, str(row["folder_id"]))
-            await self._authorize(conn, actor, folder, AclAction.VIEW_METADATA)
+            await self._authorize(conn, actor, folder, KbAction.VIEW_METADATA)
             jobs = (
                 (
                     await conn.execute(
@@ -426,7 +431,7 @@ class StorageService:
         row = (
             (
                 await conn.execute(
-                    text("SELECT id,workspace_id,lifecycle FROM ima.folders WHERE id=:id"),
+                    text("SELECT id,kb_id,lifecycle FROM ima.folders WHERE id=:id"),
                     {"id": folder_id},
                 )
             )
@@ -438,28 +443,13 @@ class StorageService:
         return dict(row)
 
     async def _authorize(
-        self, conn: Any, actor: str | McpActor, folder: dict[str, Any], action: AclAction
+        self, conn: Any, actor: str | McpActor, folder: dict[str, Any], action: KbAction
     ) -> None:
         await assert_mutation_allowed(conn, action)
-        if isinstance(actor, McpActor):
-            try:
-                await self.workspace._require_delegated_action(
-                    conn,
-                    actor,
-                    str(folder["workspace_id"]),
-                    str(folder["id"]),
-                    action,
-                )
-            except WorkspaceError as exc:
-                raise KnowledgeError(exc.status_code, exc.code, exc.detail) from exc
-            return
-        info = await self.workspace._require_member(conn, actor, str(folder["workspace_id"]))
-        try:
-            await self.workspace._require_folder_action(
-                conn, info["subject"], str(folder["workspace_id"]), str(folder["id"]), action
-            )
-        except Exception as exc:
-            raise KnowledgeError(404, "DOCUMENT_NOT_FOUND", "Document not found") from exc
+        user_id = await effective_user_id(conn, actor)
+        membership = await kb_membership(conn, user_id, str(folder["kb_id"])) if user_id else None
+        if not role_permits(membership[0] if membership else None, action):
+            raise KnowledgeError(404, "DOCUMENT_NOT_FOUND", "Document not found")
 
     async def _file_row(
         self, conn: Any, document_id: UUID, version: int | None, lock: bool = False
@@ -468,7 +458,7 @@ class StorageService:
             (
                 await conn.execute(
                     text(
-                        """SELECT d.id,d.folder_id,d.workspace_id,d.current_version,d.version AS document_version,
+                        """SELECT d.id,d.folder_id,d.kb_id,d.current_version,d.version AS document_version,
                         fv.version,fv.object_state,fv.object_key,fv.checksum,fv.size_bytes,fv.mime_type,fv.original_filename
                         FROM ima.documents d JOIN ima.document_file_versions fv ON fv.document_id=d.id
                         WHERE d.id=:id AND d.kind='file' AND d.lifecycle='active'

@@ -62,11 +62,11 @@ def upgrade() -> None:
       session_absolute_seconds integer NOT NULL DEFAULT 2592000, recent_auth_seconds integer NOT NULL DEFAULT 900,
       updated_at timestamptz NOT NULL, updated_by varchar(32) REFERENCES ima.users(id)
     );
-    CREATE TABLE IF NOT EXISTS ima.workspaces (
+    CREATE TABLE IF NOT EXISTS ima.knowledge_bases (
       id varchar(32) PRIMARY KEY, name varchar(200) NOT NULL, is_active boolean NOT NULL DEFAULT true,
       archived_at timestamptz, created_by varchar(32) REFERENCES ima.users(id), created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS ix_ima_workspaces_name ON ima.workspaces(lower(name));
+    CREATE INDEX IF NOT EXISTS ix_ima_knowledge_bases_name ON ima.knowledge_bases(lower(name));
     CREATE TABLE IF NOT EXISTS ima.audit_events (
       id bigserial PRIMARY KEY, actor_id varchar(32) REFERENCES ima.users(id), action varchar(96) NOT NULL,
       target_type varchar(64), target_id varchar(128), result varchar(32) NOT NULL, reason_code varchar(64),
@@ -93,7 +93,7 @@ def downgrade() -> None:
         "legacy_identity_projection",
         "legacy_identity_migration",
         "audit_events",
-        "workspaces",
+        "knowledge_bases",
         "system_settings",
         "auth_rate_limits",
         "platform_role_assignments",

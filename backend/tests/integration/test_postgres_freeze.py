@@ -20,7 +20,7 @@ import psycopg
 import pytest
 from sqlalchemy import text
 
-from ima.application.authorization import WorkspaceService
+from ima.application.authorization import KbService
 from ima.application.knowledge import KnowledgeService
 from ima.application.maintenance import (
     MAINTENANCE_WRITE_FREEZE,
@@ -29,6 +29,7 @@ from ima.application.maintenance import (
 )
 from ima.config import Settings
 from ima.infrastructure.db.engine import create_engine
+from ima.infrastructure.tasks.service import JobService
 
 DATABASE_URL = os.environ.get("IMA_TEST_DATABASE_URL")
 SYNC_URL = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://") if DATABASE_URL else None
@@ -73,38 +74,30 @@ def seed_user(connection: Any, user_id: str, *, super_admin: bool = False) -> No
         )
 
 
-async def create_workspace_context(label: str) -> tuple[Any, str, str]:
-    """Create engine + disposable workspace; returns (engine, workspace_id, actor)."""
+async def create_kb_context(label: str) -> tuple[Any, str, str]:
+    """Create engine + disposable knowledge base; returns (engine, kb_id, actor)."""
     engine = create_engine(freeze_settings())
-    workspace_service = WorkspaceService(engine, freeze_settings())
+    kb_service = KbService(engine, freeze_settings())
     digest = hashlib.sha256(label.encode()).hexdigest()[:16]
     actor = f"freeze-{digest}-actor"
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                """DELETE FROM ima.document_tags WHERE document_id IN
-                (SELECT id FROM ima.documents WHERE workspace_id IN
-                 (SELECT id FROM ima.workspaces WHERE created_by=:actor))"""
-            ),
-            {"actor": actor},
-        )
-        await conn.execute(
-            text(
                 """DELETE FROM ima.document_versions WHERE document_id IN
-                (SELECT id FROM ima.documents WHERE workspace_id IN
-                 (SELECT id FROM ima.workspaces WHERE created_by=:actor))"""
+                (SELECT id FROM ima.documents WHERE kb_id IN
+                 (SELECT id FROM ima.knowledge_bases WHERE created_by=:actor))"""
             ),
             {"actor": actor},
         )
         await conn.execute(
             text(
-                """DELETE FROM ima.documents WHERE workspace_id IN
-                (SELECT id FROM ima.workspaces WHERE created_by=:actor)"""
+                """DELETE FROM ima.documents WHERE kb_id IN
+                (SELECT id FROM ima.knowledge_bases WHERE created_by=:actor)"""
             ),
             {"actor": actor},
         )
         await conn.execute(
-            text("DELETE FROM ima.workspaces WHERE created_by=:actor"), {"actor": actor}
+            text("DELETE FROM ima.knowledge_bases WHERE created_by=:actor"), {"actor": actor}
         )
         await conn.execute(
             text("DELETE FROM ima.audit_events WHERE actor_id=:actor"), {"actor": actor}
@@ -131,28 +124,27 @@ async def create_workspace_context(label: str) -> tuple[Any, str, str]:
             ),
             {"id": actor, "now": stamp},
         )
-    workspace = await workspace_service.create_workspace(actor, f"Freeze {label}", actor)
-    return engine, str(workspace["id"]), actor
+    knowledge_base = await kb_service.create_knowledge_base(actor, f"Freeze {label}")
+    return engine, str(knowledge_base["id"]), actor
 
 
-def cleanup_workspace(connection: Any, workspace_id: str, actor_ids: tuple[str, ...]) -> None:
+def cleanup_kb(connection: Any, kb_id: str, actor_ids: tuple[str, ...]) -> None:
     connection.execute(
         "UPDATE ima.system_settings SET maintenance_write_freeze=false,"
         "maintenance_freeze_reason=NULL,maintenance_freeze_entered_at=NULL,"
         "maintenance_freeze_entered_by=NULL,updated_by=NULL"
     )
     connection.execute(
-        "DELETE FROM ima.document_tags WHERE document_id IN "
-        "(SELECT id FROM ima.documents WHERE workspace_id=%s)",
-        (workspace_id,),
-    )
-    connection.execute(
         "DELETE FROM ima.document_versions WHERE document_id IN "
-        "(SELECT id FROM ima.documents WHERE workspace_id=%s)",
-        (workspace_id,),
+        "(SELECT id FROM ima.documents WHERE kb_id=%s)",
+        (kb_id,),
     )
-    connection.execute("DELETE FROM ima.documents WHERE workspace_id=%s", (workspace_id,))
-    connection.execute("DELETE FROM ima.workspaces WHERE id=%s", (workspace_id,))
+    connection.execute("DELETE FROM ima.documents WHERE kb_id=%s", (kb_id,))
+    connection.execute("DELETE FROM ima.kb_share_links WHERE kb_id=%s", (kb_id,))
+    connection.execute("DELETE FROM ima.kb_members WHERE kb_id=%s", (kb_id,))
+    connection.execute("DELETE FROM ima.folder_closure WHERE kb_id=%s", (kb_id,))
+    connection.execute("DELETE FROM ima.folders WHERE kb_id=%s", (kb_id,))
+    connection.execute("DELETE FROM ima.knowledge_bases WHERE id=%s", (kb_id,))
     for actor_id in actor_ids:
         connection.execute("DELETE FROM ima.audit_events WHERE actor_id=%s", (actor_id,))
         connection.execute(
@@ -165,11 +157,11 @@ def cleanup_workspace(connection: Any, workspace_id: str, actor_ids: tuple[str, 
 @requires_database
 async def test_freeze_guard_blocks_python_mutations_but_not_direct_writers() -> None:
     assert SYNC_URL
-    engine, workspace_id, actor = await create_workspace_context("guard")
+    engine, kb_id, actor = await create_kb_context("guard")
     digest = uuid4().hex[:12]
     admin = f"freeze-{digest}-admin"
     service = MaintenanceService(engine)
-    knowledge = KnowledgeService(engine, WorkspaceService(engine, freeze_settings()))
+    knowledge = KnowledgeService(engine, JobService(freeze_settings(), engine))
     try:
         with psycopg.connect(SYNC_URL) as connection:
             seed_user(connection, admin, super_admin=True)
@@ -185,8 +177,9 @@ async def test_freeze_guard_blocks_python_mutations_but_not_direct_writers() -> 
         assert entered["secretValues"] is False
 
         # Python knowledge mutations are refused with the typed RFC 9457 problem.
+        # The root folder shares the knowledge base id.
         with pytest.raises(MaintenanceFreezeError) as refusal:
-            await knowledge.create_note(actor, workspace_id, f"Frozen {digest}", "text")
+            await knowledge.create_note(actor, kb_id, f"Frozen {digest}", "text")
         assert refusal.value.status_code == 503
         assert refusal.value.code == MAINTENANCE_WRITE_FREEZE
 
@@ -213,7 +206,7 @@ async def test_freeze_guard_blocks_python_mutations_but_not_direct_writers() -> 
         assert exited["enteredBy"] is None
 
         # Mutations succeed again after the freeze exits.
-        note = await knowledge.create_note(actor, workspace_id, f"After freeze {digest}", "text")
+        note = await knowledge.create_note(actor, kb_id, f"After freeze {digest}", "text")
         assert note["id"] is not None
         with psycopg.connect(SYNC_URL) as connection:
             actions = {
@@ -237,5 +230,5 @@ async def test_freeze_guard_blocks_python_mutations_but_not_direct_writers() -> 
             assert metadata == {"reason": f"freeze rehearsal {digest}", "secretValues": False}
     finally:
         with psycopg.connect(SYNC_URL) as connection:
-            cleanup_workspace(connection, workspace_id, (actor, admin))
+            cleanup_kb(connection, kb_id, (actor, admin))
         await engine.dispose()

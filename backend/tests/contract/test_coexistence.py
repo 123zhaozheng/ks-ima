@@ -17,8 +17,8 @@ def test_caddy_terminal_matrix_routes_python_and_terminates_legacy() -> None:
     assert caddy.count("@ima_mcp path /mcp /.well-known/oauth-protected-resource ") == 2
     assert (
         caddy.count(
-            "@ima_workspace path /api/v1/workspaces /api/v1/workspaces/* "
-            "/api/v1/workspace-invitations /api/v1/workspace-invitations/* "
+            "@ima_kb path /api/v1/knowledge-bases /api/v1/knowledge-bases/* "
+            "/api/v1/kb-share-links /api/v1/kb-share-links/* "
             "/api/v1/folders/* /api/v1/documents/*"
         )
         == 2

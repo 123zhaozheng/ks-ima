@@ -79,7 +79,7 @@ class SessionList(IdentityModel):
     items: tuple[SessionInfo, ...]
 
 
-class WorkspaceInfo(IdentityModel):
+class KnowledgeBaseInfo(IdentityModel):
     id: str
     name: str
     is_active: bool = Field(alias="isActive")
@@ -88,14 +88,14 @@ class WorkspaceInfo(IdentityModel):
     updated_at: datetime = Field(alias="updatedAt")
 
 
-class WorkspaceCreateResponse(IdentityModel):
+class KnowledgeBaseCreateResponse(IdentityModel):
     id: str
     name: str
     is_active: bool = Field(alias="isActive")
 
 
-class WorkspaceList(IdentityModel):
-    items: tuple[WorkspaceInfo, ...]
+class KnowledgeBaseList(IdentityModel):
+    items: tuple[KnowledgeBaseInfo, ...]
     next_cursor: str | None = Field(default=None, alias="nextCursor")
 
 
@@ -155,9 +155,9 @@ class RoleRequest(IdentityModel):
     role: Literal["super_admin", "platform_admin", "security_auditor"]
 
 
-class WorkspaceRequest(IdentityModel):
+class KnowledgeBaseRequest(IdentityModel):
     name: str = Field(min_length=1, max_length=200)
-    initial_admin_user_id: str = Field(alias="initialAdminUserId", min_length=1, max_length=64)
+    initial_owner_user_id: str = Field(alias="initialOwnerUserId", min_length=1, max_length=64)
 
 
 class SettingPatch(IdentityModel):

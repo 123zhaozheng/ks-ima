@@ -50,7 +50,7 @@ def test_model_governance_migration_is_fresh_and_repeatable() -> None:
             "governed_models",
             "capability_profiles",
             "capability_profile_versions",
-            "workspace_profile_assignments",
+            "kb_profile_assignments",
             "model_dependency_index",
             "legacy_model_governance_migration",
         ):
@@ -136,12 +136,12 @@ def test_published_profile_version_cannot_be_rewritten() -> None:
 def test_assignment_and_dependency_rows_have_restrictive_foreign_keys() -> None:
     migrate()
     assert SYNC_URL
-    workspace_id = f"pg-ws-{uuid4().hex[:20]}"
+    kb_id = f"pg-kb-{uuid4().hex[:20]}"
     profile_id, model_id, gateway_id = uuid4(), uuid4(), uuid4()
     with psycopg.connect(SYNC_URL) as connection:
         connection.execute(
-            "INSERT INTO ima.workspaces(id,name,is_active,created_at,updated_at) VALUES (%s,'PG Model Workspace',true,now(),now())",
-            (workspace_id,),
+            "INSERT INTO ima.knowledge_bases(id,name,is_active,created_at,updated_at) VALUES (%s,'PG Model Knowledge Base',true,now(),now())",
+            (kb_id,),
         )
         connection.execute(
             "INSERT INTO ima.model_gateways(id,name,normalized_base_url,allowed_capabilities,tls_mode,connect_timeout_ms,read_timeout_ms,write_timeout_ms,pool_timeout_ms,max_response_bytes,created_at,updated_at) VALUES (%s,%s,'https://gateway.internal',ARRAY['chat'], 'required',1000,10000,10000,1000,1048576,now(),now())",
@@ -163,18 +163,18 @@ def test_assignment_and_dependency_rows_have_restrictive_foreign_keys() -> None:
             ),
         )
         connection.execute(
-            "INSERT INTO ima.workspace_profile_assignments(workspace_id,workflow,profile_id,profile_version,assigned_at) VALUES (%s,'title_generation',%s,1,now())",
-            (workspace_id, profile_id),
+            "INSERT INTO ima.kb_profile_assignments(kb_id,workflow,profile_id,profile_version,assigned_at) VALUES (%s,'title_generation',%s,1,now())",
+            (kb_id, profile_id),
         )
         connection.execute(
-            "INSERT INTO ima.model_dependency_index(id,dependency_kind,workspace_id,source_id,model_id,dimension,created_at,updated_at) VALUES (%s,'target_index',%s,'idx-1',%s,1536,now(),now())",
-            (uuid4(), workspace_id, model_id),
+            "INSERT INTO ima.model_dependency_index(id,dependency_kind,kb_id,source_id,model_id,dimension,created_at,updated_at) VALUES (%s,'target_index',%s,'idx-1',%s,1536,now(),now())",
+            (uuid4(), kb_id, model_id),
         )
         connection.commit()
         with pytest.raises(psycopg.Error):
             connection.execute("DELETE FROM ima.governed_models WHERE id=%s", (model_id,))
         connection.rollback()
-        connection.execute("DELETE FROM ima.workspaces WHERE id=%s", (workspace_id,))
+        connection.execute("DELETE FROM ima.knowledge_bases WHERE id=%s", (kb_id,))
         connection.execute(
             "DELETE FROM ima.capability_profile_versions WHERE profile_id=%s", (profile_id,)
         )

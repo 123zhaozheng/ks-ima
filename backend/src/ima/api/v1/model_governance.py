@@ -1,4 +1,4 @@
-"""Platform model-governance HTTP adapters and safe workspace projection."""
+"""Platform model-governance HTTP adapters and safe knowledge base projection."""
 
 # ruff: noqa: E501
 
@@ -23,6 +23,7 @@ from ima.api.v1.model_governance_contracts import (
     GovernedModelPatchRequest,
     HealthRequest,
     ImpactResponse,
+    KbCapability,
     ModelDiscoveryResponse,
     ModelGateway,
     ModelGatewayList,
@@ -35,13 +36,12 @@ from ima.api.v1.model_governance_contracts import (
     ProfileVersionList,
     SecretRotateRequest,
     VersionRequest,
-    WorkspaceCapability,
 )
 from ima.application.model_governance import ModelGovernanceService
 from ima.domain.model_governance import ModelGatewayInput, Workflow
 
 router = APIRouter(prefix="/admin", tags=["model-governance"])
-workspace_router = APIRouter(prefix="/workspaces", tags=["model-governance"])
+kb_router = APIRouter(prefix="/knowledge-bases", tags=["model-governance"])
 
 
 def service(request: Request) -> ModelGovernanceService:
@@ -423,19 +423,19 @@ async def profile_diff(
 
 
 @router.put(
-    "/workspaces/{workspace_id}/profile-assignments/{workflow}",
+    "/knowledge-bases/{kb_id}/profile-assignments/{workflow}",
     response_model=Assignment,
-    operation_id="assignWorkspaceCapabilityProfile",
+    operation_id="assignKnowledgeBaseCapabilityProfile",
 )
 async def assign_profile(
-    workspace_id: str, workflow: str, payload: AssignmentRequest, request: Request, current: Current
+    kb_id: str, workflow: str, payload: AssignmentRequest, request: Request, current: Current
 ) -> dict[str, Any]:
     _, actor = await require(request, current, mutate=True)
     if payload.workflow != workflow:
         raise HTTPException(400, "Workflow path and request do not match")
     return await service(request).assign_profile(
         actor.id,
-        workspace_id,
+        kb_id,
         Workflow(workflow),
         payload.profile_id,
         payload.profile_version,
@@ -444,21 +444,19 @@ async def assign_profile(
 
 
 @router.delete(
-    "/workspaces/{workspace_id}/profile-assignments/{workflow}",
+    "/knowledge-bases/{kb_id}/profile-assignments/{workflow}",
     status_code=204,
-    operation_id="removeWorkspaceCapabilityProfile",
+    operation_id="removeKnowledgeBaseCapabilityProfile",
 )
 async def remove_assignment(
-    workspace_id: str,
+    kb_id: str,
     workflow: str,
     request: Request,
     current: Current,
     expected_version: int | None = None,
 ) -> None:
     _, actor = await require(request, current, mutate=True)
-    await service(request).remove_assignment(
-        actor.id, workspace_id, Workflow(workflow), expected_version
-    )
+    await service(request).remove_assignment(actor.id, kb_id, Workflow(workflow), expected_version)
 
 
 @router.get(
@@ -475,11 +473,11 @@ async def impact(model_id: UUID, request: Request, current: Current) -> dict[str
 
 
 @router.get(
-    "/workspaces/{workspace_id}/profile-assignments",
+    "/knowledge-bases/{kb_id}/profile-assignments",
     response_model=AssignmentList,
-    operation_id="listWorkspaceCapabilityAssignments",
+    operation_id="listKnowledgeBaseCapabilityAssignments",
 )
-async def assignments(workspace_id: str, request: Request, current: Current) -> dict[str, Any]:
+async def assignments(kb_id: str, request: Request, current: Current) -> dict[str, Any]:
     await require(request, current, mutate=False)
     async with service(request).engine.connect() as conn:
         from sqlalchemy import text
@@ -488,9 +486,9 @@ async def assignments(workspace_id: str, request: Request, current: Current) -> 
             (
                 await conn.execute(
                     text(
-                        "SELECT * FROM ima.workspace_profile_assignments WHERE workspace_id=:workspace ORDER BY workflow"
+                        "SELECT * FROM ima.kb_profile_assignments WHERE kb_id=:kb ORDER BY workflow"
                     ),
-                    {"workspace": workspace_id},
+                    {"kb": kb_id},
                 )
             )
             .mappings()
@@ -499,15 +497,13 @@ async def assignments(workspace_id: str, request: Request, current: Current) -> 
     return {"items": [dict(row) for row in rows]}
 
 
-@workspace_router.get(
-    "/{workspace_id}/capabilities",
-    response_model=tuple[WorkspaceCapability, ...],
-    operation_id="listWorkspaceModelCapabilities",
+@kb_router.get(
+    "/{kb_id}/capabilities",
+    response_model=tuple[KbCapability, ...],
+    operation_id="listKnowledgeBaseModelCapabilities",
 )
-async def workspace_capabilities(
-    workspace_id: str, request: Request, current: Current
-) -> list[dict[str, Any]]:
-    return await service(request).workspace_capabilities(current[1].id, workspace_id)
+async def kb_capabilities(kb_id: str, request: Request, current: Current) -> list[dict[str, Any]]:
+    return await service(request).kb_capabilities(current[1].id, kb_id)
 
 
-__all__ = ["router", "workspace_router"]
+__all__ = ["kb_router", "router"]

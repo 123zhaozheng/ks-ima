@@ -64,43 +64,6 @@ class ListingCursor:
             raise ValueError("invalid cursor") from exc
 
 
-@dataclass(frozen=True, slots=True)
-class TrashCursor:
-    workspace_id: str
-    trashed_at: str
-    item_id: str
-
-    def encode(self) -> str:
-        raw = json.dumps(
-            {
-                "v": 1,
-                "workspaceId": self.workspace_id,
-                "trashedAt": self.trashed_at,
-                "id": self.item_id,
-            },
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-        return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
-
-    @classmethod
-    def decode(cls, value: str) -> TrashCursor:
-        try:
-            padded = value + "=" * (-len(value) % 4)
-            payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
-            if payload.get("v") != 1 or not all(
-                key in payload for key in ("workspaceId", "trashedAt", "id")
-            ):
-                raise ValueError
-            return cls(
-                str(payload["workspaceId"]),
-                str(payload["trashedAt"]),
-                str(payload["id"]),
-            )
-        except (ValueError, TypeError, KeyError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-            raise ValueError("invalid cursor") from exc
-
-
 def safe_metadata(row: Any) -> dict[str, Any]:
     return {
         "mimeType": row.get("mime_type") if hasattr(row, "get") else None,

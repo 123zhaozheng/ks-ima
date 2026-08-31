@@ -7,49 +7,54 @@ import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from ipaddress import ip_address, ip_network
+from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from ima.application.authorization import WorkspaceError, WorkspaceService
+from ima.application.authorization import KbError, KbService
 from ima.application.identity import IdentityService
 from ima.application.mcp_contracts import (
     KNOWN_TOOLS,
     OAUTH_MAPPING,
+    SCOPE_TOOL_MAP,
     McpActor,
+    McpScope,
     OAuthErrorCode,
     parse_scopes,
     pkce_s256,
 )
 from ima.config import Settings
-from ima.domain.authorization import AclAction
 from ima.domain.oauth import ClientRecord, CredentialRecord, GrantRecord, ServicePrincipalRecord
 from ima.infrastructure.oauth import McpOauthRepository, McpRepositoryError
 
 PKCE_CHALLENGE_PATTERN = re.compile(r"[A-Za-z0-9_-]{43}\Z")
 SERVICE_PRINCIPAL_SCOPES = frozenset(
     {
-        "mcp:workspaces:read",
+        "mcp:knowledge-bases:read",
         "mcp:knowledge:read",
         "mcp:knowledge:search",
+        "mcp:knowledge:write",
     }
 )
 
-TOOL_ACL_ACTION: dict[str, AclAction] = {
-    "kb_list_dir": AclAction.VIEW_METADATA,
-    "kb_get_tree": AclAction.VIEW_METADATA,
-    "kb_get_note": AclAction.VIEW_CONTENT,
-    "kb_get_file": AclAction.DOWNLOAD,
-    "kb_list_tags": AclAction.VIEW_METADATA,
-    "kb_search": AclAction.VIEW_CONTENT,
-    "kb_ask": AclAction.ASK,
-    "kb_mkdir": AclAction.CREATE_CHILD,
-    "kb_create_note": AclAction.CREATE_CHILD,
-    "kb_update_note": AclAction.EDIT,
-    "kb_upload_file": AclAction.CREATE_CHILD,
-    "kb_move": AclAction.MOVE,
-    "kb_set_tags": AclAction.EDIT,
-    "kb_delete": AclAction.DELETE,
+# Knowledge-base roles ordered by privilege.  Authorization is decided by the
+# caller's membership role in the target knowledge base alone.
+KB_ROLE_RANK: dict[str, int] = {"viewer": 1, "editor": 2, "owner": 3}
+
+# Minimum membership role each tool requires in its target knowledge base.
+# Write tools need editor or better; read/list/search/ask tools allow viewers.
+TOOL_MIN_ROLE: dict[str, str] = {
+    tool: ("editor" if scope == McpScope.KNOWLEDGE_WRITE.value else "viewer")
+    for scope, tools in SCOPE_TOOL_MAP.items()
+    for tool in tools
 }
+
+
+def _summary_field(summary: object, key: str) -> Any:
+    """Read one field from a KbSummary mapping or object projection."""
+    if isinstance(summary, dict):
+        return summary.get(key)
+    return getattr(summary, key, None)
 
 
 def utcnow() -> datetime:
@@ -72,8 +77,6 @@ class AuthorizationContext:
     client: ClientRecord
     redirect_uri: str
     resource: str
-    workspace_id: str
-    folder_root_id: str | None
     scopes: tuple[str, ...]
     code_challenge: str = field(repr=False)
     state: str = field(repr=False)
@@ -134,25 +137,23 @@ class CredentialIssue:
 class ConnectedGrantView:
     id: UUID
     client_name: str
-    workspace_id: str
-    folder_root_id: str | None
     scopes: tuple[str, ...]
     expires_at: datetime
 
 
 class McpAuthorizationService:
-    """Policy orchestration over identity, workspace, and digest-only state."""
+    """Policy orchestration over identity, knowledge bases, and digest-only state."""
 
     def __init__(
         self,
         repository: McpOauthRepository,
         identity: IdentityService,
-        workspace: WorkspaceService,
+        kb: KbService,
         settings: Settings,
     ) -> None:
         self.repository = repository
         self.identity = identity
-        self.workspace = workspace
+        self.kb = kb
         self.settings = settings
 
     @staticmethod
@@ -190,8 +191,6 @@ class McpAuthorizationService:
         client_id: str,
         redirect_uri: str,
         resource: str,
-        workspace_id: str,
-        folder_root_id: str | None,
         scope: str,
         state: str,
         code_challenge: str,
@@ -229,13 +228,9 @@ class McpAuthorizationService:
             seconds=self.settings.oauth_refresh_absolute_seconds
         ):
             raise McpAuthorizationError("invalid_request", "Grant expiry is outside policy")
-        try:
-            await self.workspace.authorize_oauth_boundary(user_id, workspace_id, folder_root_id)
-        except WorkspaceError as exc:
-            raise McpAuthorizationError("policy_denied", exc.detail) from exc
-        existing = await self.repository.find_active_grant(
-            user_id, client.id, resource, workspace_id, folder_root_id
-        )
+        # Grants are user-level: no knowledge-base boundary is fixed at consent
+        # time.  Membership and role are verified on every tool call instead.
+        existing = await self.repository.find_active_grant(user_id, client.id, resource)
         consent_required = (
             existing is None
             or not set(scopes).issubset(set(existing.scopes))
@@ -246,8 +241,6 @@ class McpAuthorizationService:
             client=client,
             redirect_uri=redirect_uri,
             resource=resource,
-            workspace_id=workspace_id,
-            folder_root_id=folder_root_id,
             scopes=scopes,
             code_challenge=code_challenge,
             state=state,
@@ -274,12 +267,6 @@ class McpAuthorizationService:
             or context.resource != current_client.canonical_resource
         ):
             raise McpAuthorizationError("invalid_client", "OAuth client is no longer active")
-        try:
-            await self.workspace.authorize_oauth_boundary(
-                context.user_id, context.workspace_id, context.folder_root_id
-            )
-        except WorkspaceError as exc:
-            raise McpAuthorizationError("policy_denied", exc.detail) from exc
         security_stamp = await self.identity.active_security_stamp(context.user_id)
         if security_stamp is None:
             raise McpAuthorizationError("invalid_grant", "The local account is inactive")
@@ -299,8 +286,6 @@ class McpAuthorizationService:
                 user_id=context.user_id,
                 client_id=context.client.id,
                 canonical_resource=context.resource,
-                workspace_id=context.workspace_id,
-                folder_root_id=context.folder_root_id,
                 scopes=context.scopes,
                 expires_at=context.grant_expires_at,
                 consent_granted_by=context.user_id,
@@ -320,8 +305,6 @@ class McpAuthorizationService:
                 or current_grant.user_id != context.user_id
                 or current_grant.client_id != context.client.id
                 or current_grant.canonical_resource != context.resource
-                or current_grant.workspace_id != context.workspace_id
-                or current_grant.folder_root_id != context.folder_root_id
             ):
                 raise McpAuthorizationError("invalid_grant", "Prior consent is no longer active")
             grant = current_grant
@@ -331,8 +314,6 @@ class McpAuthorizationService:
             client_id=context.client.id,
             redirect_uri=context.redirect_uri,
             canonical_resource=context.resource,
-            workspace_id=context.workspace_id,
-            folder_root_id=context.folder_root_id,
             scopes=context.scopes,
             code_challenge=context.code_challenge,
             security_stamp=security_stamp,
@@ -446,8 +427,6 @@ class McpAuthorizationService:
             ConnectedGrantView(
                 id=grant.id,
                 client_name=client_name,
-                workspace_id=grant.workspace_id,
-                folder_root_id=grant.folder_root_id,
                 scopes=grant.scopes,
                 expires_at=grant.expires_at,
             )
@@ -482,8 +461,6 @@ class McpAuthorizationService:
                 or grant.expires_at <= utcnow()
                 or grant.client_id != record.client_id
                 or grant.canonical_resource != record.canonical_resource
-                or grant.workspace_id != record.workspace_id
-                or grant.folder_root_id != record.folder_root_id
                 or not set(record.scopes).issubset(set(grant.scopes))
             ):
                 raise McpAuthorizationError("invalid_token", "Bearer grant is inactive")
@@ -494,17 +471,12 @@ class McpAuthorizationService:
                 or not hmac.compare_digest(record.security_stamp, current_stamp)
             ):
                 raise McpAuthorizationError("invalid_token", "Bearer grant is inactive")
-            try:
-                await self.workspace.authorize_oauth_boundary(
-                    grant.user_id, record.workspace_id, record.folder_root_id
-                )
-            except WorkspaceError as exc:
-                raise McpAuthorizationError("policy_denied", exc.detail) from exc
+            # User-level grant: no knowledge-base boundary is checked here.
+            # Every tool call verifies membership and role against its target
+            # knowledge base in real time.
             actor = McpActor(
                 actor_type="human",
                 user_id=grant.user_id,
-                workspace_id=record.workspace_id,
-                folder_root_id=record.folder_root_id,
                 scopes=record.scopes,
                 correlationId=correlation_id or "",
                 token_id=str(record.id),
@@ -515,26 +487,13 @@ class McpAuthorizationService:
         else:
             assert record.principal_id is not None
             principal = await self.repository.load_service_principal(record.principal_id)
-            if (
-                principal is None
-                or principal.workspace_id != record.workspace_id
-                or principal.folder_root_id != record.folder_root_id
-                or not set(record.scopes).issubset(set(principal.scopes))
-            ):
+            if principal is None or not set(record.scopes).issubset(set(principal.scopes)):
                 raise McpAuthorizationError("invalid_token", "Bearer principal is inactive")
             if not self._source_allowed(source_ip, principal.cidr_allowlist):
                 raise McpAuthorizationError("network_denied", "Service policy denied")
-            try:
-                await self.workspace.authorize_delegated_boundary(
-                    principal.workspace_id, principal.folder_root_id
-                )
-            except WorkspaceError as exc:
-                raise McpAuthorizationError("policy_denied", exc.detail) from exc
             actor = McpActor(
                 actor_type="service_principal",
                 principal_id=str(principal.id),
-                workspace_id=principal.workspace_id,
-                folder_root_id=principal.folder_root_id,
                 scopes=record.scopes,
                 correlationId=correlation_id or "",
                 token_id=str(record.id),
@@ -577,9 +536,45 @@ class McpAuthorizationService:
     async def release_tool_lease(self, lease_id: UUID) -> None:
         await self.repository.release_concurrency_lease(lease_id)
 
+    async def effective_user_id(self, actor: McpActor) -> str:
+        """Resolve the content identity behind an actor.
+
+        Human actors act as themselves.  Service principals inherit their
+        owner's membership identity: knowledge-base access is always decided
+        by the owner's current membership and role.
+        """
+        if actor.actor_type == "human":
+            if actor.user_id is None:
+                raise McpAuthorizationError("invalid_token", "Actor identity is incomplete")
+            return actor.user_id
+        if actor.principal_id is None:
+            raise McpAuthorizationError("invalid_token", "Actor identity is incomplete")
+        principal = await self.repository.load_service_principal(UUID(actor.principal_id))
+        if principal is None:
+            raise McpAuthorizationError("policy_denied", "Service principal is inactive")
+        return principal.owner_user_id
+
+    async def _kb_role(self, user_id: str, kb_id: str) -> str | None:
+        """Current membership role of ``user_id`` in ``kb_id``, if any."""
+        try:
+            summaries = await self.kb.list_knowledge_bases(user_id)
+        except KbError as exc:
+            raise McpAuthorizationError("policy_denied", exc.detail) from exc
+        for summary in summaries:
+            if _summary_field(summary, "id") == kb_id:
+                role = _summary_field(summary, "role")
+                return str(role) if role is not None else None
+        return None
+
     async def authorize_tool(
-        self, actor: McpActor, tool_name: str, *, target_folder_id: str | None = None
+        self, actor: McpActor, tool_name: str, *, target_kb_id: str | None = None
     ) -> None:
+        """Authorize one MCP tool call.
+
+        Every call re-checks the OAuth scope and, when the tool targets a
+        knowledge base, the caller's live membership and role there.  Service
+        principals are judged by their owner's membership role.
+        """
         required_scope = KNOWN_TOOLS.get(tool_name)
         safe_tool_name = tool_name if required_scope is not None else "unknown"
         target_type = "service_principal" if actor.principal_id else "user"
@@ -587,22 +582,19 @@ class McpAuthorizationService:
         try:
             if required_scope is None or required_scope not in actor.scopes:
                 raise McpAuthorizationError("insufficient_scope", "Tool scope is not granted")
-            assert actor.workspace_id is not None
-            if actor.actor_type == "service_principal":
-                await self.workspace.authorize_delegated_boundary(
-                    actor.workspace_id, actor.folder_root_id, target_folder_id
-                )
-            else:
-                assert actor.user_id is not None
-                await self.workspace.authorize_oauth_boundary(
-                    actor.user_id,
-                    actor.workspace_id,
-                    actor.folder_root_id,
-                    target_folder_id,
-                    TOOL_ACL_ACTION.get(tool_name, AclAction.VIEW_METADATA),
-                )
-        except (McpAuthorizationError, WorkspaceError) as exc:
+            if target_kb_id is not None:
+                user_id = await self.effective_user_id(actor)
+                role = await self._kb_role(user_id, target_kb_id)
+                if role is None or role not in KB_ROLE_RANK:
+                    raise McpAuthorizationError("policy_denied", "Knowledge base is not accessible")
+                min_role = TOOL_MIN_ROLE.get(safe_tool_name, "viewer")
+                if KB_ROLE_RANK[role] < KB_ROLE_RANK[min_role]:
+                    raise McpAuthorizationError(
+                        "policy_denied", "Knowledge base role is insufficient"
+                    )
+        except (McpAuthorizationError, KbError) as exc:
             reason = exc.reason if isinstance(exc, McpAuthorizationError) else "policy_denied"
+            detail = getattr(exc, "detail", "Target operation denied")
             await self.repository.append_audit(
                 actor.user_id,
                 "mcp.tool.denied",
@@ -610,19 +602,19 @@ class McpAuthorizationService:
                 target_type=target_type,
                 target_id=target_id,
                 reason=reason,
-                metadata={"tool": safe_tool_name, "workspace_id": actor.workspace_id},
+                metadata={"tool": safe_tool_name, "kb_id": target_kb_id},
                 correlation_id=actor.correlation_id or None,
             )
             if isinstance(exc, McpAuthorizationError):
                 raise
-            raise McpAuthorizationError(reason, exc.detail) from exc
+            raise McpAuthorizationError(reason, detail) from exc
         await self.repository.append_audit(
             actor.user_id,
             "mcp.tool.allowed",
             "success",
             target_type=target_type,
             target_id=target_id,
-            metadata={"tool": safe_tool_name, "workspace_id": actor.workspace_id},
+            metadata={"tool": safe_tool_name, "kb_id": target_kb_id},
             correlation_id=actor.correlation_id or None,
         )
 
@@ -630,8 +622,6 @@ class McpAuthorizationService:
         self,
         *,
         actor_id: str,
-        workspace_id: str,
-        folder_root_id: str | None,
         display_name: str,
         purpose: str,
         owner_user_id: str,
@@ -642,8 +632,8 @@ class McpAuthorizationService:
         cidr_allowlist: tuple[str, ...] = (),
         correlation_id: str | None = None,
     ) -> CredentialIssue:
-        await self.workspace.require_workspace_admin(actor_id, workspace_id)
-        await self.workspace.authorize_delegated_boundary(workspace_id, folder_root_id)
+        if await self.identity.active_security_stamp(actor_id) is None:
+            raise McpAuthorizationError("invalid_request", "Actor account is inactive")
         if await self.identity.active_security_stamp(owner_user_id) is None:
             raise McpAuthorizationError("invalid_request", "Owner account is inactive")
         normalized_scopes = self._scopes(scopes)
@@ -655,8 +645,6 @@ class McpAuthorizationService:
             raise McpAuthorizationError("invalid_request", "Rate policy must be positive")
         try:
             principal = await self.repository.create_service_principal(
-                workspace_id=workspace_id,
-                folder_root_id=folder_root_id,
                 display_name=display_name.strip(),
                 purpose=purpose.strip(),
                 owner_user_id=owner_user_id,
@@ -699,11 +687,8 @@ class McpAuthorizationService:
             principal=principal,
         )
 
-    async def list_service_principals(
-        self, actor_id: str, workspace_id: str
-    ) -> tuple[ServicePrincipalRecord, ...]:
-        await self.workspace.require_workspace_admin(actor_id, workspace_id)
-        return await self.repository.list_service_principals(workspace_id)
+    async def list_service_principals(self, actor_id: str) -> tuple[ServicePrincipalRecord, ...]:
+        return await self.repository.list_service_principals(owner_user_id=actor_id)
 
     async def get_service_principal(
         self, actor_id: str, principal_id: UUID
@@ -713,7 +698,8 @@ class McpAuthorizationService:
         )
         if principal is None:
             raise McpAuthorizationError("invalid_principal", "Service principal not found")
-        await self.workspace.require_workspace_admin(actor_id, principal.workspace_id)
+        if principal.owner_user_id != actor_id:
+            raise McpAuthorizationError("policy_denied", "Service principal is not owned")
         return principal
 
     async def list_service_credentials(
@@ -733,12 +719,7 @@ class McpAuthorizationService:
         overlap_expires_at: datetime | None = None,
         correlation_id: str | None = None,
     ) -> CredentialIssue:
-        principal = await self.repository.load_service_principal(
-            principal_id, include_inactive=True
-        )
-        if principal is None:
-            raise McpAuthorizationError("invalid_principal", "Service principal not found")
-        await self.workspace.require_workspace_admin(actor_id, principal.workspace_id)
+        principal = await self.get_service_principal(actor_id, principal_id)
         existing = await self.repository.find_credential_by_id(credential_id)
         if existing is None or existing.principal_id != principal.id:
             raise McpAuthorizationError("invalid_credential", "Credential not found")
@@ -770,7 +751,8 @@ class McpAuthorizationService:
         )
         if principal is None:
             return
-        await self.workspace.require_workspace_admin(actor_id, principal.workspace_id)
+        if principal.owner_user_id != actor_id:
+            raise McpAuthorizationError("policy_denied", "Service principal is not owned")
         await self.repository.set_principal_state(
             principal_id, "revoked", actor_id=actor_id, reason=reason
         )
@@ -827,7 +809,7 @@ class McpAuthorizationService:
                 target_type="service_principal",
                 target_id=str(principal.id),
                 reason="network_denied",
-                metadata={"workspace_id": principal.workspace_id},
+                metadata={"owner_user_id": principal.owner_user_id},
                 correlation_id=correlation_id,
             )
             raise McpAuthorizationError("network_denied", "Source network is not allowed")
@@ -841,19 +823,11 @@ class McpAuthorizationService:
         scopes = principal.scopes if requested_scopes is None else self._scopes(requested_scopes)
         if not set(scopes).issubset(set(principal.scopes)):
             raise McpAuthorizationError("invalid_scope", "Credential scope cannot be widened")
-        try:
-            await self.workspace.authorize_delegated_boundary(
-                principal.workspace_id, principal.folder_root_id
-            )
-        except WorkspaceError as exc:
-            raise McpAuthorizationError("policy_denied", exc.detail) from exc
         access, access_record = await self.repository.create_access_token(
             grant_id=None,
             principal_id=principal.id,
             client_id=None,
             canonical_resource=self.settings.mcp_resource_url,
-            workspace_id=principal.workspace_id,
-            folder_root_id=principal.folder_root_id,
             scopes=scopes,
             expires_at=min(
                 principal.expires_at,

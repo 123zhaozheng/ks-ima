@@ -27,9 +27,9 @@
 		reverse_proxy {$PYTHON_API_URL}
 	}
 
-	@ima_workspace path /api/v1/workspaces /api/v1/workspaces/* /api/v1/workspace-invitations /api/v1/workspace-invitations/* /api/v1/folders/* /api/v1/documents/*
+	@ima_kb path /api/v1/knowledge-bases /api/v1/knowledge-bases/* /api/v1/kb-share-links /api/v1/kb-share-links/* /api/v1/folders/* /api/v1/documents/*
 	@ima_storage path /api/v1/folders/*/files/upload-ticket /api/v1/documents/*/file /api/v1/documents/*/file/* /api/v1/documents/*/ingestion
-	handle @ima_workspace {
+	handle @ima_kb {
 		reverse_proxy {$PYTHON_API_URL}
 	}
 	handle @ima_storage {
@@ -85,9 +85,9 @@
 		reverse_proxy {$PYTHON_API_URL}
 	}
 
-	@ima_workspace path /api/v1/workspaces /api/v1/workspaces/* /api/v1/workspace-invitations /api/v1/workspace-invitations/* /api/v1/folders/* /api/v1/documents/*
+	@ima_kb path /api/v1/knowledge-bases /api/v1/knowledge-bases/* /api/v1/kb-share-links /api/v1/kb-share-links/* /api/v1/folders/* /api/v1/documents/*
 	@ima_storage path /api/v1/folders/*/files/upload-ticket /api/v1/documents/*/file /api/v1/documents/*/file/* /api/v1/documents/*/ingestion
-	handle @ima_workspace {
+	handle @ima_kb {
 		reverse_proxy {$PYTHON_API_URL}
 	}
 	handle @ima_storage {

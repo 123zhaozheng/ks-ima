@@ -25,19 +25,18 @@ from ima.api.v1.account import router as account_router
 from ima.api.v1.admin import router as admin_router
 from ima.api.v1.auth import router as auth_router
 from ima.api.v1.knowledge import router as knowledge_router
+from ima.api.v1.knowledge_bases import router as kb_router
+from ima.api.v1.knowledge_bases import share_router as kb_share_router
 from ima.api.v1.model_governance import (
-    router as model_governance_router,
+    kb_router as model_kb_router,
 )
 from ima.api.v1.model_governance import (
-    workspace_router as model_workspace_router,
+    router as model_governance_router,
 )
 from ima.api.v1.search import router as search_router
 from ima.api.v1.system import readiness
 from ima.api.v1.system import router as system_router
-from ima.api.v1.workspaces import admin_router as workspace_admin_router
-from ima.api.v1.workspaces import invitation_router
-from ima.api.v1.workspaces import router as workspace_router
-from ima.application.authorization import WorkspaceError, WorkspaceService
+from ima.application.authorization import KbError, KbService
 from ima.application.identity import IdentityError, IdentityService
 from ima.application.knowledge import KnowledgeError, KnowledgeService
 from ima.application.maintenance import MaintenanceFreezeError
@@ -67,25 +66,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = app_settings
         app.state.job_service = service
         app.state.identity_service = IdentityService(engine, app_settings)
-        app.state.workspace_service = WorkspaceService(engine, app_settings)
+        app.state.kb_service = KbService(engine, app_settings)
         app.state.mcp_oauth_repository = McpOauthRepository(engine, app_settings)
         app.state.mcp_authorization_service = McpAuthorizationService(
             app.state.mcp_oauth_repository,
             app.state.identity_service,
-            app.state.workspace_service,
+            app.state.kb_service,
             app_settings,
         )
         app.state.model_governance_service = ModelGovernanceService(engine, app_settings)
-        app.state.knowledge_service = KnowledgeService(engine, app.state.workspace_service)
-        app.state.search_service = SearchService(
-            engine, app.state.workspace_service, app.state.model_governance_service
-        )
-        app.state.storage_service = StorageService(
-            app_settings, engine, app.state.workspace_service, service
-        )
+        app.state.knowledge_service = KnowledgeService(engine, service)
+        app.state.search_service = SearchService(engine, app.state.model_governance_service)
+        app.state.storage_service = StorageService(app_settings, engine, service)
         mcp_runtime["value"] = McpRuntime(
             authorization=app.state.mcp_authorization_service,
-            workspace=app.state.workspace_service,
+            kb=app.state.kb_service,
             knowledge=app.state.knowledge_service,
             storage=app.state.storage_service,
             search=app.state.search_service,
@@ -131,18 +126,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.add_exception_handler(IdentityError, identity_exception_handler)  # type: ignore[arg-type]
 
-    async def workspace_exception_handler(request: Request, exc: WorkspaceError) -> JSONResponse:
+    async def kb_exception_handler(request: Request, exc: KbError) -> JSONResponse:
         from ima.api.errors import make_problem
 
         return make_problem(
             request,
             status=exc.status_code,
-            title="Workspace request failed",
+            title="Knowledge base request failed",
             detail=exc.detail,
             code=exc.code,
         )
 
-    app.add_exception_handler(WorkspaceError, workspace_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(KbError, kb_exception_handler)  # type: ignore[arg-type]
 
     async def model_governance_exception_handler(
         request: Request, exc: ModelGovernanceError
@@ -254,13 +249,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.include_router(auth_router)
     api.include_router(admin_router)
     api.include_router(account_router)
-    api.include_router(workspace_router)
-    api.include_router(invitation_router)
-    api.include_router(workspace_admin_router)
+    api.include_router(kb_router)
+    api.include_router(kb_share_router)
     # /api/v1/internal/* is intentionally unmounted; Caddy keeps answering the
     # retired private bridge space with a public 404 as defense in depth.
     api.include_router(model_governance_router)
-    api.include_router(model_workspace_router)
+    api.include_router(model_kb_router)
     api.include_router(knowledge_router)
     api.include_router(search_router)
     api.include_router(oauth_admin_router)

@@ -279,10 +279,8 @@ class McpOauthRepository:
         user_id: str,
         client_id: UUID,
         canonical_resource: str,
-        workspace_id: str,
-        folder_root_id: str | None,
     ) -> GrantRecord | None:
-        """Return the single active grant matching a boundary, if any."""
+        """Return the active user-level grant for a client, if any."""
         async with self.engine.connect() as conn:
             row = (
                 (
@@ -290,7 +288,6 @@ class McpOauthRepository:
                         text(
                             """SELECT id FROM ima.mcp_grants
                                WHERE user_id=:uid AND client_id=:cid AND canonical_resource=:resource
-                                 AND workspace_id=:wid AND folder_root_id IS NOT DISTINCT FROM :root
                                  AND state='active' AND expires_at>:now
                                ORDER BY created_at DESC LIMIT 1"""
                         ),
@@ -298,8 +295,6 @@ class McpOauthRepository:
                             "uid": user_id,
                             "cid": client_id,
                             "resource": canonical_resource,
-                            "wid": workspace_id,
-                            "root": folder_root_id,
                             "now": utcnow(),
                         },
                     )
@@ -314,7 +309,7 @@ class McpOauthRepository:
             (
                 await conn.execute(
                     text(
-                        """SELECT id,user_id,client_id,canonical_resource,workspace_id,folder_root_id,scopes,state,expires_at
+                        """SELECT id,user_id,client_id,canonical_resource,scopes,state,expires_at
                            FROM ima.mcp_grants WHERE id=:id"""
                     ),
                     {"id": grant_id},
@@ -330,8 +325,6 @@ class McpOauthRepository:
             user_id=str(row["user_id"]),
             client_id=UUID(str(row["client_id"])),
             canonical_resource=str(row["canonical_resource"]),
-            workspace_id=str(row["workspace_id"]),
-            folder_root_id=row["folder_root_id"],
             scopes=tuple(row["scopes"]),
             state=row["state"],
             expires_at=row["expires_at"],
@@ -367,14 +360,12 @@ class McpOauthRepository:
         user_id: str,
         client_id: UUID,
         canonical_resource: str,
-        workspace_id: str,
-        folder_root_id: str | None,
         scopes: tuple[str, ...],
         expires_at: datetime,
         consent_granted_by: str,
         correlation_id: str | None = None,
     ) -> GrantRecord:
-        """Create or explicitly re-consent an exact-boundary human grant."""
+        """Create or explicitly re-consent a user-level human grant."""
         grant_id = uuid4()
         now = utcnow()
         async with self.engine.begin() as conn:
@@ -387,8 +378,6 @@ class McpOauthRepository:
                             user_id,
                             str(client_id),
                             canonical_resource,
-                            workspace_id,
-                            folder_root_id or "",
                         )
                     )
                 },
@@ -397,14 +386,11 @@ class McpOauthRepository:
                 "uid": user_id,
                 "cid": client_id,
                 "resource": canonical_resource,
-                "wid": workspace_id,
-                "root": folder_root_id,
             }
             existing = await conn.scalar(
                 text(
                     """SELECT id FROM ima.mcp_grants
                        WHERE user_id=:uid AND client_id=:cid AND canonical_resource=:resource
-                         AND workspace_id=:wid AND folder_root_id IS NOT DISTINCT FROM :root
                          AND state='active' FOR UPDATE"""
                 ),
                 parameters,
@@ -427,9 +413,9 @@ class McpOauthRepository:
             else:
                 await conn.execute(
                     text(
-                        """INSERT INTO ima.mcp_grants(id,user_id,client_id,canonical_resource,workspace_id,folder_root_id,
+                        """INSERT INTO ima.mcp_grants(id,user_id,client_id,canonical_resource,
                            scopes,state,revocation_epoch,expires_at,created_at,updated_at,consent_granted_by)
-                           VALUES (:id,:uid,:cid,:resource,:wid,:root,:scopes,'active',0,:expires,:now,:now,:actor)"""
+                           VALUES (:id,:uid,:cid,:resource,:scopes,'active',0,:expires,:now,:now,:actor)"""
                     ),
                     {
                         "id": grant_id,
@@ -447,7 +433,7 @@ class McpOauthRepository:
                 "success",
                 target_type="oauth_grant",
                 target_id=str(grant_id),
-                metadata={"workspace_id": workspace_id, "scopes": list(scopes)},
+                metadata={"scopes": list(scopes)},
                 correlation_id=correlation_id,
             )
         async with self.engine.connect() as conn:
@@ -524,8 +510,6 @@ class McpOauthRepository:
         client_id: UUID,
         redirect_uri: str,
         canonical_resource: str,
-        workspace_id: str,
-        folder_root_id: str | None,
         scopes: tuple[str, ...],
         code_challenge: str,
         security_stamp: str,
@@ -544,9 +528,9 @@ class McpOauthRepository:
             await conn.execute(
                 text(
                     """INSERT INTO ima.mcp_authorization_codes(id,code_digest,grant_id,user_id,client_id,redirect_uri,
-                       canonical_resource,workspace_id,folder_root_id,scopes,code_challenge,code_challenge_method,
+                       canonical_resource,scopes,code_challenge,code_challenge_method,
                        security_stamp,state,expires_at,created_at)
-                       VALUES (:id,:digest,:grant,:uid,:cid,:redirect,:resource,:wid,:root,:scopes,:challenge,'S256',
+                       VALUES (:id,:digest,:grant,:uid,:cid,:redirect,:resource,:scopes,:challenge,'S256',
                                :stamp,:state,:expires,:now)"""
                 ),
                 {
@@ -557,8 +541,6 @@ class McpOauthRepository:
                     "cid": client_id,
                     "redirect": redirect_uri,
                     "resource": canonical_resource,
-                    "wid": workspace_id,
-                    "root": folder_root_id,
                     "scopes": list(scopes),
                     "challenge": code_challenge,
                     "stamp": security_stamp,
@@ -574,7 +556,7 @@ class McpOauthRepository:
                 "success",
                 target_type="oauth_grant",
                 target_id=str(grant_id),
-                metadata={"client_id": str(client_id), "workspace_id": workspace_id},
+                metadata={"client_id": str(client_id)},
                 correlation_id=correlation_id,
             )
         async with self.engine.connect() as conn:
@@ -589,8 +571,8 @@ class McpOauthRepository:
             (
                 await conn.execute(
                     text(
-                        """SELECT id,grant_id,user_id,client_id,redirect_uri,canonical_resource,workspace_id,
-                                  folder_root_id,scopes,code_challenge,state,expires_at
+                        """SELECT id,grant_id,user_id,client_id,redirect_uri,canonical_resource,
+                                  scopes,code_challenge,state,expires_at
                            FROM ima.mcp_authorization_codes WHERE id=:id"""
                     ),
                     {"id": code_id},
@@ -611,8 +593,6 @@ class McpOauthRepository:
             scopes=tuple(row["scopes"]),
             code_challenge=str(row["code_challenge"]),
             expires_at=row["expires_at"],
-            workspace_id=str(row["workspace_id"]),
-            folder_root_id=row["folder_root_id"],
             state=str(row["state"]),
         )
 
@@ -644,7 +624,6 @@ class McpOauthRepository:
                         text(
                             """SELECT c.*,g.state AS grant_state,g.user_id AS grant_user,
                                       g.client_id AS grant_client,g.canonical_resource AS grant_resource,
-                                      g.workspace_id AS grant_workspace,g.folder_root_id AS grant_root,
                                       g.scopes AS grant_scopes,g.expires_at AS grant_expires,
                                       client.is_enabled AS client_enabled,
                                       client.canonical_resource AS client_resource,
@@ -768,11 +747,7 @@ class McpOauthRepository:
                 deferred_error = McpRepositoryError(
                     "invalid_grant", "authorization code security state changed"
                 )
-            elif (
-                str(row["workspace_id"]) != str(row["grant_workspace"])
-                or row["folder_root_id"] != row["grant_root"]
-                or not set(row["scopes"]).issubset(set(row["grant_scopes"]))
-            ):
+            elif not set(row["scopes"]).issubset(set(row["grant_scopes"])):
                 deferred_error = McpRepositoryError(
                     "invalid_grant", "authorization code grant binding mismatch"
                 )
@@ -820,8 +795,6 @@ class McpOauthRepository:
                     scopes=tuple(row["scopes"]),
                     code_challenge=str(row["code_challenge"]),
                     expires_at=row["expires_at"],
-                    workspace_id=str(row["workspace_id"]),
-                    folder_root_id=row["folder_root_id"],
                     state=str(row["state"]),
                 )
         if deferred_error is not None:
@@ -850,22 +823,16 @@ class McpOauthRepository:
                         text(
                             """SELECT c.*,g.state AS grant_state,g.user_id AS grant_user,
                                       g.client_id AS grant_client,g.canonical_resource AS grant_resource,
-                                      g.workspace_id AS grant_workspace,g.folder_root_id AS grant_root,
                                       g.scopes AS grant_scopes,g.expires_at AS grant_expires,
                                       client.is_enabled AS client_enabled,
                                       client.canonical_resource AS client_resource,
                                       u.is_active AS user_active,u.security_stamp AS current_security_stamp,
-                                      w.is_active AS workspace_active,wm.state AS membership_state,
-                                      CASE WHEN g.folder_root_id IS NULL THEN true ELSE root.lifecycle='active' END AS root_active,
                                       EXISTS (SELECT 1 FROM ima.mcp_client_redirects redirect
                                         WHERE redirect.client_id=c.client_id AND redirect.redirect_uri=c.redirect_uri) AS redirect_registered
                                FROM ima.mcp_authorization_codes c
                                JOIN ima.mcp_grants g ON g.id=c.grant_id
                                JOIN ima.mcp_clients client ON client.id=c.client_id
                                JOIN ima.users u ON u.id=c.user_id
-                               JOIN ima.workspaces w ON w.id=g.workspace_id
-                               LEFT JOIN ima.workspace_members wm ON wm.workspace_id=g.workspace_id AND wm.user_id=g.user_id
-                               LEFT JOIN ima.folders root ON root.workspace_id=g.workspace_id AND root.id=g.folder_root_id
                                WHERE c.code_digest=:digest FOR UPDATE OF c,g"""
                         ),
                         {"digest": self._token_digest(raw_code)},
@@ -892,9 +859,6 @@ class McpOauthRepository:
                 or row["grant_expires"] <= now
                 or not row["user_active"]
                 or not row["client_enabled"]
-                or not row["workspace_active"]
-                or row["membership_state"] != "active"
-                or not row["root_active"]
             ):
                 reason = "invalid_grant"
             elif (
@@ -916,11 +880,7 @@ class McpOauthRepository:
                 str(row["security_stamp"]), str(row["current_security_stamp"])
             ):
                 reason = "invalid_grant"
-            elif (
-                str(row["workspace_id"]) != str(row["grant_workspace"])
-                or row["folder_root_id"] != row["grant_root"]
-                or not set(row["scopes"]).issubset(set(row["grant_scopes"]))
-            ):
+            elif not set(row["scopes"]).issubset(set(row["grant_scopes"])):
                 reason = "invalid_grant"
             elif not secrets.compare_digest(str(row["code_challenge"]), expected_code_challenge):
                 reason = "verifier_mismatch"
@@ -963,16 +923,14 @@ class McpOauthRepository:
                     {"id": row["grant_id"], "now": now},
                 )
                 await conn.execute(
-                    text("""INSERT INTO ima.mcp_access_tokens(id,token_digest,grant_id,principal_id,client_id,canonical_resource,workspace_id,folder_root_id,scopes,security_stamp,expires_at,created_at)
-                    VALUES (:id,:digest,:grant,NULL,:client,:resource,:workspace,:root,:scopes,:stamp,:expires,:now)"""),
+                    text("""INSERT INTO ima.mcp_access_tokens(id,token_digest,grant_id,principal_id,client_id,canonical_resource,scopes,security_stamp,expires_at,created_at)
+                    VALUES (:id,:digest,:grant,NULL,:client,:resource,:scopes,:stamp,:expires,:now)"""),
                     {
                         "id": access_id,
                         "digest": self._token_digest(raw_access),
                         "grant": row["grant_id"],
                         "client": row["client_id"],
                         "resource": expected_resource,
-                        "workspace": row["workspace_id"],
-                        "root": row["folder_root_id"],
                         "scopes": list(row["scopes"]),
                         "stamp": row["current_security_stamp"],
                         "expires": access_expiry,
@@ -992,8 +950,8 @@ class McpOauthRepository:
                     },
                 )
                 await conn.execute(
-                    text("""INSERT INTO ima.mcp_refresh_tokens(id,token_digest,family_id,grant_id,client_id,canonical_resource,workspace_id,folder_root_id,scopes,issued_at,expires_at)
-                    VALUES (:id,:digest,:family,:grant,:client,:resource,:workspace,:root,:scopes,:now,:expires)"""),
+                    text("""INSERT INTO ima.mcp_refresh_tokens(id,token_digest,family_id,grant_id,client_id,canonical_resource,scopes,issued_at,expires_at)
+                    VALUES (:id,:digest,:family,:grant,:client,:resource,:scopes,:now,:expires)"""),
                     {
                         "id": refresh_id,
                         "digest": self._token_digest(raw_refresh),
@@ -1001,8 +959,6 @@ class McpOauthRepository:
                         "grant": row["grant_id"],
                         "client": row["client_id"],
                         "resource": expected_resource,
-                        "workspace": row["workspace_id"],
-                        "root": row["folder_root_id"],
                         "scopes": list(row["scopes"]),
                         "now": now,
                         "expires": refresh_expiry,
@@ -1024,10 +980,7 @@ class McpOauthRepository:
                     "success",
                     target_type="oauth_grant",
                     target_id=str(row["grant_id"]),
-                    metadata={
-                        "workspace_id": str(row["workspace_id"]),
-                        "scopes": list(row["scopes"]),
-                    },
+                    metadata={"scopes": list(row["scopes"])},
                     correlation_id=correlation_id,
                 )
                 await self._audit(
@@ -1046,8 +999,6 @@ class McpOauthRepository:
                     client_id=UUID(str(row["client_id"])),
                     redirect_uri=str(row["redirect_uri"]),
                     canonical_resource=str(row["canonical_resource"]),
-                    workspace_id=str(row["workspace_id"]),
-                    folder_root_id=row["folder_root_id"],
                     scopes=tuple(row["scopes"]),
                     code_challenge=str(row["code_challenge"]),
                     expires_at=row["expires_at"],
@@ -1060,8 +1011,6 @@ class McpOauthRepository:
                     principal_id=None,
                     client_id=expected_client_id,
                     canonical_resource=expected_resource,
-                    workspace_id=str(row["workspace_id"]),
-                    folder_root_id=row["folder_root_id"],
                     scopes=tuple(row["scopes"]),
                     expires_at=access_expiry,
                     security_stamp=str(row["current_security_stamp"]),
@@ -1072,8 +1021,6 @@ class McpOauthRepository:
                     grant_id=UUID(str(row["grant_id"])),
                     client_id=expected_client_id,
                     canonical_resource=expected_resource,
-                    workspace_id=str(row["workspace_id"]),
-                    folder_root_id=row["folder_root_id"],
                     scopes=tuple(row["scopes"]),
                     token_digest=self._token_digest(raw_refresh),
                     expires_at=refresh_expiry,
@@ -1097,8 +1044,6 @@ class McpOauthRepository:
         principal_id: UUID | None,
         client_id: UUID | None,
         canonical_resource: str,
-        workspace_id: str,
-        folder_root_id: str | None,
         scopes: tuple[str, ...],
         expires_at: datetime,
         security_stamp: str | None = None,
@@ -1128,20 +1073,12 @@ class McpOauthRepository:
                     (
                         await conn.execute(
                             text(
-                                """SELECT g.user_id,g.client_id,g.canonical_resource,g.workspace_id,
-                                          g.folder_root_id,g.scopes,g.expires_at,u.security_stamp,
-                                          u.is_active,c.is_enabled,c.canonical_resource AS client_resource,
-                                          w.is_active AS workspace_active,
-                                          wm.state AS membership_state,
-                                          CASE WHEN g.folder_root_id IS NULL THEN true ELSE root.lifecycle='active' END AS root_active
+                                """SELECT g.user_id,g.client_id,g.canonical_resource,
+                                          g.scopes,g.expires_at,u.security_stamp,
+                                          u.is_active,c.is_enabled,c.canonical_resource AS client_resource
                                    FROM ima.mcp_grants g
                                    JOIN ima.users u ON u.id=g.user_id
                                    JOIN ima.mcp_clients c ON c.id=g.client_id
-                                   JOIN ima.workspaces w ON w.id=g.workspace_id
-                                   LEFT JOIN ima.workspace_members wm
-                                     ON wm.workspace_id=g.workspace_id AND wm.user_id=g.user_id
-                                   LEFT JOIN ima.folders root
-                                     ON root.workspace_id=g.workspace_id AND root.id=g.folder_root_id
                                    WHERE g.id=:id AND g.state='active' AND g.expires_at>:now
                                    FOR UPDATE OF g"""
                             ),
@@ -1156,14 +1093,9 @@ class McpOauthRepository:
                     or client_id != UUID(str(binding["client_id"]))
                     or canonical_resource != binding["canonical_resource"]
                     or canonical_resource != binding["client_resource"]
-                    or workspace_id != binding["workspace_id"]
-                    or folder_root_id != binding["folder_root_id"]
                     or not set(scopes).issubset(set(binding["scopes"]))
                     or not binding["is_active"]
                     or not binding["is_enabled"]
-                    or not binding["workspace_active"]
-                    or binding["membership_state"] != "active"
-                    or not binding["root_active"]
                     or security_stamp is None
                     or not secrets.compare_digest(security_stamp, str(binding["security_stamp"]))
                     or expires_at > binding["expires_at"]
@@ -1177,13 +1109,8 @@ class McpOauthRepository:
                     (
                         await conn.execute(
                             text(
-                                """SELECT p.workspace_id,p.folder_root_id,p.scopes,p.expires_at,
-                                          w.is_active AS workspace_active,
-                                          CASE WHEN p.folder_root_id IS NULL THEN true ELSE root.lifecycle='active' END AS root_active
+                                """SELECT p.scopes,p.expires_at
                                    FROM ima.mcp_service_principals p
-                                   JOIN ima.workspaces w ON w.id=p.workspace_id
-                                   LEFT JOIN ima.folders root
-                                     ON root.workspace_id=p.workspace_id AND root.id=p.folder_root_id
                                    WHERE p.id=:id AND p.state='active' AND p.expires_at>:now
                                    FOR UPDATE OF p"""
                             ),
@@ -1198,11 +1125,7 @@ class McpOauthRepository:
                     or client_id is not None
                     or security_stamp is not None
                     or canonical_resource != self.settings.mcp_resource_url
-                    or workspace_id != binding["workspace_id"]
-                    or folder_root_id != binding["folder_root_id"]
                     or not set(scopes).issubset(set(binding["scopes"]))
-                    or not binding["workspace_active"]
-                    or not binding["root_active"]
                     or expires_at > binding["expires_at"]
                 ):
                     raise McpRepositoryError(
@@ -1211,8 +1134,8 @@ class McpOauthRepository:
             await conn.execute(
                 text(
                     """INSERT INTO ima.mcp_access_tokens(id,token_digest,grant_id,principal_id,client_id,
-                       canonical_resource,workspace_id,folder_root_id,scopes,security_stamp,expires_at,created_at)
-                       VALUES (:id,:digest,:grant,:principal,:cid,:resource,:wid,:root,:scopes,:stamp,:expires,:now)"""
+                       canonical_resource,scopes,security_stamp,expires_at,created_at)
+                       VALUES (:id,:digest,:grant,:principal,:cid,:resource,:scopes,:stamp,:expires,:now)"""
                 ),
                 {
                     "id": token_uuid,
@@ -1221,8 +1144,6 @@ class McpOauthRepository:
                     "principal": principal_id,
                     "cid": client_id,
                     "resource": canonical_resource,
-                    "wid": workspace_id,
-                    "root": folder_root_id,
                     "scopes": list(scopes),
                     "stamp": security_stamp,
                     "expires": expires_at,
@@ -1236,7 +1157,7 @@ class McpOauthRepository:
                 "success",
                 target_type="oauth_grant" if grant_id else "service_principal",
                 target_id=str(grant_id or principal_id),
-                metadata={"workspace_id": workspace_id, "scopes": list(scopes)},
+                metadata={"scopes": list(scopes)},
                 correlation_id=correlation_id,
             )
         async with self.engine.connect() as conn:
@@ -1249,8 +1170,8 @@ class McpOauthRepository:
             (
                 await conn.execute(
                     text(
-                        """SELECT id,token_digest,grant_id,principal_id,client_id,canonical_resource,workspace_id,
-                                  folder_root_id,scopes,security_stamp,expires_at,revoked_at
+                        """SELECT id,token_digest,grant_id,principal_id,client_id,canonical_resource,
+                                  scopes,security_stamp,expires_at,revoked_at
                            FROM ima.mcp_access_tokens WHERE id=:id"""
                     ),
                     {"id": token_id},
@@ -1268,8 +1189,6 @@ class McpOauthRepository:
             principal_id=UUID(str(row["principal_id"])) if row["principal_id"] else None,
             client_id=UUID(str(row["client_id"])) if row["client_id"] else None,
             canonical_resource=str(row["canonical_resource"]),
-            workspace_id=str(row["workspace_id"]),
-            folder_root_id=row["folder_root_id"],
             scopes=tuple(row["scopes"]),
             expires_at=row["expires_at"],
             security_stamp=row["security_stamp"],
@@ -1294,37 +1213,28 @@ class McpOauthRepository:
                     await conn.execute(
                         text(
                             """SELECT at.id,at.token_digest,at.grant_id,at.principal_id,at.client_id,
-                                      at.canonical_resource,at.workspace_id,at.folder_root_id,at.scopes,
+                                      at.canonical_resource,at.scopes,
                                       at.security_stamp,at.expires_at,at.revoked_at
                                FROM ima.mcp_access_tokens at
-                               JOIN ima.workspaces w ON w.id=at.workspace_id AND w.is_active
-                               LEFT JOIN ima.folders root
-                                 ON root.workspace_id=at.workspace_id AND root.id=at.folder_root_id
                                LEFT JOIN ima.mcp_grants g ON g.id=at.grant_id
                                LEFT JOIN ima.mcp_clients c ON c.id=g.client_id
                                LEFT JOIN ima.users u ON u.id=g.user_id
-                               LEFT JOIN ima.workspace_members wm
-                                 ON wm.workspace_id=g.workspace_id AND wm.user_id=g.user_id
                                LEFT JOIN ima.mcp_service_principals p ON p.id=at.principal_id
+                               LEFT JOIN ima.users po ON po.id=p.owner_user_id
                                WHERE at.token_digest=:digest AND at.revoked_at IS NULL
                                  AND at.canonical_resource=:resource AND at.expires_at>:now
-                                 AND (at.folder_root_id IS NULL OR root.lifecycle='active')
                                  AND (
                                    (at.grant_id IS NOT NULL
                                     AND g.state='active' AND g.expires_at>:now
                                     AND g.client_id=at.client_id
                                     AND g.canonical_resource=at.canonical_resource
-                                    AND g.workspace_id=at.workspace_id
-                                    AND g.folder_root_id IS NOT DISTINCT FROM at.folder_root_id
                                     AND at.scopes <@ g.scopes
                                     AND c.is_enabled AND c.canonical_resource=at.canonical_resource
-                                    AND u.is_active AND u.security_stamp=at.security_stamp
-                                    AND wm.state='active')
+                                    AND u.is_active AND u.security_stamp=at.security_stamp)
                                    OR
                                    (at.principal_id IS NOT NULL
                                     AND p.state='active' AND p.expires_at>:now
-                                    AND p.workspace_id=at.workspace_id
-                                    AND p.folder_root_id IS NOT DISTINCT FROM at.folder_root_id
+                                    AND po.is_active
                                     AND at.scopes <@ p.scopes)
                                  )"""
                         ),
@@ -1347,8 +1257,6 @@ class McpOauthRepository:
                 principal_id=UUID(str(row["principal_id"])) if row["principal_id"] else None,
                 client_id=UUID(str(row["client_id"])) if row["client_id"] else None,
                 canonical_resource=str(row["canonical_resource"]),
-                workspace_id=str(row["workspace_id"]),
-                folder_root_id=row["folder_root_id"],
                 scopes=tuple(row["scopes"]),
                 expires_at=row["expires_at"],
                 security_stamp=row["security_stamp"],
@@ -1381,7 +1289,7 @@ class McpOauthRepository:
             (
                 await conn.execute(
                     text(
-                        """SELECT id,family_id,grant_id,client_id,canonical_resource,workspace_id,folder_root_id,
+                        """SELECT id,family_id,grant_id,client_id,canonical_resource,
                                   scopes,token_digest,expires_at,replaced_at,replaced_by,revoked_at
                            FROM ima.mcp_refresh_tokens WHERE id=:id"""
                     ),
@@ -1399,8 +1307,6 @@ class McpOauthRepository:
             grant_id=UUID(str(row["grant_id"])),
             client_id=UUID(str(row["client_id"])),
             canonical_resource=str(row["canonical_resource"]),
-            workspace_id=str(row["workspace_id"]),
-            folder_root_id=row["folder_root_id"],
             scopes=tuple(row["scopes"]),
             token_digest=str(row["token_digest"]),
             expires_at=row["expires_at"],
@@ -1445,18 +1351,16 @@ class McpOauthRepository:
                                       g.state AS grant_state,g.scopes AS grant_scopes,g.expires_at AS grant_expires,
                                       f.grant_id AS family_grant,g.user_id AS grant_user,
                                       g.client_id AS grant_client,
-                                      g.canonical_resource AS grant_resource,g.workspace_id AS grant_workspace,
-                                      g.folder_root_id AS grant_root,u.is_active AS user_active,
+                                      g.canonical_resource AS grant_resource,u.is_active AS user_active,
                                       u.security_stamp AS current_security_stamp,c.is_enabled AS client_enabled,
-                                      c.canonical_resource AS client_resource,w.is_active AS workspace_active
+                                      c.canonical_resource AS client_resource
                                FROM ima.mcp_refresh_tokens rt
                                JOIN ima.mcp_refresh_families f ON f.id=rt.family_id
                                JOIN ima.mcp_grants g ON g.id=rt.grant_id
                                JOIN ima.users u ON u.id=g.user_id
                                JOIN ima.mcp_clients c ON c.id=g.client_id
-                               JOIN ima.workspaces w ON w.id=g.workspace_id
                                WHERE rt.token_digest=:digest
-                               FOR UPDATE OF rt,f,g,u,c,w"""
+                               FOR UPDATE OF rt,f,g,u,c"""
                         ),
                         {"digest": self._token_digest(raw_refresh)},
                     )
@@ -1464,27 +1368,6 @@ class McpOauthRepository:
                 .mappings()
                 .first()
             )
-            membership_state = None
-            root_active = False
-            if row:
-                membership_state = await conn.scalar(
-                    text(
-                        "SELECT state FROM ima.workspace_members WHERE workspace_id=:workspace AND user_id=:user FOR UPDATE"
-                    ),
-                    {"workspace": row["grant_workspace"], "user": row["grant_user"]},
-                )
-                if row["folder_root_id"] is None:
-                    root_active = True
-                else:
-                    root_active = (
-                        await conn.scalar(
-                            text(
-                                "SELECT lifecycle FROM ima.folders WHERE workspace_id=:workspace AND id=:root FOR UPDATE"
-                            ),
-                            {"workspace": row["workspace_id"], "root": row["folder_root_id"]},
-                        )
-                        == "active"
-                    )
             if not row:
                 await self._audit(
                     conn,
@@ -1571,12 +1454,7 @@ class McpOauthRepository:
                 or str(row["canonical_resource"]) != expected_resource
                 or str(row["grant_resource"]) != expected_resource
                 or str(row["client_resource"]) != expected_resource
-                or str(row["workspace_id"]) != str(row["grant_workspace"])
-                or row["folder_root_id"] != row["grant_root"]
                 or not set(row["scopes"]).issubset(set(row["grant_scopes"]))
-                or not row["workspace_active"]
-                or membership_state != "active"
-                or not root_active
                 or not row["user_active"]
                 or not secrets.compare_digest(
                     str(row["family_stamp"]), str(row["current_security_stamp"])
@@ -1647,8 +1525,8 @@ class McpOauthRepository:
                     await conn.execute(
                         text(
                             """INSERT INTO ima.mcp_refresh_tokens(id,token_digest,family_id,grant_id,client_id,
-                           canonical_resource,workspace_id,folder_root_id,scopes,issued_at,expires_at,replaced_at,replaced_by)
-                           VALUES (:id,:digest,:family,:grant,:cid,:resource,:wid,:root,:scopes,:now,:expires,NULL,NULL)"""
+                           canonical_resource,scopes,issued_at,expires_at,replaced_at,replaced_by)
+                           VALUES (:id,:digest,:family,:grant,:cid,:resource,:scopes,:now,:expires,NULL,NULL)"""
                         ),
                         {
                             "id": new_token_id,
@@ -1657,8 +1535,6 @@ class McpOauthRepository:
                             "grant": row["grant_id"],
                             "cid": row["client_id"],
                             "resource": expected_resource,
-                            "wid": row["workspace_id"],
-                            "root": row["folder_root_id"],
                             "scopes": list(new_scopes),
                             "now": now,
                             "expires": refresh_expiry,
@@ -1667,8 +1543,8 @@ class McpOauthRepository:
                     await conn.execute(
                         text(
                             """INSERT INTO ima.mcp_access_tokens(id,token_digest,grant_id,principal_id,client_id,
-                               canonical_resource,workspace_id,folder_root_id,scopes,security_stamp,expires_at,created_at)
-                               VALUES (:id,:digest,:grant,NULL,:client,:resource,:workspace,:root,:scopes,:stamp,:expires,:now)"""
+                               canonical_resource,scopes,security_stamp,expires_at,created_at)
+                               VALUES (:id,:digest,:grant,NULL,:client,:resource,:scopes,:stamp,:expires,:now)"""
                         ),
                         {
                             "id": access_token_id,
@@ -1676,8 +1552,6 @@ class McpOauthRepository:
                             "grant": row["grant_id"],
                             "client": row["client_id"],
                             "resource": expected_resource,
-                            "workspace": row["workspace_id"],
-                            "root": row["folder_root_id"],
                             "scopes": list(new_scopes),
                             "stamp": row["current_security_stamp"],
                             "expires": access_expiry,
@@ -1713,10 +1587,7 @@ class McpOauthRepository:
                         "success",
                         target_type="oauth_grant",
                         target_id=str(row["grant_id"]),
-                        metadata={
-                            "workspace_id": str(row["workspace_id"]),
-                            "scopes": list(new_scopes),
-                        },
+                        metadata={"scopes": list(new_scopes)},
                         correlation_id=correlation_id,
                     )
                     grant = await self._grant_record(conn, row["grant_id"])
@@ -1767,7 +1638,7 @@ class McpOauthRepository:
             (
                 await conn.execute(
                     text(
-                        """SELECT id,workspace_id,folder_root_id,display_name,purpose,owner_user_id,scopes,state,
+                        """SELECT id,display_name,purpose,owner_user_id,scopes,state,
                                   expires_at,cidr_allowlist,rate_limit,concurrency_limit
                            FROM ima.mcp_service_principals WHERE id=:id"""
                     ),
@@ -1781,8 +1652,6 @@ class McpOauthRepository:
             return None
         return ServicePrincipalRecord(
             id=UUID(str(row["id"])),
-            workspace_id=str(row["workspace_id"]),
-            folder_root_id=row["folder_root_id"],
             display_name=str(row["display_name"]),
             purpose=str(row["purpose"]),
             owner_user_id=str(row["owner_user_id"]),
@@ -1803,7 +1672,7 @@ class McpOauthRepository:
                 (
                     await conn.execute(
                         text(
-                            """SELECT id,workspace_id,folder_root_id,display_name,purpose,owner_user_id,scopes,state,
+                            """SELECT id,display_name,purpose,owner_user_id,scopes,state,
                                       expires_at,cidr_allowlist,rate_limit,concurrency_limit
                                FROM ima.mcp_service_principals
                                WHERE id=:id AND (:include_inactive OR (state='active' AND expires_at>:now))"""
@@ -1818,8 +1687,6 @@ class McpOauthRepository:
                 return None
             return ServicePrincipalRecord(
                 id=UUID(str(row["id"])),
-                workspace_id=str(row["workspace_id"]),
-                folder_root_id=row["folder_root_id"],
                 display_name=str(row["display_name"]),
                 purpose=str(row["purpose"]),
                 owner_user_id=str(row["owner_user_id"]),
@@ -2026,14 +1893,11 @@ class McpOauthRepository:
                         text(
                             """SELECT c.id,c.principal_id FROM ima.mcp_credentials c
                                JOIN ima.mcp_service_principals p ON p.id=c.principal_id
-                               JOIN ima.workspaces w ON w.id=p.workspace_id
-                               LEFT JOIN ima.folders root
-                                 ON root.workspace_id=p.workspace_id AND root.id=p.folder_root_id
+                               JOIN ima.users owner ON owner.id=p.owner_user_id AND owner.is_active
                                WHERE c.credential_id=:cid AND c.digest=:digest
                                  AND c.revoked_at IS NULL AND c.expires_at>:now
                                  AND (c.replaced_by IS NULL OR c.overlap_expires_at>:now)
-                                 AND p.state='active' AND p.expires_at>:now AND w.is_active
-                                 AND (p.folder_root_id IS NULL OR root.lifecycle='active')
+                                 AND p.state='active' AND p.expires_at>:now
                                FOR UPDATE OF c"""
                         ),
                         {
@@ -2075,15 +1939,15 @@ class McpOauthRepository:
             return credential, principal
 
     async def list_service_principals(
-        self, workspace_id: str
+        self, *, owner_user_id: str
     ) -> tuple[ServicePrincipalRecord, ...]:
-        """Return safe service-principal projections for one workspace."""
+        """Return safe service-principal projections owned by one user."""
         async with self.engine.connect() as conn:
             rows = await conn.execute(
                 text(
-                    "SELECT id FROM ima.mcp_service_principals WHERE workspace_id=:id ORDER BY created_at DESC,id"
+                    "SELECT id FROM ima.mcp_service_principals WHERE owner_user_id=:id ORDER BY created_at DESC,id"
                 ),
-                {"id": workspace_id},
+                {"id": owner_user_id},
             )
             records = [await self._service_principal_record(conn, row[0]) for row in rows]
         return tuple(record for record in records if record is not None)
@@ -2489,8 +2353,6 @@ class McpOauthRepository:
     async def create_service_principal(
         self,
         *,
-        workspace_id: str,
-        folder_root_id: str | None,
         display_name: str,
         purpose: str,
         owner_user_id: str,
@@ -2502,7 +2364,7 @@ class McpOauthRepository:
         created_by: str | None = None,
         correlation_id: str | None = None,
     ) -> ServicePrincipalRecord:
-        """Create a workspace-admin-approved service principal (finite expiry)."""
+        """Create a user-owned service principal (finite expiry)."""
         principal_id = uuid4()
         now = utcnow()
         if expires_at <= now:
@@ -2518,16 +2380,14 @@ class McpOauthRepository:
         async with self.engine.begin() as conn:
             await conn.execute(
                 text(
-                    """INSERT INTO ima.mcp_service_principals(id,workspace_id,folder_root_id,display_name,purpose,
+                    """INSERT INTO ima.mcp_service_principals(id,display_name,purpose,
                        owner_user_id,scopes,state,created_by,expires_at,cidr_allowlist,rate_limit,concurrency_limit,
                        created_at,updated_at)
-                       VALUES (:id,:wid,:root,:name,:purpose,:owner,:scopes,'active',:created_by,:expires,
+                       VALUES (:id,:name,:purpose,:owner,:scopes,'active',:created_by,:expires,
                                :cidr,:rate,:concurrency,:now,:now)"""
                 ),
                 {
                     "id": principal_id,
-                    "wid": workspace_id,
-                    "root": folder_root_id,
                     "name": display_name,
                     "purpose": purpose,
                     "owner": owner_user_id,
@@ -2547,7 +2407,7 @@ class McpOauthRepository:
                 "success",
                 target_type="service_principal",
                 target_id=str(principal_id),
-                metadata={"workspace_id": workspace_id, "scopes": list(scopes)},
+                metadata={"owner_user_id": owner_user_id, "scopes": list(scopes)},
                 correlation_id=correlation_id,
             )
         async with self.engine.connect() as conn:

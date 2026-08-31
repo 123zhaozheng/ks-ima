@@ -24,13 +24,13 @@ from ima.api.v1.identity_contracts import (
     AuditEventList,
     CreateUserRequest,
     IdentityUser,
+    KnowledgeBaseCreateResponse,
+    KnowledgeBaseInfo,
+    KnowledgeBaseList,
+    KnowledgeBaseRequest,
     PlatformSettings,
     SettingPatch,
     UserPatch,
-    WorkspaceCreateResponse,
-    WorkspaceInfo,
-    WorkspaceList,
-    WorkspaceRequest,
 )
 
 router = APIRouter(prefix="/admin", tags=["platform-admin"])
@@ -340,15 +340,17 @@ async def revoke_role(
     return {"revoked": True}
 
 
-@router.get("/workspaces", response_model=WorkspaceList, operation_id="adminListWorkspaces")
-async def workspaces(
+@router.get(
+    "/knowledge-bases", response_model=KnowledgeBaseList, operation_id="adminListKnowledgeBases"
+)
+async def knowledge_bases(
     request: Request,
     current_session: Current,
     q: str = "",
     limit: int = 50,
     cursor: str | None = None,
 ) -> dict[str, Any]:
-    await require(request, "workspaces_read", current_session, sensitive=False)
+    await require(request, "knowledge_bases_read", current_session, sensitive=False)
     limit = max(1, min(limit, 100))
     decoded_cursor = _decode_cursor(cursor)
     async with service(request).engine.connect() as conn:
@@ -356,7 +358,7 @@ async def workspaces(
             (
                 await conn.execute(
                     text(
-                        "SELECT id,name,is_active,archived_at,created_at,updated_at FROM ima.workspaces WHERE (:q='' OR lower(name) LIKE '%'||:q||'%') AND (CAST(:cursor_at AS timestamptz) IS NULL OR (created_at,id) < (CAST(:cursor_at AS timestamptz),CAST(:cursor_id AS varchar))) ORDER BY created_at DESC,id DESC LIMIT :limit"
+                        "SELECT id,name,is_active,archived_at,created_at,updated_at FROM ima.knowledge_bases WHERE (:q='' OR lower(name) LIKE '%'||:q||'%') AND (CAST(:cursor_at AS timestamptz) IS NULL OR (created_at,id) < (CAST(:cursor_at AS timestamptz),CAST(:cursor_id AS varchar))) ORDER BY created_at DESC,id DESC LIMIT :limit"
                     ),
                     {
                         "q": q.casefold(),
@@ -370,7 +372,7 @@ async def workspaces(
             .all()
         )
     return {
-        "items": [WorkspaceInfo(**dict(row)) for row in rows[:limit]],
+        "items": [KnowledgeBaseInfo(**dict(row)) for row in rows[:limit]],
         "nextCursor": (
             _encode_cursor(rows[limit - 1]["created_at"], rows[limit - 1]["id"])
             if len(rows) > limit
@@ -380,46 +382,50 @@ async def workspaces(
 
 
 @router.post(
-    "/workspaces", response_model=WorkspaceCreateResponse, operation_id="adminCreateWorkspace"
+    "/knowledge-bases",
+    response_model=KnowledgeBaseCreateResponse,
+    operation_id="adminCreateKnowledgeBase",
 )
-async def create_workspace(
-    payload: WorkspaceRequest, request: Request, current_session: Current
-) -> WorkspaceCreateResponse:
-    session, actor = await require(request, "workspaces_manage", current_session)
+async def create_knowledge_base(
+    payload: KnowledgeBaseRequest, request: Request, current_session: Current
+) -> KnowledgeBaseCreateResponse:
+    session, actor = await require(request, "knowledge_bases_manage", current_session)
     check_csrf(request, session)
-    workspace = await request.app.state.workspace_service.create_workspace(
-        actor.id, payload.name, payload.initial_admin_user_id
+    knowledge_base = await request.app.state.kb_service.create_knowledge_base(
+        payload.initial_owner_user_id, payload.name
     )
-    return WorkspaceCreateResponse(id=workspace["id"], name=workspace["name"], isActive=True)
+    return KnowledgeBaseCreateResponse(
+        id=knowledge_base["id"], name=knowledge_base["name"], isActive=True
+    )
 
 
-@router.post("/workspaces/{workspace_id}/archive", operation_id="adminArchiveWorkspace")
-async def archive_workspace(
-    workspace_id: str, request: Request, current_session: Current
+@router.post("/knowledge-bases/{kb_id}/archive", operation_id="adminArchiveKnowledgeBase")
+async def archive_knowledge_base(
+    kb_id: str, request: Request, current_session: Current
 ) -> dict[str, bool]:
-    session, actor = await require(request, "workspaces_manage", current_session)
+    session, actor = await require(request, "knowledge_bases_manage", current_session)
     check_csrf(request, session)
-    await request.app.state.workspace_service.archive_workspace(actor.id, workspace_id)
+    await request.app.state.kb_service.archive_knowledge_base(actor.id, kb_id)
     return {"archived": True}
 
 
-@router.post("/workspaces/{workspace_id}/restore", operation_id="adminRestoreWorkspace")
-async def restore_workspace(
-    workspace_id: str, request: Request, current_session: Current
+@router.post("/knowledge-bases/{kb_id}/restore", operation_id="adminRestoreKnowledgeBase")
+async def restore_knowledge_base(
+    kb_id: str, request: Request, current_session: Current
 ) -> dict[str, bool]:
-    session, actor = await require(request, "workspaces_manage", current_session)
+    session, actor = await require(request, "knowledge_bases_manage", current_session)
     check_csrf(request, session)
-    await request.app.state.workspace_service.restore_workspace(actor.id, workspace_id)
+    await request.app.state.kb_service.restore_knowledge_base(actor.id, kb_id)
     return {"restored": True}
 
 
-@router.delete("/workspaces/{workspace_id}", operation_id="adminDeleteWorkspace")
-async def delete_workspace(
-    workspace_id: str, request: Request, current_session: Current
+@router.delete("/knowledge-bases/{kb_id}", operation_id="adminDeleteKnowledgeBase")
+async def delete_knowledge_base(
+    kb_id: str, request: Request, current_session: Current
 ) -> dict[str, bool]:
-    session, actor = await require(request, "workspaces_manage", current_session)
+    session, actor = await require(request, "knowledge_bases_manage", current_session)
     check_csrf(request, session)
-    await request.app.state.workspace_service.delete_archived_workspace(actor.id, workspace_id)
+    await request.app.state.kb_service.delete_archived_knowledge_base(actor.id, kb_id)
     return {"deleted": True}
 
 

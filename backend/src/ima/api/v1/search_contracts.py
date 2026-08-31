@@ -31,7 +31,8 @@ class SearchResponse(ContractModel):
 
 class ConversationResponse(ContractModel):
     id: UUID
-    workspace_id: str = Field(alias="workspaceId")
+    kb_id: str = Field(alias="kbId")
+    kb_name: str = Field(alias="kbName")
     title: str
     lifecycle: Literal["active", "archived"]
     version: int

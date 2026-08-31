@@ -14,15 +14,15 @@
   </q-header>
   <q-page-container>
     <q-page class="ask-home-page">
-      <!-- Workspaces still loading: calm spinner instead of a flashing empty state. -->
+      <!-- Knowledge bases still loading: calm spinner instead of a flashing empty state. -->
       <q-spinner
         v-if="!listReady"
         color="primary"
         size="40px"
       />
-      <!-- No workspace: honest onboarding with a way forward. -->
+      <!-- No knowledge base: minimal onboarding with a way forward. -->
       <div
-        v-else-if="!workspaceStore.id"
+        v-else-if="!kbStore.id"
         class="tk-empty"
         data-testid="ask-home-onboarding"
       >
@@ -32,27 +32,27 @@
           class="tk-empty-icon"
         />
         <div class="tk-empty-title">
-          {{ t('Start with a workspace') }}
+          {{ t('Start with a knowledge base') }}
         </div>
         <div class="tk-empty-subtitle">
-          {{ t('Ask grounds every answer in a workspace knowledge base. Create one, or join a workspace with an invitation.') }}
+          {{ t('Ask grounds every answer in a knowledge base. Create one, or join with a share link.') }}
         </div>
         <div class="tk-empty-actions">
           <q-btn
             unelevated
             no-caps
             class="tk-cta"
-            :label="t('Create Workspace')"
-            data-testid="ask-home-create-workspace"
-            @click="showCreateWorkspace = true"
+            :label="t('Create knowledge base')"
+            data-testid="ask-home-create-kb"
+            @click="showCreateKb = true"
           />
           <q-btn
             flat
             no-caps
             class="tk-cta-secondary"
-            :label="t('Join workspace')"
-            data-testid="ask-home-join-workspace"
-            @click="joinWorkspace"
+            :label="t('Join with a link')"
+            data-testid="ask-home-join-kb"
+            @click="joinWithLink"
           />
         </div>
       </div>
@@ -74,7 +74,7 @@
         </div>
         <ask-composer
           ref="composerRef"
-          :workspace-id="workspaceStore.id ?? ''"
+          :kb-id="kbStore.id ?? ''"
           :busy="asking"
           @submit="onSubmit"
         />
@@ -97,41 +97,86 @@
           class="ask-home-foot"
           text-center
         >
-          {{ t('Answers are grounded in your workspace knowledge base.') }}
+          {{ t('Answers are grounded in your knowledge base.') }}
         </div>
       </div>
     </q-page>
   </q-page-container>
-  <create-workspace-dialog v-model="showCreateWorkspace" />
+  <q-dialog
+    v-model="showCreateKb"
+    @hide="kbName = ''"
+  >
+    <q-card
+      min-w="360px"
+      data-testid="ask-home-create-kb-dialog"
+    >
+      <q-card-section class="text-h6">
+        {{ t('Create knowledge base') }}
+      </q-card-section>
+      <q-card-section>
+        <q-input
+          v-model="kbName"
+          outlined
+          autofocus
+          :label="t('Knowledge base name')"
+          data-testid="kb-name-input"
+          @keyup.enter="createKb"
+        />
+        <div class="tk-caption q-mt-sm">
+          {{ t('You will become the owner of the new knowledge base.') }}
+        </div>
+      </q-card-section>
+      <q-card-actions align="right">
+        <q-btn
+          v-close-popup
+          flat
+          :label="t('Cancel')"
+        />
+        <q-btn
+          flat
+          color="primary"
+          :label="t('Create')"
+          :loading="creating"
+          :disable="!kbName.trim()"
+          data-testid="kb-create-button"
+          @click="createKb"
+        />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
 </template>
 
 <script setup lang="ts">
 import { computed, inject, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Notify, useQuasar } from 'quasar'
+import { useQueryClient } from '@tanstack/vue-query'
 import AskComposer from 'src/components/AskComposer.vue'
-import CreateWorkspaceDialog from 'src/components/CreateWorkspaceDialog.vue'
 import { groundedKey, useGroundedKnowledge } from 'src/composables/use-grounded-knowledge'
 import { useRequireLogin } from 'src/composables/require-login'
+import { useKbStore } from 'src/stores/knowledge-base'
 import { useUiStateStore } from 'src/stores/ui-state'
-import { useWorkspaceStore } from 'src/stores/workspace'
 import { apiErrorMessage } from 'src/utils/api-error'
+import { identityClient } from 'src/utils/identity-client'
 import { t } from 'src/utils/i18n'
 
 useRequireLogin()
 
 const router = useRouter()
 const $q = useQuasar()
-const workspaceStore = useWorkspaceStore()
+const queryClient = useQueryClient()
+const kbStore = useKbStore()
 const uiStateStore = useUiStateStore()
 // Shared instance from AppShell: the stream keeps running after we route to
 // /ask/:conversationId below.
-const grounded = inject(groundedKey) ?? useGroundedKnowledge(() => workspaceStore.id)
+const grounded = inject(groundedKey) ?? useGroundedKnowledge(() => kbStore.id)
 
 const composerRef = ref<InstanceType<typeof AskComposer>>()
 const asking = ref(false)
-const showCreateWorkspace = ref(false)
-const listReady = computed(() => workspaceStore.workspacesStatus === 'success')
+const showCreateKb = ref(false)
+const kbName = ref('')
+const creating = ref(false)
+const listReady = computed(() => kbStore.kbsStatus === 'success')
 
 // Curated example questions; clicking one fills the composer.
 const hints = [
@@ -144,23 +189,47 @@ function fillHint(hint: string) {
   composerRef.value?.setText(hint)
 }
 
-function joinWorkspace() {
+async function createKb() {
+  const name = kbName.value.trim()
+  if (!name || creating.value) return
+  creating.value = true
+  try {
+    const { data, error } = await identityClient.createKnowledgeBase({ name })
+    if (error || !data) {
+      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Create failed') })
+      return
+    }
+    Notify.create({ type: 'positive', message: t('Knowledge base created') })
+    showCreateKb.value = false
+    // Membership list drives the switcher; refresh then select the new kb.
+    await queryClient.invalidateQueries({ queryKey: ['knowledge-bases', 'member'] })
+    kbStore.switchKb(data.id)
+  } catch (error) {
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Create failed') })
+  } finally {
+    creating.value = false
+  }
+}
+
+function joinWithLink() {
   $q.dialog({
-    title: t('Join Workspace'),
+    title: t('Join knowledge base'),
     prompt: {
       model: '',
-      label: t('Invitation Link'),
+      label: t('Share link'),
     },
     cancel: true,
   }).onOk((link: string) => {
-    const token = link.match(/\/invitations\/(.+)/)?.[1]
-    token && router.push(`/invitations/${token}`)
+    const token = link.match(/\/join\/(.+)/)?.[1] ?? link.trim()
+    token && router.push(`/join/${encodeURIComponent(token)}`)
   })
 }
 
 async function onSubmit(question: string) {
   if (asking.value) return
-  if (!workspaceStore.id) return
+  // Asking requires a selected knowledge base; the composer blocks send
+  // without one, and we guard again here.
+  if (!kbStore.id) return
   asking.value = true
   let routed = false
   const stopWatch = watch(() => grounded.conversationId.value, id => {

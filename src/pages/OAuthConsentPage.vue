@@ -74,29 +74,6 @@
                 </q-item-label>
               </q-item-section>
             </q-item>
-            <q-item>
-              <q-item-section>
-                <q-item-label caption>
-                  {{ t('Redirect') }}
-                </q-item-label><q-item-label class="mono">
-                  {{ preview.redirectUri }}
-                </q-item-label>
-              </q-item-section>
-            </q-item>
-            <q-item>
-              <q-item-section>
-                <q-item-label caption>
-                  {{ t('Workspace') }}
-                </q-item-label><q-item-label>{{ preview.workspaceId }}</q-item-label>
-              </q-item-section>
-            </q-item>
-            <q-item v-if="preview.folderRootId">
-              <q-item-section>
-                <q-item-label caption>
-                  {{ t('Folder restriction') }}
-                </q-item-label><q-item-label>{{ preview.folderRootId }}</q-item-label>
-              </q-item-section>
-            </q-item>
           </q-list>
         </section>
 
@@ -125,13 +102,6 @@
                 <q-item-label caption>
                   {{ t('Expires') }}
                 </q-item-label><q-item-label>{{ formatTime(preview.expiresAt) }}</q-item-label>
-              </q-item-section>
-            </q-item>
-            <q-item>
-              <q-item-section>
-                <q-item-label caption>
-                  {{ t('Refresh') }}
-                </q-item-label><q-item-label>{{ preview.refreshEnabled ? t('Rotating refresh enabled') : t('Reauthorization required') }}</q-item-label>
               </q-item-section>
             </q-item>
           </q-list>
@@ -207,8 +177,6 @@ function submit(approved: boolean) {
     clientId: one('client_id'),
     redirectUri: preview.value.redirectUri,
     resource: preview.value.resource,
-    workspaceId: preview.value.workspaceId,
-    folderRootId: preview.value.folderRootId,
     scope: preview.value.scopes.join(' '),
     state,
     codeChallenge: challenge,
@@ -222,8 +190,6 @@ function submit(approved: boolean) {
     client_id: payload.clientId,
     redirect_uri: payload.redirectUri,
     resource: payload.resource,
-    workspace_id: payload.workspaceId,
-    folder_root_id: payload.folderRootId ?? '',
     scope: payload.scope,
     state: payload.state,
     code_challenge: payload.codeChallenge,

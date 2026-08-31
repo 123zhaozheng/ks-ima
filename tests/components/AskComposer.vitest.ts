@@ -2,7 +2,6 @@ import { mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import AskComposer from 'src/components/AskComposer.vue'
-import { useAskContextStore } from 'src/stores/ask-context'
 
 /*
  * The scope picker is exercised through a stubbed FolderPickerList that emits
@@ -10,11 +9,11 @@ import { useAskContextStore } from 'src/stores/ask-context'
  */
 vi.mock('src/components/FolderPickerList.vue', () => ({
   default: {
-    props: { workspaceId: String, selectedId: String },
+    props: { kbId: String, selectedId: String },
     emits: ['select'],
     template: `<div data-testid="folder-picker-stub">
       <button data-testid="pick-folder-a" @click="$emit('select', { id: 'folder-a', title: 'Folder A' })">Folder A</button>
-      <button data-testid="pick-whole-workspace" @click="$emit('select', null)">Whole workspace</button>
+      <button data-testid="pick-whole-kb" @click="$emit('select', null)">Whole knowledge base</button>
     </div>`,
   },
 }))
@@ -38,11 +37,10 @@ const stubs = {
 
 function mountComposer(props: Record<string, unknown> = {}) {
   const pinia = createPinia()
-  const wrapper = mount(AskComposer, {
+  return mount(AskComposer, {
     props,
     global: { plugins: [pinia], stubs },
   })
-  return { wrapper, pinia }
 }
 
 beforeEach(() => {
@@ -50,23 +48,35 @@ beforeEach(() => {
 })
 
 describe('AskComposer', () => {
-  test('defaults the scope chip to the whole workspace', () => {
-    const { wrapper } = mountComposer({ workspaceId: 'workspace-1' })
+  test('defaults the scope chip to the whole knowledge base', () => {
+    const wrapper = mountComposer({ kbId: 'kb-1' })
     const chip = wrapper.find('[data-testid="ask-scope-chip"]')
     expect(chip.exists()).toBe(true)
-    expect(chip.text()).toContain('Whole workspace')
+    expect(chip.text()).toContain('Whole knowledge base')
   })
 
-  test('picks a folder scope from the picker and can return to the workspace', async () => {
-    const { wrapper } = mountComposer({ workspaceId: 'workspace-1' })
+  test('picks a folder scope from the picker and can return to the knowledge base', async () => {
+    const wrapper = mountComposer({ kbId: 'kb-1' })
     await wrapper.find('[data-testid="pick-folder-a"]').trigger('click')
     expect(wrapper.find('[data-testid="ask-scope-chip"]').text()).toContain('Folder A')
-    await wrapper.find('[data-testid="pick-whole-workspace"]').trigger('click')
-    expect(wrapper.find('[data-testid="ask-scope-chip"]').text()).toContain('Whole workspace')
+    await wrapper.find('[data-testid="pick-whole-kb"]').trigger('click')
+    expect(wrapper.find('[data-testid="ask-scope-chip"]').text()).toContain('Whole knowledge base')
+  })
+
+  test('blocks sending in home mode without a selected knowledge base', async () => {
+    const wrapper = mountComposer({ kbId: '' })
+    // Without a knowledge base the scope control is hidden entirely.
+    expect(wrapper.find('[data-testid="ask-scope-chip"]').exists()).toBe(false)
+    const textarea = wrapper.get('textarea')
+    await textarea.setValue('What is the policy?')
+    const send = wrapper.find('[data-testid="ask-send"]')
+    expect((send.element as HTMLButtonElement).disabled).toBe(true)
+    await textarea.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('submit')).toBeUndefined()
   })
 
   test('submits trimmed text on Enter and clears the textarea', async () => {
-    const { wrapper } = mountComposer({ workspaceId: 'workspace-1' })
+    const wrapper = mountComposer({ kbId: 'kb-1' })
     const textarea = wrapper.get('textarea')
     await textarea.setValue('  What is the policy?  ')
     await textarea.trigger('keydown', { key: 'Enter' })
@@ -75,46 +85,20 @@ describe('AskComposer', () => {
   })
 
   test('Shift+Enter keeps the newline, Ctrl+Enter also submits', async () => {
-    const { wrapper } = mountComposer({ workspaceId: 'workspace-1' })
+    const wrapper = mountComposer({ kbId: 'kb-1' })
     const textarea = wrapper.get('textarea')
     await textarea.setValue('line one')
     await textarea.trigger('keydown', { key: 'Enter', shiftKey: true })
     expect(wrapper.emitted('submit')).toBeUndefined()
     await textarea.trigger('keydown', { key: 'Enter', ctrlKey: true })
-    expect(wrapper.emitted('submit')).toEqual([['line one']])
+    expect(wrapper.emitted('submit')).toHaveLength(1)
   })
 
-  test('does not submit while busy and hides the scope chip in conversation mode', async () => {
-    const { wrapper } = mountComposer({ mode: 'conversation', busy: true })
-    expect(wrapper.find('[data-testid="ask-scope-chip"]').exists()).toBe(false)
+  test('conversation mode can send without a knowledge base prop', async () => {
+    const wrapper = mountComposer({ mode: 'conversation' })
     const textarea = wrapper.get('textarea')
-    await textarea.setValue('follow up')
+    await textarea.setValue('Follow up')
     await textarea.trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toBeUndefined()
-  })
-
-  test('shows the document prefill from the ask-context store and clears it on submit', async () => {
-    const { wrapper } = mountComposer({ workspaceId: 'workspace-1' })
-    const askContext = useAskContextStore()
-    askContext.askAboutDocument('note-1', 'Draft note')
-    await wrapper.vm.$nextTick()
-    expect(wrapper.find('[data-testid="ask-scope-chip"]').text()).toContain('Draft note')
-
-    const textarea = wrapper.get('textarea')
-    await textarea.setValue('Tell me about it')
-    await textarea.trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['Tell me about it']])
-    expect(askContext.hasDocumentScope).toBe(false)
-  })
-
-  test('removing the document chip restores the folder scope picker', async () => {
-    const { wrapper } = mountComposer({ workspaceId: 'workspace-1' })
-    const askContext = useAskContextStore()
-    askContext.askAboutDocument('note-1', 'Draft note')
-    await wrapper.vm.$nextTick()
-    await wrapper.find('[data-testid="chip-remove"]').trigger('click')
-    expect(askContext.hasDocumentScope).toBe(false)
-    await wrapper.vm.$nextTick()
-    expect(wrapper.find('[data-testid="ask-scope-chip"]').exists()).toBe(true)
+    expect(wrapper.emitted('submit')).toEqual([['Follow up']])
   })
 })

@@ -12,16 +12,16 @@
     <q-item
       clickable
       class="kb-tree-item"
-      :class="{ 'kb-tree-item-active': currentFolderId === workspaceStore.id }"
+      :class="{ 'kb-tree-item-active': currentFolderId === kbStore.id }"
       role="treeitem"
       tabindex="0"
       min-h="36px"
       py-0
       px-2
-      :to="workspaceStore.id ? '/kb' : undefined"
-      :active="currentFolderId === workspaceStore.id"
-      @keydown.enter.prevent="activate(workspaceStore.id!)"
-      @keydown.space.prevent="activate(workspaceStore.id!)"
+      :to="kbStore.id ? '/kb' : undefined"
+      :active="currentFolderId === kbStore.id"
+      @keydown.enter.prevent="activate(kbStore.id!)"
+      @keydown.space.prevent="activate(kbStore.id!)"
     >
       <q-item-section
         avatar
@@ -102,12 +102,12 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { knowledgeClient } from 'src/api/knowledge-client'
-import { useWorkspaceStore } from 'src/stores/workspace'
+import { useKbStore } from 'src/stores/knowledge-base'
 import { t } from 'src/utils/i18n'
 
 type Folder = { id: string, title: string, kind: 'folder', version: number }
 
-const workspaceStore = useWorkspaceStore()
+const kbStore = useKbStore()
 const route = useRoute()
 const router = useRouter()
 const byParent = ref(new Map<string, Folder[]>())
@@ -116,7 +116,7 @@ const folderMap = computed(() => Object.fromEntries([...byParent.value.values()]
 const currentFolderId = computed(() => {
   const query = route.query.folderId
   if (typeof query === 'string' && query) return query
-  return workspaceStore.id ?? ''
+  return kbStore.id ?? ''
 })
 
 const expanded = reactive(new Set<string>())
@@ -127,10 +127,10 @@ function childrenOf(parentId: string) {
 
 watch([currentFolderId, folderMap], () => {
   let id = currentFolderId.value
-  while (id && id !== workspaceStore.id) {
+  while (id && id !== kbStore.id) {
     const folder = folderMap.value[id]
     const parentId = [...byParent.value.entries()].find(([, folders]) => folders.some(item => item.id === folder?.id))?.[0]
-    if (!parentId || parentId === workspaceStore.id) break
+    if (!parentId || parentId === kbStore.id) break
     expanded.add(parentId)
     id = parentId
   }
@@ -145,7 +145,7 @@ const visibleRows = computed(() => {
       if (expanded.has(folder.id)) walk(folder.id, depth + 1)
     }
   }
-  if (workspaceStore.id) walk(workspaceStore.id, 0)
+  if (kbStore.id) walk(kbStore.id, 0)
   return rows
 })
 
@@ -160,7 +160,7 @@ function activate(id: string) {
   if (folder) {
     toggle(id)
   }
-  if (id === workspaceStore.id) router.push('/kb')
+  if (id === kbStore.id) router.push('/kb')
   else router.push({ path: '/kb', query: { folderId: id } })
 }
 
@@ -181,15 +181,15 @@ async function loadChildren(parentId: string) {
 // Re-read a folder's children after folder creation; expands the parent so
 // the new folder is immediately visible.
 async function refresh(parentId?: string) {
-  const target = parentId || workspaceStore.id
+  const target = parentId || kbStore.id
   if (!target) return
-  if (target !== workspaceStore.id) expanded.add(target)
+  if (target !== kbStore.id) expanded.add(target)
   await loadChildren(target)
 }
 
 defineExpose({ refresh })
 
-watch(() => workspaceStore.id, id => {
+watch(() => kbStore.id, id => {
   byParent.value = new Map()
   expanded.clear()
   if (id) loadChildren(id).catch(() => undefined)

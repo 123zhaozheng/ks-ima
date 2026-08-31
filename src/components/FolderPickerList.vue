@@ -26,7 +26,7 @@
           whitespace-nowrap
           overflow-hidden
         >
-          {{ t('Whole workspace') }}
+          {{ t('Whole knowledge base') }}
         </q-item-label>
       </q-item-section>
       <q-item-section
@@ -112,7 +112,7 @@ import type { PickedFolder } from 'src/components/folder-picker-list'
 import { t } from 'src/utils/i18n'
 
 const props = defineProps<{
-  workspaceId: string
+  kbId: string
   selectedId?: string | null
 }>()
 
@@ -133,7 +133,7 @@ const visibleRows = computed(() => {
       if (expanded.has(folder.id)) walk(folder.id, depth + 1)
     }
   }
-  if (props.workspaceId) walk(props.workspaceId, 0)
+  if (props.kbId) walk(props.kbId, 0)
   return rows
 })
 
@@ -147,7 +147,7 @@ async function loadChildren(parentId: string) {
     failed.value = false
   } catch {
     byParent.value.set(parentId, [])
-    if (parentId === props.workspaceId) failed.value = true
+    if (parentId === props.kbId) failed.value = true
   }
 }
 
@@ -157,7 +157,7 @@ function toggle(id: string) {
   if (!loaded.has(id)) loadChildren(id)
 }
 
-watch(() => props.workspaceId, id => {
+watch(() => props.kbId, id => {
   byParent.value = new Map()
   expanded.clear()
   loaded.clear()

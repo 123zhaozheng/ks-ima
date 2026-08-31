@@ -5,20 +5,20 @@ import { localReactive } from 'src/composables/local-reactive'
 const StorageKey = 'user-data'
 
 type UserState = {
-  lastWorkspaceId: string | null
+  lastKbId: string | null
   data: Record<string, any>
   perfs: Record<string, any>
-  workspacePerfs: Record<string, Record<string, any>>
+  kbPerfs: Record<string, Record<string, any>>
 }
 
 // User-level UI state lives in the browser. The Python API is authoritative
 // for identity/membership; preferences and tips are local-only state.
 export const useUserDataStore = defineStore('user-data', () => {
   const state = localReactive<UserState>(StorageKey, {
-    lastWorkspaceId: null,
+    lastKbId: null,
     data: {},
     perfs: {},
-    workspacePerfs: {},
+    kbPerfs: {},
   })
 
   function updateData(updates: Record<string, any>) {
@@ -32,29 +32,29 @@ export const useUserDataStore = defineStore('user-data', () => {
     })
   }
 
-  function updateWorkspacePerfs(workspaceId: string, updates?: Record<string, any>, deletes?: string[]) {
-    const target = { ...(state.workspacePerfs[workspaceId] ?? {}) }
+  function updateKbPerfs(kbId: string, updates?: Record<string, any>, deletes?: string[]) {
+    const target = { ...(state.kbPerfs[kbId] ?? {}) }
     Object.assign(target, updates)
     deletes?.forEach(key => {
       delete target[key]
     })
-    state.workspacePerfs[workspaceId] = target
+    state.kbPerfs[kbId] = target
   }
 
-  function setLastWorkspaceId(workspaceId: string) {
-    state.lastWorkspaceId = workspaceId
+  function setLastKbId(kbId: string) {
+    state.lastKbId = kbId
   }
 
   return {
-    lastWorkspaceId: computed(() => state.lastWorkspaceId ?? undefined),
+    lastKbId: computed(() => state.lastKbId ?? undefined),
     data: computed(() => state.data),
     perfs: computed(() => state.perfs),
-    workspacePerfs: computed(() => state.workspacePerfs),
+    kbPerfs: computed(() => state.kbPerfs),
     status: computed(() => 'success' as const),
     updateData,
     updatePerfs,
-    updateWorkspacePerfs,
-    setLastWorkspaceId,
+    updateKbPerfs,
+    setLastKbId,
   }
 })
 

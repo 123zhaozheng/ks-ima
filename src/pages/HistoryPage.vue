@@ -13,55 +13,7 @@
   </q-header>
   <q-page-container>
     <q-page
-      v-if="!workspaceStore.id && !listReady"
-      flex
-      flex-center
-    >
-      <q-spinner color="primary" />
-    </q-page>
-    <q-page
-      v-else-if="!workspaceStore.id"
-      flex
-      flex-center
-      text-on-sur-var
-    >
-      <div
-        class="tk-empty"
-        data-testid="history-onboarding"
-      >
-        <q-icon
-          name="sym_o_history"
-          size="56px"
-          class="tk-empty-icon"
-        />
-        <div class="tk-empty-title">
-          {{ t('History lives in a workspace') }}
-        </div>
-        <div class="tk-empty-subtitle">
-          {{ t('Create a workspace, or join one with an invitation, and your conversations will appear here.') }}
-        </div>
-        <div class="tk-empty-actions">
-          <q-btn
-            unelevated
-            no-caps
-            class="tk-cta"
-            :label="t('Create Workspace')"
-            data-testid="history-create-workspace"
-            @click="showCreateWorkspace = true"
-          />
-          <q-btn
-            flat
-            no-caps
-            class="tk-cta-secondary"
-            :label="t('Join workspace')"
-            data-testid="history-join-workspace"
-            @click="joinWorkspace"
-          />
-        </div>
-      </div>
-    </q-page>
-    <q-page
-      v-else-if="conversations.isError.value"
+      v-if="conversations.isError.value"
       flex
       flex-center
     >
@@ -166,7 +118,7 @@
               {{ conversation.title }}
             </q-item-label>
             <q-item-label caption>
-              {{ t('Updated {0}', new Date(conversation.updatedAt).toLocaleString()) }}
+              {{ conversation.kbName }} · {{ t('Updated {0}', new Date(conversation.updatedAt).toLocaleString()) }}
               <template v-if="conversation.lifecycle === 'archived'">
                 · {{ t('Archived') }}
               </template>
@@ -223,21 +175,19 @@
       </q-list>
     </q-page>
   </q-page-container>
-  <create-workspace-dialog v-model="showCreateWorkspace" />
 </template>
 
 <script setup lang="ts">
 import type { components } from 'src/api/generated/schema'
-import { computed, inject, ref } from 'vue'
+import { computed, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { Notify, useQuasar } from 'quasar'
 import { useQueryClient } from '@tanstack/vue-query'
 import { groundedClient } from 'src/api/grounded-client'
-import CreateWorkspaceDialog from 'src/components/CreateWorkspaceDialog.vue'
 import { groundedKey, useGroundedKnowledge } from 'src/composables/use-grounded-knowledge'
 import { useRequireLogin } from 'src/composables/require-login'
+import { useKbStore } from 'src/stores/knowledge-base'
 import { useUiStateStore } from 'src/stores/ui-state'
-import { useWorkspaceStore } from 'src/stores/workspace'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { t } from 'src/utils/i18n'
 
@@ -248,37 +198,22 @@ useRequireLogin()
 const router = useRouter()
 const $q = useQuasar()
 const queryClient = useQueryClient()
-const workspaceStore = useWorkspaceStore()
+const kbStore = useKbStore()
 const uiStateStore = useUiStateStore()
 
-const grounded = inject(groundedKey) ?? useGroundedKnowledge(() => workspaceStore.id)
+// User-level history: one list across every knowledge base the user belongs
+// to; each row carries the knowledge base it lives in.
+const grounded = inject(groundedKey) ?? useGroundedKnowledge(() => kbStore.id)
 const conversations = grounded.conversations
 
 const rows = computed(() => conversations.data.value?.items ?? [])
-const listReady = computed(() => workspaceStore.workspacesStatus === 'success')
-const showCreateWorkspace = ref(false)
-
-function joinWorkspace() {
-  $q.dialog({
-    title: t('Join Workspace'),
-    prompt: {
-      model: '',
-      label: t('Invitation Link'),
-    },
-    cancel: true,
-  }).onOk((link: string) => {
-    const token = link.match(/\/invitations\/(.+)/)?.[1]
-    token && router.push(`/invitations/${token}`)
-  })
-}
 
 function open(conversationId: string) {
   router.push(`/ask/${conversationId}`)
 }
 
 async function refresh() {
-  if (!workspaceStore.id) return
-  await queryClient.invalidateQueries({ queryKey: ['grounded', 'workspace', workspaceStore.id, 'conversations'] })
+  await queryClient.invalidateQueries({ queryKey: ['grounded', 'conversations'] })
 }
 
 function rename(conversation: Conversation) {
@@ -288,9 +223,9 @@ function rename(conversation: Conversation) {
     cancel: true,
   }).onOk(async (title: string) => {
     const next = title.trim()
-    if (!next || next === conversation.title || !workspaceStore.id) return
+    if (!next || next === conversation.title) return
     try {
-      await groundedClient.updateConversation(workspaceStore.id, conversation.id, { title: next, expectedVersion: conversation.version })
+      await groundedClient.updateConversation(conversation.kbId, conversation.id, { title: next, expectedVersion: conversation.version })
       await refresh()
     } catch (error) {
       Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Rename failed') })
@@ -299,9 +234,8 @@ function rename(conversation: Conversation) {
 }
 
 function toggleArchive(conversation: Conversation) {
-  if (!workspaceStore.id) return
   const archived = conversation.lifecycle !== 'archived'
-  groundedClient.updateConversation(workspaceStore.id, conversation.id, { archived, expectedVersion: conversation.version })
+  groundedClient.updateConversation(conversation.kbId, conversation.id, { archived, expectedVersion: conversation.version })
     .then(refresh)
     .catch(error => {
       Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Archive failed') })
@@ -315,8 +249,7 @@ function remove(conversation: Conversation) {
     cancel: true,
     ok: { label: t('Delete'), color: 'negative', flat: true },
   }).onOk(() => {
-    if (!workspaceStore.id) return
-    groundedClient.deleteConversation(workspaceStore.id, conversation.id, conversation.version)
+    groundedClient.deleteConversation(conversation.kbId, conversation.id, conversation.version)
       .then(refresh)
       .catch(error => {
         Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Delete failed') })

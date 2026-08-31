@@ -47,7 +47,7 @@
           />
         </q-item-section>
         <q-item-section
-          v-else-if="item.kind !== 'folder'"
+          v-else-if="item.kind !== 'folder' && !readonly"
           side
         >
           <q-btn
@@ -64,8 +64,8 @@
                 <q-item
                   v-close-popup
                   clickable
-                  data-testid="row-trash-action"
-                  @click="confirmTrash(item)"
+                  data-testid="row-delete-action"
+                  @click="confirmDelete(item)"
                 >
                   <q-item-section
                     avatar
@@ -73,7 +73,7 @@
                   >
                     <q-icon name="sym_o_delete" />
                   </q-item-section>
-                  <q-item-section>{{ t('Move to trash') }}</q-item-section>
+                  <q-item-section>{{ t('Delete') }}</q-item-section>
                 </q-item>
               </q-list>
             </q-menu>
@@ -139,15 +139,15 @@ import { t } from 'src/utils/i18n'
 
 type ContentRow = components['schemas']['ContentRow']
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   folderId: string
   selectedId?: string | null
-  tagId?: string | null
-}>()
+  readonly?: boolean
+}>(), { selectedId: null, readonly: false })
 
 const $q = useQuasar()
 const cursor = ref<string>()
-const query = useFolderContents(() => props.folderId, () => ({ tagId: props.tagId ?? undefined }))
+const query = useFolderContents(() => props.folderId)
 const extraItems = ref<ContentRow[]>([])
 const items = computed(() => [...(query.data.value?.items ?? []), ...extraItems.value])
 const nextCursor = ref<string>()
@@ -185,26 +185,25 @@ async function loadMore() {
   }
 }
 
-function confirmTrash(item: ContentRow) {
+function confirmDelete(item: ContentRow) {
   $q.dialog({
-    title: t('Move to trash'),
-    message: t('Are you sure you want to move "{0}" to trash?', item.title),
+    title: t('Delete'),
+    message: `${t('Are you sure you want to delete "{0}"?', item.title)} ${t('This cannot be undone.')}`,
     cancel: true,
     ok: {
-      label: t('Move to trash'),
+      label: t('Delete'),
       color: 'negative',
       flat: true,
     },
   }).onOk(async () => {
     try {
-      await mutations.trashDocument.mutateAsync({
+      await mutations.deleteDocument.mutateAsync({
         documentId: item.id,
-        expectedVersion: item.version,
         folderId: props.folderId,
       })
-      Notify.create({ type: 'positive', message: t('Moved to trash') })
+      Notify.create({ type: 'positive', message: t('Deleted') })
     } catch (error) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Trash failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Delete failed') })
     }
   })
 }

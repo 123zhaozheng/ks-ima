@@ -19,14 +19,14 @@
         </q-item-section>
       </q-item>
       <q-item
-        to="/workspaces"
+        to="/knowledge-bases"
         item-rd
       >
         <q-item-section avatar>
           <q-icon name="sym_o_deployed_code" />
         </q-item-section>
         <q-item-section>
-          {{ t('Workspaces') }}
+          {{ t('Knowledge bases') }}
         </q-item-section>
       </q-item>
       <q-item

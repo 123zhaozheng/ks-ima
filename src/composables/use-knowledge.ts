@@ -31,24 +31,22 @@ function putWithProgress(url: string, file: File, mimeType: string, checksum: st
 }
 export const knowledgeKeys = {
   all: ['knowledge'] as const,
-  workspace: (workspaceId: string) => [...knowledgeKeys.all, 'workspace', workspaceId] as const,
-  contents: (folderId: string, options: { kind?: string, tagId?: string } = {}) => [...knowledgeKeys.all, 'contents', folderId, options] as const,
+  kb: (kbId: string) => [...knowledgeKeys.all, 'kb', kbId] as const,
+  contents: (folderId: string, options: { kind?: string } = {}) => [...knowledgeKeys.all, 'contents', folderId, options] as const,
   document: (documentId: string) => [...knowledgeKeys.all, 'document', documentId] as const,
   versions: (documentId: string) => [...knowledgeKeys.all, 'versions', documentId] as const,
   ingestion: (documentId: string) => [...knowledgeKeys.all, 'ingestion', documentId] as const,
   fileVersions: (documentId: string) => [...knowledgeKeys.all, 'file-versions', documentId] as const,
-  tags: (workspaceId: string) => [...knowledgeKeys.workspace(workspaceId), 'tags'] as const,
-  trash: (workspaceId: string) => [...knowledgeKeys.workspace(workspaceId), 'trash'] as const,
 }
 
-export function useKnowledgeCapabilities(workspaceId: () => string | null) {
-  return useQuery({ queryKey: computed(() => [...knowledgeKeys.all, 'capabilities', workspaceId()]), queryFn: ({ signal }) => knowledgeClient.capabilities(workspaceId()!, signal), enabled: computed(() => Boolean(workspaceId())) })
+export function useKnowledgeCapabilities(kbId: () => string | null) {
+  return useQuery({ queryKey: computed(() => [...knowledgeKeys.all, 'capabilities', kbId()]), queryFn: ({ signal }) => knowledgeClient.capabilities(kbId()!, signal), enabled: computed(() => Boolean(kbId())) })
 }
 
-export function useFolderContents(folderId: () => string | null, options: () => { kind?: 'folder' | 'file' | 'note', tagId?: string | null } = () => ({})) {
+export function useFolderContents(folderId: () => string | null, options: () => { kind?: 'folder' | 'file' | 'note' } = () => ({})) {
   return useQuery({
-    queryKey: computed(() => knowledgeKeys.contents(folderId()!, { kind: options().kind, tagId: options().tagId ?? undefined })),
-    queryFn: ({ signal }) => knowledgeClient.contents(folderId()!, { kind: options().kind, tagId: options().tagId ?? undefined, signal }),
+    queryKey: computed(() => knowledgeKeys.contents(folderId()!, { kind: options().kind })),
+    queryFn: ({ signal }) => knowledgeClient.contents(folderId()!, { kind: options().kind, signal }),
     enabled: computed(() => Boolean(folderId())),
   })
 }
@@ -76,29 +74,22 @@ export function useKnowledgeIngestion(documentId: () => string | null) {
     refetchInterval: query => query.state.data?.jobs.some(job => ['queued', 'running', 'retryable', 'cancel_requested'].includes(job.status)) ? 1500 : false,
   })
 }
-export function useKnowledgeTrash(workspaceId: () => string | null) {
-  return useQuery({ queryKey: computed(() => knowledgeKeys.trash(workspaceId()!)), queryFn: ({ signal }) => knowledgeClient.trash(workspaceId()!, { signal }), enabled: computed(() => Boolean(workspaceId())) })
-}
-
-export function useKnowledgeTags(workspaceId: () => string | null) {
-  return useQuery({ queryKey: computed(() => knowledgeKeys.tags(workspaceId()!)), queryFn: ({ signal }) => knowledgeClient.tags(workspaceId()!, signal), enabled: computed(() => Boolean(workspaceId())) })
-}
 
 export function useKnowledgeMutations() {
   const client = useQueryClient()
-  const invalidate = (documentId?: string, workspaceId?: string, folderId?: string) => {
+  const invalidate = (documentId?: string, kbId?: string, folderId?: string) => {
     if (documentId) client.invalidateQueries({ queryKey: knowledgeKeys.document(documentId) })
-    if (workspaceId) client.invalidateQueries({ queryKey: knowledgeKeys.workspace(workspaceId) })
+    if (kbId) client.invalidateQueries({ queryKey: knowledgeKeys.kb(kbId) })
     if (folderId) client.invalidateQueries({ queryKey: [...knowledgeKeys.all, 'contents', folderId] })
   }
   return {
     createFolder: useMutation({
-      mutationFn: ({ workspaceId, name, parentId }: { workspaceId: string, name: string, parentId: string }) => knowledgeClient.createFolder(workspaceId, { name, parentId }),
-      onSuccess: folder => invalidate(undefined, folder.workspaceId, folder.parentId ?? undefined),
+      mutationFn: ({ kbId, name, parentId }: { kbId: string, name: string, parentId: string }) => knowledgeClient.createFolder(kbId, { name, parentId }),
+      onSuccess: folder => invalidate(undefined, folder.kbId, folder.parentId ?? undefined),
     }),
     createNote: useMutation({
       mutationFn: ({ folderId, input }: { folderId: string, input: Parameters<typeof knowledgeClient.createNote>[1] }) => knowledgeClient.createNote(folderId, input),
-      onSuccess: document => invalidate(document.id, document.workspaceId, document.folderId),
+      onSuccess: document => invalidate(document.id, document.kbId, document.folderId),
     }),
     uploadFile: useMutation({
       mutationFn: async ({ folderId, file, title, onProgress, signal }: {
@@ -150,10 +141,9 @@ export function useKnowledgeMutations() {
 
     retryIngestion: useMutation({ mutationFn: knowledgeClient.retryIngestion, onSuccess: status => invalidate(status.documentId) }),
     cancelIngestion: useMutation({ mutationFn: knowledgeClient.cancelIngestion, onSuccess: status => invalidate(status.documentId) }),
-    updateDocument: useMutation({ mutationFn: ({ documentId, input }: { documentId: string, input: Parameters<typeof knowledgeClient.updateDocument>[1] }) => knowledgeClient.updateDocument(documentId, input), onSuccess: document => invalidate(document.id, document.workspaceId, document.folderId) }),
-    moveDocument: useMutation({ mutationFn: ({ documentId, folderId, expectedVersion }: { documentId: string, folderId: string, expectedVersion: number }) => knowledgeClient.moveDocument(documentId, folderId, expectedVersion), onSuccess: document => invalidate(document.id, document.workspaceId, document.folderId) }),
-    trashDocument: useMutation({ mutationFn: ({ documentId, expectedVersion }: { documentId: string, expectedVersion: number, folderId?: string }) => knowledgeClient.trashDocument(documentId, expectedVersion), onSuccess: (_value, variables) => { invalidate(variables.documentId); if (variables.folderId) client.invalidateQueries({ queryKey: [...knowledgeKeys.all, 'contents', variables.folderId] }) } }),
-    deleteTag: useMutation({ mutationFn: ({ workspaceId, tagId, expectedVersion }: { workspaceId: string, tagId: string, expectedVersion: number }) => knowledgeClient.deleteTag(workspaceId, tagId, { expectedVersion }), onSuccess: (_value, variables) => client.invalidateQueries({ queryKey: knowledgeKeys.tags(variables.workspaceId) }) }),
-    mergeTag: useMutation({ mutationFn: ({ workspaceId, tagId, targetTagId, expectedVersion, expectedTargetVersion }: { workspaceId: string, tagId: string, targetTagId: string, expectedVersion: number, expectedTargetVersion: number }) => knowledgeClient.mergeTag(workspaceId, tagId, { targetTagId, expectedVersion, expectedTargetVersion }), onSuccess: (_value, variables) => client.invalidateQueries({ queryKey: knowledgeKeys.tags(variables.workspaceId) }) }),
+    updateDocument: useMutation({ mutationFn: ({ documentId, input }: { documentId: string, input: Parameters<typeof knowledgeClient.updateDocument>[1] }) => knowledgeClient.updateDocument(documentId, input), onSuccess: document => invalidate(document.id, document.kbId, document.folderId) }),
+    moveDocument: useMutation({ mutationFn: ({ documentId, folderId, expectedVersion }: { documentId: string, folderId: string, expectedVersion: number }) => knowledgeClient.moveDocument(documentId, folderId, expectedVersion), onSuccess: document => invalidate(document.id, document.kbId, document.folderId) }),
+    // Deletion is immediate and irreversible; the trash lifecycle is gone.
+    deleteDocument: useMutation({ mutationFn: ({ documentId }: { documentId: string, folderId?: string }) => knowledgeClient.deleteDocument(documentId), onSuccess: (_value, variables) => { invalidate(variables.documentId); if (variables.folderId) client.invalidateQueries({ queryKey: [...knowledgeKeys.all, 'contents', variables.folderId] }) } }),
   }
 }

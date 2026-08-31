@@ -16,7 +16,7 @@
       @keydown="onKeydown"
     />
     <div class="ask-composer-bar">
-      <template v-if="mode === 'home' && workspaceId">
+      <template v-if="mode === 'home' && kbId">
         <q-chip
           v-if="askContext.hasDocumentScope"
           dense
@@ -42,7 +42,7 @@
         >
           <q-menu v-model="scopeMenuOpen">
             <folder-picker-list
-              :workspace-id="workspaceId"
+              :kb-id="kbId"
               :selected-id="scope?.id ?? null"
               @select="pickScope"
             />
@@ -84,12 +84,12 @@ import { t } from 'src/utils/i18n'
 const props = withDefaults(defineProps<{
   mode?: 'home' | 'conversation'
   busy?: boolean
-  workspaceId?: string
+  kbId?: string
   placeholder?: string
 }>(), {
   mode: 'home',
   busy: false,
-  workspaceId: '',
+  kbId: '',
   placeholder: undefined,
 })
 
@@ -106,9 +106,9 @@ const scopeMenuOpen = ref(false)
 const inputRef = ref<InstanceType<typeof QInput>>()
 
 const placeholderText = computed(() => props.placeholder ?? t('Ask anything about your knowledge base'))
-const scopeLabel = computed(() => scope.value?.title ?? t('Whole workspace'))
-// A question without a workspace can never be answered; block the submit.
-const canSend = computed(() => Boolean(question.value.trim()) && !props.busy && (props.mode === 'conversation' || Boolean(props.workspaceId)))
+const scopeLabel = computed(() => scope.value?.title ?? t('Whole knowledge base'))
+// A question without a knowledge base can never be answered; block the submit.
+const canSend = computed(() => Boolean(question.value.trim()) && !props.busy && (props.mode === 'conversation' || Boolean(props.kbId)))
 
 function pickScope(folder: PickedFolder | null) {
   scope.value = folder

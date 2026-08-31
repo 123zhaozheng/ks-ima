@@ -29,12 +29,11 @@ describe('identity client', () => {
     const payload = { secret: 'one-time-secret', credential: { id: 'c1' }, principal: { id: 'p1' } }
     const fetchMock = mock(() => Promise.resolve(new Response(JSON.stringify(payload), { status: 200 })))
     globalThis.fetch = fetchMock as unknown as typeof fetch
-    const result = await identityClient.createServicePrincipal('w1', {
+    const result = await identityClient.createServicePrincipal({
       displayName: 'CI',
       purpose: 'Automation',
       ownerUserId: 'u1',
-      folderRootId: null,
-      scopes: ['mcp:knowledge:read'],
+      scopes: ['mcp:knowledge-bases:read'],
       expiresAt: new Date(Date.now() + 86400000).toISOString(),
       rateLimit: 10,
       concurrencyLimit: 2,
@@ -44,7 +43,7 @@ describe('identity client', () => {
     expect(JSON.stringify(localStorage)).not.toContain('one-time-secret')
     expect(JSON.stringify(sessionStorage)).not.toContain('one-time-secret')
     const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-    expect(call[0]).toBe('/api/v1/workspaces/w1/service-principals')
+    expect(call[0]).toBe('/api/v1/service-principals')
     expect(new Headers(call[1].headers).get('X-CSRF-Token')).toBe('test-csrf')
   })
 })

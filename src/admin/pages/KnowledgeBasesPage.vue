@@ -9,25 +9,25 @@
           v-model="search"
           dense
           outlined
-          label="Search workspaces"
+          :label="t('Search knowledge bases')"
         />
         <template v-if="canManage">
           <q-input
             v-model="newName"
             dense
             outlined
-            label="New workspace"
+            :label="t('New knowledge base')"
           />
           <q-input
-            v-model="newAdminUserId"
+            v-model="newOwnerUserId"
             dense
             outlined
-            label="Initial workspace admin user ID"
+            :label="t('Initial owner user ID')"
           />
           <q-btn
             icon="add"
             flat
-            :disable="!newName"
+            :disable="!newName || !newOwnerUserId"
             @click="create"
           />
         </template>
@@ -87,37 +87,38 @@ import { computed, ref } from 'vue'
 import type { QTableColumn } from 'quasar'
 import type { components } from 'src/api/generated/schema'
 import { identityClient, session } from 'src/utils/identity-client'
+import { t } from 'src/utils/i18n'
 
-type Workspace = components['schemas']['WorkspaceInfo']
-const rows = ref<Workspace[]>([])
+type KnowledgeBaseInfo = components['schemas']['KnowledgeBaseInfo']
+const rows = ref<KnowledgeBaseInfo[]>([])
 const search = ref('')
 const newName = ref('')
-const newAdminUserId = ref('')
+const newOwnerUserId = ref('')
 const loading = ref(false)
 const error = ref('')
 const canManage = computed(() => session.value.data?.user.platformRoles?.some(role => role === 'super_admin' || role === 'platform_admin') ?? false)
 const columns: QTableColumn[] = [
-  { name: 'name', label: 'Name', field: 'name', align: 'left' },
-  { name: 'status', label: 'Status', field: row => row.isActive ? 'Active' : 'Archived' },
-  { name: 'created', label: 'Created', field: row => new Date(row.createdAt).toLocaleString() },
-  { name: 'actions', label: 'Actions', field: 'id' },
+  { name: 'name', label: t('Name'), field: 'name', align: 'left' },
+  { name: 'status', label: t('Status'), field: row => row.isActive ? t('Active') : t('Archived') },
+  { name: 'created', label: t('Created'), field: row => new Date(row.createdAt).toLocaleString() },
+  { name: 'actions', label: t('Actions'), field: 'id' },
 ]
 
 async function create() {
-  const result = await identityClient.createWorkspace({ name: newName.value, initialAdminUserId: newAdminUserId.value })
+  const result = await identityClient.adminCreateKnowledgeBase({ name: newName.value, initialOwnerUserId: newOwnerUserId.value })
   if (result.error) { error.value = result.error.message; return }
   newName.value = ''
-  newAdminUserId.value = ''
+  newOwnerUserId.value = ''
   await load()
 }
-async function archive(id: string) { const result = await identityClient.archiveWorkspace(id); if (result.error) error.value = result.error.message; else await load() }
-async function restore(id: string) { const result = await identityClient.restoreWorkspace(id); if (result.error) error.value = result.error.message; else await load() }
-async function remove(id: string) { const result = await identityClient.deleteWorkspace(id); if (result.error) error.value = result.error.message; else await load() }
+async function archive(id: string) { const result = await identityClient.adminArchiveKnowledgeBase(id); if (result.error) error.value = result.error.message; else await load() }
+async function restore(id: string) { const result = await identityClient.adminRestoreKnowledgeBase(id); if (result.error) error.value = result.error.message; else await load() }
+async function remove(id: string) { const result = await identityClient.adminDeleteKnowledgeBase(id); if (result.error) error.value = result.error.message; else await load() }
 
 async function load() {
   loading.value = true
   error.value = ''
-  const result = await identityClient.listWorkspaces(search.value)
+  const result = await identityClient.adminListKnowledgeBases(search.value)
   rows.value = result.data?.items ?? []
   if (result.error) error.value = result.error.message
   loading.value = false

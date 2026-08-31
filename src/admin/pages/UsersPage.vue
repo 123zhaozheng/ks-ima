@@ -101,8 +101,8 @@
                 <q-menu>
                   <q-list>
                     <menu-item
-                      :label="t('View Workspaces')"
-                      :to="`/workspaces?ownerId=${props.row.id}`"
+                      :label="t('View knowledge bases')"
+                      :to="`/knowledge-bases?ownerId=${props.row.id}`"
                     />
                     <menu-item
                       :label="t('Reset Password')"
@@ -290,7 +290,7 @@ function banUser(user: UserWithRole) {
 function deleteUser({ id, displayName }: UserWithRole) {
   $q.dialog({
     title: t('Delete User'),
-    message: t('Are you sure you want to delete user "{0}"? Note that you must delete all workspaces created by this user before you can delete the user.', displayName),
+    message: t('Are you sure you want to delete user "{0}"? Note that you must delete all knowledge bases created by this user before you can delete the user.', displayName),
     cancel: true,
     ok: {
       label: t('Delete'),

@@ -235,7 +235,7 @@
     v-model="showSave"
     :answer="saveAnswer"
     :citations="saveCitations"
-    :workspace-id="workspaceStore.id ?? ''"
+    :kb-id="citationKbId ?? ''"
     @created="onNoteCreated"
   />
 </template>
@@ -252,8 +252,8 @@ import SaveAnswerDialog from 'src/components/SaveAnswerDialog.vue'
 import { groundedClient } from 'src/api/grounded-client'
 import { groundedKey, useGroundedKnowledge } from 'src/composables/use-grounded-knowledge'
 import { useRequireLogin } from 'src/composables/require-login'
+import { useKbStore } from 'src/stores/knowledge-base'
 import { useUiStateStore } from 'src/stores/ui-state'
-import { useWorkspaceStore } from 'src/stores/workspace'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { pageFhStyle } from 'src/utils/functions'
 import { t } from 'src/utils/i18n'
@@ -265,10 +265,10 @@ type Citation = components['schemas']['CitationResponse'] & { title?: string }
 useRequireLogin()
 
 const route = useRoute()
-const workspaceStore = useWorkspaceStore()
+const kbStore = useKbStore()
 const uiStateStore = useUiStateStore()
 
-const grounded = inject(groundedKey) ?? useGroundedKnowledge(() => workspaceStore.id)
+const grounded = inject(groundedKey) ?? useGroundedKnowledge(() => kbStore.id)
 
 const conversationId = computed(() => {
   const value = route.params.conversationId
@@ -283,6 +283,10 @@ watch(conversationId, id => {
 const query = grounded.conversation
 const messages = computed(() => query.data.value?.messages ?? [])
 const title = computed(() => query.data.value?.title ?? t('Ask'))
+
+// Citations and saved notes live in the knowledge base that owns this
+// conversation, which may differ from the currently selected one.
+const citationKbId = computed(() => grounded.conversationKbId.value ?? kbStore.id)
 
 const liveStatus = computed(() => grounded.status.value)
 const streaming = computed(() => liveStatus.value === 'streaming')
@@ -368,9 +372,9 @@ async function openCitation(mark: Element, rank: number) {
     return
   }
   const messageId = mark.closest('[data-message-id]')?.getAttribute('data-message-id')
-  if (!messageId || !workspaceStore.id) return
+  if (!messageId || !citationKbId.value) return
   try {
-    const citation = await groundedClient.citation(workspaceStore.id, messageId, rank) as Citation
+    const citation = await groundedClient.citation(citationKbId.value, messageId, rank) as Citation
     openSource(citation)
   } catch {
     Notify.create({ type: 'negative', message: t('Citation unavailable') })
@@ -397,10 +401,10 @@ const citationCache = new Map<string, Citation[]>()
 async function resolveCitations(message: Message, answer: string): Promise<Citation[]> {
   const cached = citationCache.get(message.id)
   if (cached) return cached
-  if (!workspaceStore.id) return []
+  if (!citationKbId.value) return []
   const ranks = citationMarkerRanks(answer)
   const settled = await Promise.allSettled(ranks.map(rank =>
-    groundedClient.citation(workspaceStore.id!, message.id, rank)))
+    groundedClient.citation(citationKbId.value!, message.id, rank)))
   const resolved = settled.flatMap(item => item.status === 'fulfilled' ? [item.value as Citation] : [])
   citationCache.set(message.id, resolved)
   return resolved

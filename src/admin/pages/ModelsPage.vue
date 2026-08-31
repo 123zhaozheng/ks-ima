@@ -526,14 +526,14 @@
             class="row q-col-gutter-md"
           >
             <q-select
-              v-model="selectedWorkspace"
+              v-model="selectedKb"
               class="col-12 col-md-4"
               outlined
               dense
               emit-value
               map-options
-              :options="workspaces.map(workspace => ({ label: workspace.name, value: workspace.id }))"
-              :label="t('Workspace')"
+              :options="kbs.map(kb => ({ label: kb.name, value: kb.id }))"
+              :label="t('Knowledge base')"
               @update:model-value="loadAssignments"
             /><q-select
               v-model="impactModelId"
@@ -610,6 +610,31 @@
           >
             {{ impact.requiresReindex ? t('REINDEX_REQUIRED: {0} affected indexes', impact.affected.length) : t('No reindex is required') }}
           </q-banner>
+          <q-list
+            v-if="impact && impact.affected.length"
+            bordered
+            separator
+            class="q-mt-md"
+          >
+            <q-item
+              v-for="(item, index) in impact.affected"
+              :key="`${item.kbId}-${item.workflow}-${index}`"
+            >
+              <q-item-section>
+                <q-item-label caption>
+                  {{ t('Knowledge base') }}
+                </q-item-label>
+                <q-item-label>
+                  {{ item.kbId }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-item-label caption>
+                  {{ item.workflow }} · {{ t('Affected indexes') }}: {{ item.affectedIndexes }}
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
         </q-tab-panel>
       </q-tab-panels>
     </q-page>
@@ -628,7 +653,7 @@ type GovernedModel = components['schemas']['GovernedModel']
 type Profile = components['schemas']['CapabilityProfile']
 type Assignment = components['schemas']['Assignment']
 type Impact = components['schemas']['ImpactResponse']
-type Workspace = components['schemas']['WorkspaceInfo']
+type KnowledgeBaseInfo = components['schemas']['KnowledgeBaseInfo']
 const tab = ref('gateways')
 const loading = ref(false)
 const saving = ref(false)
@@ -636,9 +661,9 @@ const error = ref('')
 const gateways = ref<Gateway[]>([])
 const models = ref<GovernedModel[]>([])
 const profiles = ref<Profile[]>([])
-const workspaces = ref<Workspace[]>([])
+const kbs = ref<KnowledgeBaseInfo[]>([])
 const assignments = ref<Assignment[]>([])
-const selectedWorkspace = ref('')
+const selectedKb = ref('')
 const assignmentWorkflow = ref('grounded_ask')
 const assignmentProfileId = ref('')
 const assignmentProfileVersion = ref(1)
@@ -683,14 +708,14 @@ const assignmentColumns: QTableColumn<Assignment>[] = [
 async function refresh() {
   loading.value = true
   error.value = ''
-  const [gatewayResult, modelResult, profileResult, workspaceResult] = await Promise.all([
-    identityClient.listModelGateways(), identityClient.listGovernedModels(), identityClient.listCapabilityProfiles(), identityClient.listWorkspaces(),
+  const [gatewayResult, modelResult, profileResult, kbResult] = await Promise.all([
+    identityClient.listModelGateways(), identityClient.listGovernedModels(), identityClient.listCapabilityProfiles(), identityClient.adminListKnowledgeBases(),
   ])
   gateways.value = gatewayResult.data?.items ?? []
   models.value = modelResult.data?.items ?? []
   profiles.value = profileResult.data?.items ?? []
-  workspaces.value = workspaceResult.data?.items ?? []
-  error.value = gatewayResult.error?.message || modelResult.error?.message || profileResult.error?.message || workspaceResult.error?.message || ''
+  kbs.value = kbResult.data?.items ?? []
+  error.value = gatewayResult.error?.message || modelResult.error?.message || profileResult.error?.message || kbResult.error?.message || ''
   loading.value = false
 }
 function resetGatewayForm() { showGatewayForm.value = false; gatewayEditId.value = ''; Object.assign(gatewayForm, { name: '', baseUrl: '', secret: '', insecurePrivate: false }) }
@@ -725,9 +750,9 @@ async function publishProfile(id: string) { const result = await identityClient.
 async function cloneProfile(id: string) { const result = await identityClient.cloneCapabilityProfile(id); if (result.error) error.value = result.error.message; else await refresh() }
 async function toggleProfile(profile: Profile) { const result = profile.lifecycle === 'disabled' ? await identityClient.restoreCapabilityProfile(profile.id) : await identityClient.disableCapabilityProfile(profile.id); if (result.error) error.value = result.error.message; else await refresh() }
 async function deleteProfile(id: string) { const result = await identityClient.deleteCapabilityProfile(id); if (result.error) error.value = result.error.message; else await refresh() }
-async function loadAssignments() { if (!selectedWorkspace.value) return; const result = await identityClient.listCapabilityAssignments(selectedWorkspace.value); assignments.value = result.data?.items ?? []; if (result.error) error.value = result.error.message }
-async function assignProfile() { if (!selectedWorkspace.value || !assignmentProfileId.value) return; const result = await identityClient.assignCapabilityProfile(selectedWorkspace.value, assignmentWorkflow.value, { workflow: assignmentWorkflow.value as components['schemas']['AssignmentRequest']['workflow'], profileId: assignmentProfileId.value, profileVersion: assignmentProfileVersion.value, expectedVersion: assignments.value.find(assignment => assignment.workflow === assignmentWorkflow.value)?.version }); if (result.error) error.value = result.error.message; else await loadAssignments() }
-async function removeProfile() { if (!selectedWorkspace.value) return; const current = assignments.value.find(assignment => assignment.workflow === assignmentWorkflow.value); if (!current) return; const result = await identityClient.removeCapabilityProfile(selectedWorkspace.value, assignmentWorkflow.value, current.version); if (result.error) error.value = result.error.message; else await loadAssignments() }
+async function loadAssignments() { if (!selectedKb.value) return; const result = await identityClient.listCapabilityAssignments(selectedKb.value); assignments.value = result.data?.items ?? []; if (result.error) error.value = result.error.message }
+async function assignProfile() { if (!selectedKb.value || !assignmentProfileId.value) return; const result = await identityClient.assignCapabilityProfile(selectedKb.value, assignmentWorkflow.value, { workflow: assignmentWorkflow.value as components['schemas']['AssignmentRequest']['workflow'], profileId: assignmentProfileId.value, profileVersion: assignmentProfileVersion.value, expectedVersion: assignments.value.find(assignment => assignment.workflow === assignmentWorkflow.value)?.version }); if (result.error) error.value = result.error.message; else await loadAssignments() }
+async function removeProfile() { if (!selectedKb.value) return; const current = assignments.value.find(assignment => assignment.workflow === assignmentWorkflow.value); if (!current) return; const result = await identityClient.removeCapabilityProfile(selectedKb.value, assignmentWorkflow.value, current.version); if (result.error) error.value = result.error.message; else await loadAssignments() }
 async function checkImpact() { if (!impactModelId.value) return; const result = await identityClient.modelGovernanceImpact(impactModelId.value); impact.value = result.data ?? null; if (result.error) error.value = result.error.message }
 onMounted(refresh)
 </script>

@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import { localReactive } from 'src/composables/local-reactive'
 import type { ShortcutKey, Writable } from 'src/utils/types'
 import { useUserDataStore } from './user-data'
-import { useWorkspaceStore } from './workspace'
+import { useKbStore } from './knowledge-base'
 
 const StorageKey = 'perfs'
 
@@ -34,24 +34,24 @@ export type Perfs = typeof DefaultPerfs
 
 export const usePerfsStore = defineStore('perfsStore', () => {
   const userDataStore = useUserDataStore()
-  const workspaceStore = useWorkspaceStore()
+  const kbStore = useKbStore()
   const userPerfs = computed(() => userDataStore.perfs ?? {})
-  const workspacePerfs = computed(() =>
-    workspaceStore.id ? userDataStore.workspacePerfs[workspaceStore.id] ?? {} : {},
+  const kbPerfs = computed(() =>
+    kbStore.id ? userDataStore.kbPerfs[kbStore.id] ?? {} : {},
   )
   const localPerfs = localReactive<Partial<Writable<Perfs>>>(StorageKey, {})
-  const { perfs } = usePerfsState(computed(() => [userPerfs.value, workspacePerfs.value, localPerfs]), DefaultPerfs)
+  const { perfs } = usePerfsState(computed(() => [userPerfs.value, kbPerfs.value, localPerfs]), DefaultPerfs)
 
   function update({ updates, deletes, scope }: {
     updates?: Partial<Perfs>
     deletes?: (keyof Perfs)[]
-    scope: 'user' | 'workspace' | 'local'
+    scope: 'user' | 'kb' | 'local'
   }) {
     if (scope === 'user') {
       userDataStore.updatePerfs(updates, deletes)
-    } else if (scope === 'workspace') {
-      if (!workspaceStore.id) return
-      userDataStore.updateWorkspacePerfs(workspaceStore.id, updates, deletes)
+    } else if (scope === 'kb') {
+      if (!kbStore.id) return
+      userDataStore.updateKbPerfs(kbStore.id, updates, deletes)
     } else {
       Object.assign(localPerfs, updates)
       deletes?.forEach(key => {
@@ -61,7 +61,7 @@ export const usePerfsStore = defineStore('perfsStore', () => {
   }
   return {
     userPerfs,
-    workspacePerfs,
+    kbPerfs,
     localPerfs,
     perfs,
     update,

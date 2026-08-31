@@ -49,7 +49,7 @@ type Folder = components['schemas']['Folder']
 
 const props = defineProps<{
   modelValue: boolean
-  workspaceId: string
+  kbId: string
   parentFolderId: string
 }>()
 
@@ -73,7 +73,7 @@ async function create() {
   creating.value = true
   try {
     const folder = await mutations.createFolder.mutateAsync({
-      workspaceId: props.workspaceId,
+      kbId: props.kbId,
       name: folderName,
       parentId: props.parentFolderId,
     })

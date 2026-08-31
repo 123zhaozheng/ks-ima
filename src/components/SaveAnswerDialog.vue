@@ -22,7 +22,7 @@
           {{ t('Choose a folder') }}
         </div>
         <folder-picker-list
-          :workspace-id="workspaceId"
+          :kb-id="kbId"
           :selected-id="folder?.id ?? null"
           @select="folder = $event"
         />
@@ -62,7 +62,7 @@ const props = defineProps<{
   modelValue: boolean
   answer: string
   citations: Citation[]
-  workspaceId: string
+  kbId: string
 }>()
 
 const emit = defineEmits<{
@@ -72,7 +72,7 @@ const emit = defineEmits<{
 
 const createNote = useKnowledgeMutations().createNote
 const title = ref('')
-// undefined = nothing picked yet; null = "Whole workspace" (root folder).
+// undefined = nothing picked yet; null = "Whole knowledge base" (root folder).
 const folder = ref<PickedFolder | null | undefined>(undefined)
 
 // Default the note title to the first line of the answer.
@@ -95,7 +95,7 @@ async function save() {
   if (folder.value === undefined) return
   try {
     const document = await createNote.mutateAsync({
-      folderId: folder.value?.id ?? props.workspaceId,
+      folderId: folder.value?.id ?? props.kbId,
       input: { title: title.value.trim() || t('Saved answer'), markdown: noteMarkdown() },
     })
     Notify.create({ type: 'positive', message: t('Note saved') })

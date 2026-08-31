@@ -7,7 +7,7 @@ import NotFoundPage from 'src/pages/NotFoundPage.vue'
 import MainLayout from 'src/admin/layouts/MainLayout.vue'
 import { authRoute } from 'src/router/auth'
 import ModelsPage from './pages/ModelsPage.vue'
-import WorkspacesPage from './pages/WorkspacesPage.vue'
+import KnowledgeBasesPage from './pages/KnowledgeBasesPage.vue'
 import AuditPage from './pages/AuditPage.vue'
 
 const routes: RouteRecordRaw[] = [
@@ -32,10 +32,10 @@ const routes: RouteRecordRaw[] = [
             },
           },
           {
-            path: '/workspaces',
-            component: WorkspacesPage,
+            path: '/knowledge-bases',
+            component: KnowledgeBasesPage,
             meta: {
-              title: t('Workspaces'),
+              title: t('Knowledge bases'),
             },
           },
           {

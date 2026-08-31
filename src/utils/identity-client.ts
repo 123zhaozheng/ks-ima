@@ -18,31 +18,24 @@ type AdminUserInput = components['schemas']['CreateUserRequest']
 type AdminProfilePatch = components['schemas']['UserPatch']
 type ProfilePatch = components['schemas']['ProfilePatch']
 type SettingPatch = components['schemas']['SettingPatch']
-type WorkspaceRequest = components['schemas']['WorkspaceRequest']
-type MemberWorkspaceCreateRequest = components['schemas']['MemberWorkspaceCreateRequest']
-type WorkspaceCreateResponse = components['schemas']['WorkspaceCreateResponse']
-type WorkspaceList = components['schemas']['WorkspaceList']
-type MemberWorkspace = components['schemas']['MemberWorkspace']
 type PlatformSettings = components['schemas']['PlatformSettings']
 type AuditEventList = components['schemas']['AuditEventList']
-type WorkspaceMember = components['schemas']['WorkspaceMember']
-type WorkspaceGroup = components['schemas']['WorkspaceGroup']
+type KnowledgeBase = components['schemas']['KnowledgeBase']
+type KnowledgeBaseList = components['schemas']['KnowledgeBaseList']
+type KnowledgeBaseCreateRequest = components['schemas']['KnowledgeBaseCreateRequest']
+type KnowledgeBaseCreateResponse = components['schemas']['KnowledgeBaseCreateResponse']
+type KnowledgeBaseRenameRequest = components['schemas']['KnowledgeBaseRenameRequest']
+type KnowledgeBaseRequest = components['schemas']['KnowledgeBaseRequest']
+type KbMember = components['schemas']['KbMember']
+type MemberRolePatchRequest = components['schemas']['MemberRolePatchRequest']
+type ShareLink = components['schemas']['ShareLink']
+type ShareLinkCreateRequest = components['schemas']['ShareLinkCreateRequest']
 type Folder = components['schemas']['Folder']
-type FolderAcl = components['schemas']['FolderAcl']
-type MemberAddRequest = components['schemas']['MemberAddRequest']
-type MemberPatchRequest = components['schemas']['MemberPatchRequest']
 type FolderCreateRequest = components['schemas']['FolderCreateRequest']
 type FolderPatchRequest = components['schemas']['FolderPatchRequest']
 type FolderMoveRequest = components['schemas']['FolderMoveRequest']
 type FolderReorderRequest = components['schemas']['FolderReorderRequest']
-type FolderLifecycleRequest = components['schemas']['FolderLifecycleRequest']
-type AclReplaceRequest = components['schemas']['AclReplaceRequest']
-type GroupCreateRequest = components['schemas']['GroupCreateRequest']
-type InvitationCreateRequest = components['schemas']['InvitationCreateRequest']
-type Invitation = components['schemas']['Invitation']
-type UserSearchResult = components['schemas']['UserSearchResult']
-type AclSubject = components['schemas']['AclSubject']
-type PermissionPreviewRequest = components['schemas']['PermissionPreviewRequest']
+type KbCapability = components['schemas']['KbCapability']
 type ModelGateway = components['schemas']['ModelGateway']
 type ModelGatewayList = components['schemas']['ModelGatewayList']
 type GatewayCreateRequest = components['schemas']['GatewayCreateRequest']
@@ -57,7 +50,6 @@ type ProfileList = components['schemas']['ProfileList']
 type ProfileVersionList = components['schemas']['ProfileVersionList']
 type ProfileCreateRequest = components['schemas']['ProfileCreateRequest']
 type ProfilePatchRequest = components['schemas']['ProfilePatchRequest']
-type WorkspaceCapability = components['schemas']['WorkspaceCapability']
 type AssignmentList = components['schemas']['AssignmentList']
 type AssignmentRequest = components['schemas']['AssignmentRequest']
 type ImpactResponse = components['schemas']['ImpactResponse']
@@ -69,8 +61,14 @@ type CredentialIssue = components['schemas']['CredentialIssueResponse']
 type CredentialRotate = components['schemas']['CredentialRotate']
 type ConnectedGrant = components['schemas']['ConnectedGrantResponse']
 type ServicePrincipalDetail = components['schemas']['ServicePrincipalDetailResponse']
-type InvitationAcceptance = { workspaceId: string, userId: string, role: MemberWorkspace['role'], state: string }
 type Result<T> = { data?: T, error?: { code?: string, message: string } }
+
+/**
+ * Knowledge base summary as returned by the member-facing list/get/accept
+ * endpoints: the generated KnowledgeBase DTO plus the `owned` marker the
+ * backend adds for switcher badges.
+ */
+export type KnowledgeBaseSummary = KnowledgeBase & { owned: boolean }
 
 async function request<T>(path: string, init: RequestInit = {}, prefix = '/api/v1'): Promise<Result<T>> {
   const headers = new Headers(init.headers)
@@ -106,7 +104,7 @@ export const identityClient = {
   changePassword: (input: PasswordChangeRequest) => request('/account/password/change', { method: 'POST', body: JSON.stringify(input) }),
   requestPasswordReset: (input: PasswordForgotRequest) => request('/auth/password/forgot', { method: 'POST', body: JSON.stringify(input) }),
   resetPassword: (input: PasswordResetRequest) => request('/auth/password/reset', { method: 'POST', body: JSON.stringify(input) }),
-  acceptInvite: (input: AcceptTokenRequest) => request<IdentityUser>('/auth/invitations/accept', { method: 'POST', body: JSON.stringify(input) }),
+  acceptInvite: (input: AcceptTokenRequest) => request<IdentityUser>('/auth/accept-invite', { method: 'POST', body: JSON.stringify(input) }),
   verifyTotp: async (input: TotpVerifyRequest) => {
     const result = await request<IdentityUser>('/auth/totp/verify', { method: 'POST', body: JSON.stringify(input) })
     if (result.data) await getSession()
@@ -136,48 +134,44 @@ export const identityClient = {
   resetTotp: (userId: string) => request(`/admin/users/${userId}/reset-totp`, { method: 'POST', body: '{}' }),
   grantRole: (userId: string, role: string) => request(`/admin/users/${userId}/roles/${role}`, { method: 'PUT', body: '{}' }),
   revokeRole: (userId: string, role: string) => request(`/admin/users/${userId}/roles/${role}`, { method: 'DELETE' }),
-  listWorkspaces: (search = '', cursor?: string) => request<WorkspaceList>(`/admin/workspaces?q=${encodeURIComponent(search)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
-  createWorkspace: (input: WorkspaceRequest) => request<WorkspaceCreateResponse>('/admin/workspaces', { method: 'POST', body: JSON.stringify(input) }),
-  createSelfWorkspace: (input: MemberWorkspaceCreateRequest) => request<WorkspaceCreateResponse>('/workspaces', { method: 'POST', body: JSON.stringify(input) }),
-  archiveWorkspace: (id: string) => request(`/admin/workspaces/${id}/archive`, { method: 'POST', body: '{}' }),
-  restoreWorkspace: (id: string) => request(`/admin/workspaces/${id}/restore`, { method: 'POST', body: '{}' }),
-  deleteWorkspace: (id: string) => request(`/admin/workspaces/${id}`, { method: 'DELETE' }),
+  // Knowledge bases (member-facing)
+  listKnowledgeBases: () => request<KnowledgeBaseSummary[]>('/knowledge-bases'),
+  createKnowledgeBase: (input: KnowledgeBaseCreateRequest) => request<KnowledgeBaseCreateResponse>('/knowledge-bases', { method: 'POST', body: JSON.stringify(input) }),
+  getKnowledgeBase: (kbId: string) => request<KnowledgeBaseSummary>(`/knowledge-bases/${encodeURIComponent(kbId)}`),
+  renameKnowledgeBase: (kbId: string, input: KnowledgeBaseRenameRequest) => request<KnowledgeBaseSummary>(`/knowledge-bases/${encodeURIComponent(kbId)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  archiveKnowledgeBase: (kbId: string) => request(`/knowledge-bases/${encodeURIComponent(kbId)}/archive`, { method: 'POST', body: '{}' }),
+  restoreKnowledgeBase: (kbId: string) => request(`/knowledge-bases/${encodeURIComponent(kbId)}/restore`, { method: 'POST', body: '{}' }),
+  deleteKnowledgeBase: (kbId: string) => request(`/knowledge-bases/${encodeURIComponent(kbId)}`, { method: 'DELETE' }),
+  leaveKnowledgeBase: (kbId: string) => request(`/knowledge-bases/${encodeURIComponent(kbId)}/leave`, { method: 'POST', body: '{}' }),
+  // Knowledge base members
+  listKbMembers: (kbId: string, q = '') => request<KbMember[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/members?q=${encodeURIComponent(q)}`),
+  updateKbMemberRole: (kbId: string, userId: string, input: MemberRolePatchRequest) => request<KbMember>(`/knowledge-bases/${encodeURIComponent(kbId)}/members/${encodeURIComponent(userId)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  removeKbMember: (kbId: string, userId: string, expectedVersion?: number) => request(`/knowledge-bases/${encodeURIComponent(kbId)}/members/${encodeURIComponent(userId)}${expectedVersion ? `?expected_version=${expectedVersion}` : ''}`, { method: 'DELETE' }),
+  // Knowledge base share links
+  listKbShareLinks: (kbId: string) => request<ShareLink[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/share-links`),
+  createKbShareLink: (kbId: string, input: ShareLinkCreateRequest) => request<ShareLink>(`/knowledge-bases/${encodeURIComponent(kbId)}/share-links`, { method: 'POST', body: JSON.stringify(input) }),
+  revokeKbShareLink: (kbId: string, linkId: string) => request(`/knowledge-bases/${encodeURIComponent(kbId)}/share-links/${encodeURIComponent(linkId)}`, { method: 'DELETE' }),
+  acceptKbShareLink: (token: string) => request<KnowledgeBaseSummary>(`/kb-share-links/${encodeURIComponent(token)}/accept`, { method: 'POST', body: '{}' }),
+  // Knowledge base folder tree
+  listKbFolders: (kbId: string) => request<Folder[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/folders`),
+  createKbFolder: (kbId: string, input: FolderCreateRequest) => request<Folder>(`/knowledge-bases/${encodeURIComponent(kbId)}/folders`, { method: 'POST', body: JSON.stringify(input) }),
+  getKbFolder: (kbId: string, folderId: string) => request<Folder>(`/knowledge-bases/${encodeURIComponent(kbId)}/folders/${encodeURIComponent(folderId)}`),
+  renameKbFolder: (kbId: string, folderId: string, input: FolderPatchRequest) => request<Folder>(`/knowledge-bases/${encodeURIComponent(kbId)}/folders/${encodeURIComponent(folderId)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  moveKbFolder: (kbId: string, folderId: string, input: FolderMoveRequest) => request<Folder>(`/knowledge-bases/${encodeURIComponent(kbId)}/folders/${encodeURIComponent(folderId)}/move`, { method: 'POST', body: JSON.stringify(input) }),
+  reorderKbFolder: (kbId: string, folderId: string, input: FolderReorderRequest) => request<Folder>(`/knowledge-bases/${encodeURIComponent(kbId)}/folders/${encodeURIComponent(folderId)}/reorder`, { method: 'POST', body: JSON.stringify(input) }),
+  kbFolderBreadcrumbs: (kbId: string, folderId: string) => request<Folder[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/folders/${encodeURIComponent(folderId)}/breadcrumbs`),
+  deleteKbFolder: (kbId: string, folderId: string, expectedVersion: number) => request(`/knowledge-bases/${encodeURIComponent(kbId)}/folders/${encodeURIComponent(folderId)}?expected_version=${expectedVersion}`, { method: 'DELETE' }),
+  // Model capabilities assigned to a knowledge base (read-only for members)
+  kbModelCapabilities: (kbId: string) => request<KbCapability[]>(`/knowledge-bases/${encodeURIComponent(kbId)}/capabilities`),
+  // Platform admin: knowledge bases
+  adminListKnowledgeBases: (search = '', cursor?: string) => request<KnowledgeBaseList>(`/admin/knowledge-bases?q=${encodeURIComponent(search)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
+  adminCreateKnowledgeBase: (input: KnowledgeBaseRequest) => request<KnowledgeBaseCreateResponse>('/admin/knowledge-bases', { method: 'POST', body: JSON.stringify(input) }),
+  adminArchiveKnowledgeBase: (id: string) => request(`/admin/knowledge-bases/${id}/archive`, { method: 'POST', body: '{}' }),
+  adminRestoreKnowledgeBase: (id: string) => request(`/admin/knowledge-bases/${id}/restore`, { method: 'POST', body: '{}' }),
+  adminDeleteKnowledgeBase: (id: string) => request(`/admin/knowledge-bases/${id}`, { method: 'DELETE' }),
   getSettings: () => request<PlatformSettings>('/admin/settings'),
   updateSettings: (input: SettingPatch) => request<PlatformSettings>('/admin/settings', { method: 'PATCH', body: JSON.stringify(input) }),
   listAudit: (limit = 100) => request<AuditEventList>(`/admin/audit-events?limit=${limit}`),
-  listMemberWorkspaces: () => request<MemberWorkspace[]>('/workspaces'),
-  getMemberWorkspace: (workspaceId: string) => request<MemberWorkspace>(`/workspaces/${encodeURIComponent(workspaceId)}`),
-  listWorkspaceMembers: (workspaceId: string, q = '') => request<WorkspaceMember[]>(`/workspaces/${encodeURIComponent(workspaceId)}/members?q=${encodeURIComponent(q)}`),
-  searchWorkspaceUsers: (workspaceId: string, q: string) => request<UserSearchResult[]>(`/workspaces/${encodeURIComponent(workspaceId)}/members/search?q=${encodeURIComponent(q)}`),
-  addWorkspaceMember: (workspaceId: string, input: MemberAddRequest) => request<WorkspaceMember>(`/workspaces/${encodeURIComponent(workspaceId)}/members`, { method: 'POST', body: JSON.stringify(input) }),
-  updateWorkspaceMember: (workspaceId: string, userId: string, input: MemberPatchRequest) => request<WorkspaceMember>(`/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}`, { method: 'PATCH', body: JSON.stringify(input) }),
-  removeWorkspaceMember: (workspaceId: string, userId: string, expectedVersion?: number) => request(`/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}${expectedVersion ? `?expected_version=${expectedVersion}` : ''}`, { method: 'DELETE' }),
-  leaveWorkspaceMember: (workspaceId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/leave`, { method: 'POST', body: '{}' }),
-  listWorkspaceGroups: (workspaceId: string) => request<WorkspaceGroup[]>(`/workspaces/${encodeURIComponent(workspaceId)}/groups`),
-  createWorkspaceGroup: (workspaceId: string, input: GroupCreateRequest) => request<WorkspaceGroup>(`/workspaces/${encodeURIComponent(workspaceId)}/groups`, { method: 'POST', body: JSON.stringify(input) }),
-  listWorkspaceGroupMembers: (workspaceId: string, groupId: string) => request<UserSearchResult[]>(`/workspaces/${encodeURIComponent(workspaceId)}/groups/${encodeURIComponent(groupId)}/members`),
-  deleteWorkspaceGroup: (workspaceId: string, groupId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/groups/${encodeURIComponent(groupId)}`, { method: 'DELETE' }),
-  addWorkspaceGroupMember: (workspaceId: string, groupId: string, userId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, { method: 'PUT', body: '{}' }),
-  removeWorkspaceGroupMember: (workspaceId: string, groupId: string, userId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' }),
-  listWorkspaceFolders: (workspaceId: string, parentId?: string) => request<Folder[]>(`/workspaces/${encodeURIComponent(workspaceId)}/folders${parentId ? `?parent_id=${encodeURIComponent(parentId)}` : ''}`),
-  createWorkspaceFolder: (workspaceId: string, input: FolderCreateRequest) => request<Folder>(`/workspaces/${encodeURIComponent(workspaceId)}/folders`, { method: 'POST', body: JSON.stringify(input) }),
-  getWorkspaceFolder: (workspaceId: string, folderId: string) => request<Folder>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}`),
-  renameWorkspaceFolder: (workspaceId: string, folderId: string, input: FolderPatchRequest) => request<Folder>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}`, { method: 'PATCH', body: JSON.stringify(input) }),
-  moveWorkspaceFolder: (workspaceId: string, folderId: string, input: FolderMoveRequest) => request<Folder>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/move`, { method: 'POST', body: JSON.stringify(input) }),
-  reorderWorkspaceFolder: (workspaceId: string, folderId: string, input: FolderReorderRequest) => request<Folder>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/reorder`, { method: 'POST', body: JSON.stringify(input) }),
-  trashWorkspaceFolder: (workspaceId: string, folderId: string, input: FolderLifecycleRequest) => request(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/trash`, { method: 'POST', body: JSON.stringify(input) }),
-  restoreWorkspaceFolder: (workspaceId: string, folderId: string, input: FolderLifecycleRequest) => request(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/restore`, { method: 'POST', body: JSON.stringify(input) }),
-  deleteWorkspaceFolder: (workspaceId: string, folderId: string, expectedVersion: number) => request(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}?expected_version=${expectedVersion}`, { method: 'DELETE' }),
-  getWorkspaceFolderAcl: (workspaceId: string, folderId: string) => request<FolderAcl>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/acl`),
-  searchWorkspaceAclSubjects: (workspaceId: string, q = '') => request<AclSubject[]>(`/workspaces/${encodeURIComponent(workspaceId)}/acl-subjects?q=${encodeURIComponent(q)}`),
-  replaceWorkspaceFolderAcl: (workspaceId: string, folderId: string, input: AclReplaceRequest) => request<FolderAcl>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/acl`, { method: 'PUT', body: JSON.stringify(input) }),
-  inheritWorkspaceFolderAcl: (workspaceId: string, folderId: string, expectedVersion?: number) => request<FolderAcl>(`/workspaces/${encodeURIComponent(workspaceId)}/folders/${encodeURIComponent(folderId)}/acl${expectedVersion ? `?expected_version=${expectedVersion}` : ''}`, { method: 'DELETE' }),
-  issueWorkspaceInvitation: (workspaceId: string, input: InvitationCreateRequest) => request<Invitation>(`/workspaces/${encodeURIComponent(workspaceId)}/invitations`, { method: 'POST', body: JSON.stringify(input) }),
-  listWorkspaceInvitations: (workspaceId: string) => request<Invitation[]>(`/workspaces/${encodeURIComponent(workspaceId)}/invitations`),
-  revokeWorkspaceInvitation: (workspaceId: string, invitationId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/invitations/${encodeURIComponent(invitationId)}`, { method: 'DELETE' }),
-  acceptWorkspaceInvitation: (token: string) => request<InvitationAcceptance>(`/workspace-invitations/${encodeURIComponent(token)}/accept`, { method: 'POST', body: '{}' }),
-  previewWorkspacePermissions: (workspaceId: string, input: PermissionPreviewRequest) => request<Folder[]>(`/workspaces/${encodeURIComponent(workspaceId)}/permission-preview`, { method: 'POST', body: JSON.stringify(input) }),
-  repairWorkspaceAdmin: (workspaceId: string, userId: string) => request(`/admin/workspaces/${encodeURIComponent(workspaceId)}/workspace-admin-repair`, { method: 'POST', body: JSON.stringify({ userId }) }),
   listModelGateways: () => request<ModelGatewayList>('/admin/model-gateways'),
   createModelGateway: (input: GatewayCreateRequest) => request<ModelGateway>('/admin/model-gateways', { method: 'POST', body: JSON.stringify(input) }),
   updateModelGateway: (id: string, input: GatewayPatchRequest) => request<ModelGateway>(`/admin/model-gateways/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
@@ -204,19 +198,20 @@ export const identityClient = {
   disableCapabilityProfile: (id: string) => request(`/admin/capability-profiles/${encodeURIComponent(id)}/disable`, { method: 'POST', body: '{}' }),
   restoreCapabilityProfile: (id: string) => request(`/admin/capability-profiles/${encodeURIComponent(id)}/restore`, { method: 'POST', body: '{}' }),
   deleteCapabilityProfile: (id: string) => request(`/admin/capability-profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  listCapabilityAssignments: (workspaceId: string) => request<AssignmentList>(`/admin/workspaces/${encodeURIComponent(workspaceId)}/profile-assignments`),
-  assignCapabilityProfile: (workspaceId: string, workflow: string, input: AssignmentRequest) => request(`/admin/workspaces/${encodeURIComponent(workspaceId)}/profile-assignments/${encodeURIComponent(workflow)}`, { method: 'PUT', body: JSON.stringify(input) }),
-  removeCapabilityProfile: (workspaceId: string, workflow: string, expectedVersion?: number) => request(`/admin/workspaces/${encodeURIComponent(workspaceId)}/profile-assignments/${encodeURIComponent(workflow)}${expectedVersion ? `?expected_version=${expectedVersion}` : ''}`, { method: 'DELETE' }),
+  listCapabilityAssignments: (kbId: string) => request<AssignmentList>(`/admin/knowledge-bases/${encodeURIComponent(kbId)}/profile-assignments`),
+  assignCapabilityProfile: (kbId: string, workflow: string, input: AssignmentRequest) => request(`/admin/knowledge-bases/${encodeURIComponent(kbId)}/profile-assignments/${encodeURIComponent(workflow)}`, { method: 'PUT', body: JSON.stringify(input) }),
+  removeCapabilityProfile: (kbId: string, workflow: string, expectedVersion?: number) => request(`/admin/knowledge-bases/${encodeURIComponent(kbId)}/profile-assignments/${encodeURIComponent(workflow)}${expectedVersion ? `?expected_version=${expectedVersion}` : ''}`, { method: 'DELETE' }),
   modelGovernanceImpact: (modelId: string) => request<ImpactResponse>(`/admin/model-governance/impact?model_id=${encodeURIComponent(modelId)}`),
-  workspaceCapabilities: (workspaceId: string) => request<WorkspaceCapability[]>(`/workspaces/${encodeURIComponent(workspaceId)}/capabilities`),
   previewOAuthConsent: (query: string) => request<ConsentView>(`/oauth/authorize?${query}`, {}, ''),
   submitOAuthConsent: (input: ConsentSubmit) => request('/oauth/authorize', { method: 'POST', body: JSON.stringify(input) }, ''),
-  listServicePrincipals: (workspaceId: string) => request<ServicePrincipal[]>(`/workspaces/${encodeURIComponent(workspaceId)}/service-principals`),
-  getServicePrincipal: (workspaceId: string, principalId: string) => request<ServicePrincipalDetail>(`/workspaces/${encodeURIComponent(workspaceId)}/service-principals/${encodeURIComponent(principalId)}`),
-  createServicePrincipal: (workspaceId: string, input: ServicePrincipalCreate) => request<CredentialIssue>(`/workspaces/${encodeURIComponent(workspaceId)}/service-principals`, { method: 'POST', body: JSON.stringify(input) }),
-  rotateServiceCredential: (workspaceId: string, principalId: string, credentialId: string, input: CredentialRotate) => request<CredentialIssue>(`/workspaces/${encodeURIComponent(workspaceId)}/service-principals/${encodeURIComponent(principalId)}/credentials/${encodeURIComponent(credentialId)}/rotate`, { method: 'POST', body: JSON.stringify(input) }),
-  revokeServiceCredential: (workspaceId: string, principalId: string, credentialId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/service-principals/${encodeURIComponent(principalId)}/credentials/${encodeURIComponent(credentialId)}`, { method: 'DELETE' }),
-  revokeServicePrincipal: (workspaceId: string, principalId: string) => request(`/workspaces/${encodeURIComponent(workspaceId)}/service-principals/${encodeURIComponent(principalId)}`, { method: 'DELETE' }),
+  // Service principals are user-level: they belong to their creator and can
+  // reach every knowledge base the creator is a member of.
+  listServicePrincipals: () => request<ServicePrincipal[]>('/service-principals'),
+  getServicePrincipal: (principalId: string) => request<ServicePrincipalDetail>(`/service-principals/${encodeURIComponent(principalId)}`),
+  createServicePrincipal: (input: ServicePrincipalCreate) => request<CredentialIssue>('/service-principals', { method: 'POST', body: JSON.stringify(input) }),
+  rotateServiceCredential: (principalId: string, credentialId: string, input: CredentialRotate) => request<CredentialIssue>(`/service-principals/${encodeURIComponent(principalId)}/credentials/${encodeURIComponent(credentialId)}/rotate`, { method: 'POST', body: JSON.stringify(input) }),
+  revokeServiceCredential: (principalId: string, credentialId: string) => request(`/service-principals/${encodeURIComponent(principalId)}/credentials/${encodeURIComponent(credentialId)}`, { method: 'DELETE' }),
+  revokeServicePrincipal: (principalId: string) => request(`/service-principals/${encodeURIComponent(principalId)}`, { method: 'DELETE' }),
   listConnectedOAuthGrants: () => request<ConnectedGrant[]>('/oauth/grants'),
   revokeConnectedOAuthGrant: (grantId: string) => request(`/oauth/grants/${encodeURIComponent(grantId)}`, { method: 'DELETE' }),
 }

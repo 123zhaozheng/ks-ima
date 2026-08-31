@@ -9,7 +9,7 @@ type ConversationPatch = components['schemas']['ConversationPatchRequest']
 type ConversationResponse = components['schemas']['ConversationResponse']
 type SearchResponse = components['schemas']['SearchResponse']
 type VectorIndex = components['schemas']['VectorIndexResponse']
-type SearchOptions = { mode?: 'keyword' | 'vector' | 'hybrid', topK?: number, threshold?: number, folderId?: string, tagId?: string, signal?: AbortSignal }
+type SearchOptions = { mode?: 'keyword' | 'vector' | 'hybrid', topK?: number, threshold?: number, folderId?: string, signal?: AbortSignal }
 
 type StreamHandler = (event: string, payload: Record<string, unknown>) => void
 
@@ -56,20 +56,21 @@ function streamRequest(url: string, body: Record<string, unknown>, signal: Abort
 }
 
 export const groundedClient = {
-  search: (workspaceId: string, query: string, options: SearchOptions = {}) => {
+  search: (kbId: string, query: string, options: SearchOptions = {}) => {
     const parameters = new URLSearchParams({ query, mode: options.mode ?? 'keyword' })
     if (options.topK) parameters.set('topK', String(options.topK))
     if (options.threshold !== undefined) parameters.set('threshold', String(options.threshold))
     if (options.folderId) parameters.set('folderId', options.folderId)
-    if (options.tagId) parameters.set('tagId', options.tagId)
-    return imaClient.request<SearchResponse>(`/api/v1/workspaces/${path(workspaceId)}/search?${parameters}`, { signal: options.signal })
+    return imaClient.request<SearchResponse>(`/api/v1/knowledge-bases/${path(kbId)}/search?${parameters}`, { signal: options.signal })
   },
-  buildIndex: (workspaceId: string) => imaClient.request<VectorIndex>(`/api/v1/workspaces/${path(workspaceId)}/search-indexes/build`, { method: 'POST' }),
-  conversations: (workspaceId: string, signal?: AbortSignal) => imaClient.request<ConversationPage>(`/api/v1/workspaces/${path(workspaceId)}/conversations`, { signal }),
-  conversation: (workspaceId: string, conversationId: string, signal?: AbortSignal) => imaClient.request<Conversation>(`/api/v1/workspaces/${path(workspaceId)}/conversations/${path(conversationId)}`, { signal }),
-  updateConversation: (workspaceId: string, conversationId: string, body: ConversationPatch) => imaClient.request<ConversationResponse>(`/api/v1/workspaces/${path(workspaceId)}/conversations/${path(conversationId)}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  deleteConversation: (workspaceId: string, conversationId: string, expectedVersion: number) => imaClient.request<void>(`/api/v1/workspaces/${path(workspaceId)}/conversations/${path(conversationId)}?expectedVersion=${path(expectedVersion)}`, { method: 'DELETE' }),
-  citation: (workspaceId: string, messageId: string, ordinal: number, signal?: AbortSignal) => imaClient.request<Citation>(`/api/v1/workspaces/${path(workspaceId)}/messages/${path(messageId)}/citations/${path(ordinal)}`, { signal }),
-  ask: (workspaceId: string, request: AskRequest, signal: AbortSignal, onEvent: StreamHandler) => streamRequest(`/api/v1/workspaces/${path(workspaceId)}/ask`, request, signal, onEvent)(),
-  retry: (workspaceId: string, conversationId: string, messageId: string, expectedVersion: number, signal: AbortSignal, onEvent: StreamHandler) => streamRequest(`/api/v1/workspaces/${path(workspaceId)}/conversations/${path(conversationId)}/retry`, { messageId, expectedVersion }, signal, onEvent)(),
+  buildIndex: (kbId: string) => imaClient.request<VectorIndex>(`/api/v1/knowledge-bases/${path(kbId)}/search-indexes/build`, { method: 'POST' }),
+  // User-level history: every conversation the user can see, across all
+  // knowledge bases. Each item carries its owning knowledge base.
+  conversations: (signal?: AbortSignal) => imaClient.request<ConversationPage>('/api/v1/conversations', { signal }),
+  conversation: (kbId: string, conversationId: string, signal?: AbortSignal) => imaClient.request<Conversation>(`/api/v1/knowledge-bases/${path(kbId)}/conversations/${path(conversationId)}`, { signal }),
+  updateConversation: (kbId: string, conversationId: string, body: ConversationPatch) => imaClient.request<ConversationResponse>(`/api/v1/knowledge-bases/${path(kbId)}/conversations/${path(conversationId)}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteConversation: (kbId: string, conversationId: string, expectedVersion: number) => imaClient.request<void>(`/api/v1/knowledge-bases/${path(kbId)}/conversations/${path(conversationId)}?expectedVersion=${path(expectedVersion)}`, { method: 'DELETE' }),
+  citation: (kbId: string, messageId: string, ordinal: number, signal?: AbortSignal) => imaClient.request<Citation>(`/api/v1/knowledge-bases/${path(kbId)}/messages/${path(messageId)}/citations/${path(ordinal)}`, { signal }),
+  ask: (kbId: string, request: AskRequest, signal: AbortSignal, onEvent: StreamHandler) => streamRequest(`/api/v1/knowledge-bases/${path(kbId)}/ask`, request, signal, onEvent)(),
+  retry: (kbId: string, conversationId: string, messageId: string, expectedVersion: number, signal: AbortSignal, onEvent: StreamHandler) => streamRequest(`/api/v1/knowledge-bases/${path(kbId)}/conversations/${path(conversationId)}/retry`, { messageId, expectedVersion }, signal, onEvent)(),
 }

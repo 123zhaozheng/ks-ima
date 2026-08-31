@@ -12,10 +12,7 @@
     </q-toolbar>
   </q-header>
   <q-page-container>
-    <q-page
-      v-if="workspaceStore.id"
-      class="tk-page connectors-page"
-    >
+    <q-page class="tk-page connectors-page">
       <section class="tk-card connectors-card">
         <header class="connectors-card-head">
           <q-icon
@@ -52,6 +49,13 @@
                 :title="t('Copy')"
                 @click="copy(mcpUrl)"
               />
+            </q-item-section>
+          </q-item>
+          <q-item>
+            <q-item-section>
+              <q-item-label caption>
+                {{ t('Connections are linked to your account and cover every knowledge base you can access.') }}
+              </q-item-label>
             </q-item-section>
           </q-item>
           <q-item v-if="!grants.length">
@@ -136,10 +140,7 @@
             />
           </template>
         </q-banner>
-        <div
-          v-if="isAdmin"
-          class="create-grid"
-        >
+        <div class="create-grid">
           <q-input
             v-model="form.displayName"
             outlined
@@ -151,18 +152,6 @@
             outlined
             dense
             :label="t('Purpose')"
-          />
-          <q-input
-            v-model="form.ownerUserId"
-            outlined
-            dense
-            :label="t('Owner user ID')"
-          />
-          <q-input
-            v-model="form.folderRootId"
-            outlined
-            dense
-            :label="t('Folder root (optional)')"
           />
           <q-input
             v-model.number="form.expiresDays"
@@ -193,13 +182,10 @@
           />
         </div>
         <q-list separator>
-          <q-item v-if="!isAdmin && !loading">
-            <q-item-section>{{ t('Workspace administrators manage service access.') }}</q-item-section>
-          </q-item>
           <q-item v-if="loading">
             <q-item-section>{{ t('Loading service access…') }}</q-item-section>
           </q-item>
-          <q-item v-else-if="isAdmin && !principals.length">
+          <q-item v-else-if="!principals.length">
             <q-item-section>{{ t('No service principals') }}</q-item-section>
           </q-item>
           <q-item
@@ -212,7 +198,7 @@
                 {{ principal.purpose }} · {{ principal.state }} · {{ formatTime(principal.expiresAt) }}
               </q-item-label>
               <q-item-label caption>
-                {{ principal.scopes.map(scopeLabel).join(' · ') }}<span v-if="principal.folderRootId"> · {{ t('Folder-scoped') }}</span>
+                {{ principal.scopes.map(scopeLabel).join(' · ') }}
               </q-item-label>
               <div
                 v-for="credential in credentials[principal.id] ?? []"
@@ -233,10 +219,7 @@
                 />
               </div>
             </q-item-section>
-            <q-item-section
-              v-if="isAdmin"
-              side
-            >
+            <q-item-section side>
               <div>
                 <q-btn
                   v-if="activeCredential(principal.id)"
@@ -261,69 +244,58 @@
           </q-item>
         </q-list>
       </section>
-    </q-page>
-    <q-page
-      v-else
-      flex
-      flex-center
-      text-on-sur-var
-    >
-      <q-spinner
-        v-if="!listReady"
-        color="primary"
-        size="40px"
-      />
-      <div
-        v-else
-        class="tk-empty"
-        data-testid="connectors-onboarding"
+      <section
+        v-if="showJoin"
+        class="tk-card connectors-card"
+        data-testid="connectors-join-kb"
       >
-        <q-icon
-          name="sym_o_link"
-          size="56px"
-          class="tk-empty-icon"
-        />
-        <div class="tk-empty-title">
-          {{ t('Connectors live in a workspace') }}
-        </div>
-        <div class="tk-empty-subtitle">
-          {{ t('Create a workspace, or join one with an invitation, to manage agent access.') }}
-        </div>
-        <div class="tk-empty-actions">
+        <header class="connectors-card-head">
+          <q-icon
+            name="sym_o_group_add"
+            size="22px"
+            color="primary"
+          />
+          <div>
+            <h2 class="tk-card-title">
+              {{ t('Join knowledge base') }}
+            </h2>
+            <p class="tk-card-subtitle">
+              {{ t('Paste a share link to join a knowledge base.') }}
+            </p>
+          </div>
+        </header>
+        <div class="join-row">
+          <q-input
+            v-model="shareLink"
+            outlined
+            dense
+            :placeholder="t('Share link')"
+          />
           <q-btn
             unelevated
             no-caps
-            class="tk-cta"
-            :label="t('Create Workspace')"
-            data-testid="connectors-create-workspace"
-            @click="showCreateWorkspace = true"
-          />
-          <q-btn
-            flat
-            no-caps
-            class="tk-cta-secondary"
-            :label="t('Join workspace')"
-            data-testid="connectors-join-workspace"
-            @click="joinWorkspace"
+            color="primary"
+            :label="t('Join')"
+            :disable="!shareLink.trim()"
+            @click="joinKnowledgeBase"
           />
         </div>
-      </div>
+      </section>
     </q-page>
   </q-page-container>
-  <create-workspace-dialog v-model="showCreateWorkspace" />
 </template>
 
 <script setup lang="ts">
 import type { components } from 'src/api/generated/schema'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { copyToClipboard, useQuasar } from 'quasar'
 import { useRouter } from 'vue-router'
-import CreateWorkspaceDialog from 'src/components/CreateWorkspaceDialog.vue'
-import { useWorkspaceStore } from 'src/stores/workspace'
+import { useKbStore } from 'src/stores/knowledge-base'
 import { useUiStateStore } from 'src/stores/ui-state'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { identityClient, session } from 'src/utils/identity-client'
 import { t } from 'src/utils/i18n'
+import { mcpHttpUrl } from 'src/utils/mcp-config'
 
 type ServicePrincipal = components['schemas']['ServicePrincipalResponse']
 type CredentialIssue = components['schemas']['CredentialIssueResponse']
@@ -332,46 +304,32 @@ type ConnectedGrant = components['schemas']['ConnectedGrantResponse']
 type Credential = components['schemas']['CredentialViewResponse']
 
 const scopeOptions = [
-  'mcp:workspaces:read',
+  'mcp:knowledge-bases:read',
   'mcp:knowledge:read',
   'mcp:knowledge:search',
+  'mcp:knowledge:write',
 ]
-const workspaceStore = useWorkspaceStore()
+const kbStore = useKbStore()
 const uiStateStore = useUiStateStore()
 const $q = useQuasar()
 const router = useRouter()
-const showCreateWorkspace = ref(false)
-const listReady = computed(() => workspaceStore.workspacesStatus === 'success')
-
-function joinWorkspace() {
-  $q.dialog({
-    title: t('Join Workspace'),
-    prompt: {
-      model: '',
-      label: t('Invitation Link'),
-    },
-    cancel: true,
-  }).onOk((link: string) => {
-    const token = link.match(/\/invitations\/(.+)/)?.[1]
-    token && router.push(`/invitations/${token}`)
-  })
-}
 
 const principals = ref<ServicePrincipal[]>([])
 const grants = ref<ConnectedGrant[]>([])
 const credentials = ref<Record<string, Credential[]>>({})
 const oneTime = ref<CredentialIssue | null>(null)
-const role = ref('')
 const loading = ref(false)
 const creating = ref(false)
 const error = ref('')
-const mcpUrl = window.location.origin.replace(/\/$/, '') + '/mcp'
-const isAdmin = computed(() => role.value === 'workspace_admin')
+const shareLink = ref('')
+const mcpUrl = mcpHttpUrl()
+// Service principals are user-level: they belong to their creator and can
+// reach every knowledge base the creator is a member of, so every signed-in
+// user manages their own without per-library or folder scoping.
+const showJoin = computed(() => kbStore.kbsStatus === 'success' && (kbStore.kbs?.length ?? 0) === 0)
 const form = reactive({
   displayName: '',
   purpose: '',
-  ownerUserId: '',
-  folderRootId: '',
   expiresDays: 30,
   scopes: ['mcp:knowledge:read'],
 })
@@ -392,33 +350,25 @@ function activeCredential(principalId: string) {
 }
 
 async function load() {
-  const workspaceId = workspaceStore.id
-  if (!workspaceId) return
+  if (!session.value.data?.user.id) return
   const generation = ++loadGeneration
   loading.value = true
   error.value = ''
   try {
-    const [workspace, connected] = await Promise.all([
-      identityClient.getMemberWorkspace(workspaceId),
+    const [connected, list] = await Promise.all([
       identityClient.listConnectedOAuthGrants(),
+      identityClient.listServicePrincipals(),
     ])
     if (generation !== loadGeneration) return
-    role.value = workspace.data?.role ?? ''
-    grants.value = (connected.data ?? []).filter(grant => grant.workspaceId === workspaceId)
-    error.value = workspace.error || connected.error
-      ? apiErrorMessage(workspace.error ?? connected.error, 'Agent access is unavailable.')
-      : ''
-    principals.value = []
-    credentials.value = {}
-    if (role.value !== 'workspace_admin') return
-
-    const list = await identityClient.listServicePrincipals(workspaceId)
-    if (generation !== loadGeneration) return
+    grants.value = connected.data ?? []
     principals.value = list.data ?? []
-    error.value = list.error ? apiErrorMessage(list.error, 'Agent access is unavailable.') : error.value
+    credentials.value = {}
+    error.value = connected.error || list.error
+      ? apiErrorMessage(connected.error ?? list.error, 'Agent access is unavailable.')
+      : ''
     if (list.error) return
     const details = await Promise.all(
-      principals.value.map(principal => identityClient.getServicePrincipal(workspaceId, principal.id)),
+      principals.value.map(principal => identityClient.getServicePrincipal(principal.id)),
     )
     if (generation !== loadGeneration) return
     credentials.value = Object.fromEntries(
@@ -434,11 +384,11 @@ async function load() {
 }
 
 async function createPrincipal() {
-  const workspaceId = workspaceStore.id
-  if (!workspaceId || creating.value) return
+  const ownerId = session.value.data?.user.id
+  if (!ownerId || creating.value) return
   error.value = ''
   oneTime.value = null
-  if (!form.displayName.trim() || !form.purpose.trim() || !form.ownerUserId || !form.scopes.length) {
+  if (!form.displayName.trim() || !form.purpose.trim() || !form.scopes.length) {
     error.value = t('Complete the required service access fields.')
     return
   }
@@ -447,8 +397,7 @@ async function createPrincipal() {
   const payload = {
     displayName: form.displayName.trim(),
     purpose: form.purpose.trim(),
-    ownerUserId: form.ownerUserId,
-    folderRootId: form.folderRootId || null,
+    ownerUserId: ownerId,
     scopes: form.scopes,
     expiresAt: new Date(Date.now() + expiresDays * 86400000).toISOString(),
     rateLimit: 300,
@@ -456,7 +405,7 @@ async function createPrincipal() {
     cidrAllowlist: [],
   } satisfies ServicePrincipalCreate
   try {
-    const result = await identityClient.createServicePrincipal(workspaceId, payload)
+    const result = await identityClient.createServicePrincipal(payload)
     if (result.data) {
       oneTime.value = result.data
       form.displayName = ''
@@ -471,9 +420,7 @@ async function createPrincipal() {
 }
 
 async function revokePrincipal(id: string) {
-  const workspaceId = workspaceStore.id
-  if (!workspaceId) return
-  const result = await identityClient.revokeServicePrincipal(workspaceId, id)
+  const result = await identityClient.revokeServicePrincipal(id)
   if (result.error) error.value = apiErrorMessage(result.error, 'Could not revoke service principal')
   else await load()
 }
@@ -485,12 +432,10 @@ async function revokeGrant(id: string) {
 }
 
 async function rotateFirstCredential(principal: ServicePrincipal) {
-  const workspaceId = workspaceStore.id
   const credential = activeCredential(principal.id)
-  if (!workspaceId || !credential) return
+  if (!credential) return
   oneTime.value = null
   const result = await identityClient.rotateServiceCredential(
-    workspaceId,
     principal.id,
     credential.credentialId,
     { expiresAt: principal.expiresAt, overlapExpiresAt: null },
@@ -501,15 +446,18 @@ async function rotateFirstCredential(principal: ServicePrincipal) {
 }
 
 async function revokeCredential(principalId: string, credentialId: string) {
-  const workspaceId = workspaceStore.id
-  if (!workspaceId) return
-  const result = await identityClient.revokeServiceCredential(
-    workspaceId,
-    principalId,
-    credentialId,
-  )
+  const result = await identityClient.revokeServiceCredential(principalId, credentialId)
   if (result.error) error.value = apiErrorMessage(result.error, 'Could not revoke credential')
   else await load()
+}
+
+function joinKnowledgeBase() {
+  const token = shareLink.value.match(/\/join\/([^/?#]+)/)?.[1] ?? shareLink.value.trim().match(/^([^/?#\s]+)$/)?.[1]
+  if (!token) {
+    error.value = t('That does not look like a knowledge base share link.')
+    return
+  }
+  router.push(`/join/${encodeURIComponent(token)}`)
 }
 
 async function copy(value: string) {
@@ -519,20 +467,17 @@ async function copy(value: string) {
 
 watch(
   () => session.value.data?.user.id,
-  userId => {
-    if (!form.ownerUserId && userId) form.ownerUserId = userId
+  (userId, previous) => {
+    if (!userId || userId === previous) return
+    loadGeneration += 1
+    oneTime.value = null
+    principals.value = []
+    credentials.value = {}
+    grants.value = []
+    load().catch(() => undefined)
   },
   { immediate: true },
 )
-watch(() => workspaceStore.id, () => {
-  loadGeneration += 1
-  oneTime.value = null
-  principals.value = []
-  credentials.value = {}
-  grants.value = []
-  load().catch(() => undefined)
-})
-onMounted(() => { load().catch(() => undefined) })
 onBeforeUnmount(() => { oneTime.value = null })
 </script>
 
@@ -601,6 +546,17 @@ code {
   font-size: 13px;
 }
 
+.join-row {
+  display: flex;
+  gap: var(--tk-space-3);
+  align-items: center;
+  padding: var(--tk-space-2) var(--tk-space-4) var(--tk-space-4);
+}
+
+.join-row .q-input {
+  flex: 1;
+}
+
 @media (max-width: 640px) {
   .create-grid {
     grid-template-columns: 1fr;
@@ -617,6 +573,11 @@ code {
 
   .credential-row span:nth-child(2) {
     grid-column: 1;
+  }
+
+  .join-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>

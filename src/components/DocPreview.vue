@@ -28,7 +28,7 @@
         dense
         class="doc-preview-title"
         input-class="text-subtitle1"
-        :readonly="!document"
+        :readonly="!document || readonly"
         :disable="!document"
         @update:model-value="dirty = true"
       />
@@ -51,7 +51,7 @@
         @click="showHistory = true"
       />
       <q-btn
-        v-if="document?.kind === 'note'"
+        v-if="document?.kind === 'note' && !readonly"
         flat
         dense
         :icon="mode === 'edit' ? 'sym_o_visibility' : 'sym_o_edit'"
@@ -59,7 +59,7 @@
         @click="toggleMode"
       />
       <q-btn
-        v-if="document?.kind === 'file'"
+        v-if="document?.kind === 'file' && !readonly"
         flat
         dense
         icon="sym_o_upload_file"
@@ -93,16 +93,18 @@
         @click="loadPreviewUrl"
       />
       <q-btn
+        v-if="!readonly"
         flat
         dense
         round
         icon="sym_o_delete"
-        :title="t('Move to trash')"
+        :title="t('Delete')"
         :disable="!document"
-        data-testid="doc-trash-button"
-        @click="confirmTrash"
+        data-testid="doc-delete-button"
+        @click="confirmDelete"
       />
       <q-btn
+        v-if="!readonly"
         color="primary"
         dense
         icon="sym_o_save"
@@ -317,11 +319,12 @@ const props = withDefaults(defineProps<{
   documentId: string
   startInEdit?: boolean
   highlight?: string
-}>(), { startInEdit: false, highlight: undefined })
+  readonly?: boolean
+}>(), { startInEdit: false, highlight: undefined, readonly: false })
 
 const emit = defineEmits<{
   close: []
-  trashed: []
+  deleted: []
 }>()
 
 const router = useRouter()
@@ -487,29 +490,28 @@ async function restore(version: number) {
   }
 }
 
-function confirmTrash() {
+function confirmDelete() {
   if (!document.value) return
   $q.dialog({
-    title: t('Move to trash'),
-    message: t('Are you sure you want to move "{0}" to trash?', document.value.title),
+    title: t('Delete'),
+    message: `${t('Are you sure you want to delete "{0}"?', document.value.title)} ${t('This cannot be undone.')}`,
     cancel: true,
     ok: {
-      label: t('Move to trash'),
+      label: t('Delete'),
       color: 'negative',
       flat: true,
     },
   }).onOk(async () => {
     if (!document.value) return
     try {
-      await mutations.trashDocument.mutateAsync({
+      await mutations.deleteDocument.mutateAsync({
         documentId: document.value.id,
-        expectedVersion: document.value.version,
         folderId: document.value.folderId,
       })
-      Notify.create({ type: 'positive', message: t('Moved to trash') })
-      emit('trashed')
+      Notify.create({ type: 'positive', message: t('Deleted') })
+      emit('deleted')
     } catch (error) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Trash failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Delete failed') })
     }
   })
 }

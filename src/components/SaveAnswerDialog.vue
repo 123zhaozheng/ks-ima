@@ -6,20 +6,20 @@
   >
     <q-card class="save-answer-dialog">
       <q-card-section class="save-answer-title">
-        {{ t('Save answer as note') }}
+        将回答保存为笔记
       </q-card-section>
       <q-card-section class="save-answer-field">
         <q-input
           v-model="title"
           outlined
           dense
-          :label="t('Title')"
+          label="标题"
           data-testid="save-as-note-title"
         />
       </q-card-section>
       <q-card-section class="save-answer-folder">
         <div class="save-answer-folder-label">
-          {{ t('Choose a folder') }}
+          选择文件夹
         </div>
         <folder-picker-list
           :kb-id="kbId"
@@ -30,12 +30,12 @@
       <q-card-actions align="right">
         <q-btn
           flat
-          :label="t('Cancel')"
+          label="取消"
           @click="emit('update:modelValue', false)"
         />
         <q-btn
           color="primary"
-          :label="t('Save')"
+          label="保存"
           :loading="createNote.isPending.value"
           :disable="folder === undefined"
           data-testid="save-as-note-confirm"
@@ -54,7 +54,6 @@ import FolderPickerList from 'src/components/FolderPickerList.vue'
 import type { PickedFolder } from 'src/components/folder-picker-list'
 import { useKnowledgeMutations } from 'src/composables/use-knowledge'
 import { apiErrorMessage } from 'src/utils/api-error'
-import { t } from 'src/utils/i18n'
 
 type Citation = components['schemas']['CitationResponse'] & { title?: string }
 
@@ -80,7 +79,7 @@ watch(() => props.modelValue, open => {
   if (!open) return
   folder.value = undefined
   const firstLine = props.answer.split('\n').map(line => line.trim()).find(Boolean) ?? ''
-  title.value = firstLine.replace(/^#+\s*/, '').slice(0, 200) || t('Saved answer')
+  title.value = firstLine.replace(/^#+\s*/, '').slice(0, 200) || '保存的回答'
 })
 
 function noteMarkdown(): string {
@@ -88,7 +87,7 @@ function noteMarkdown(): string {
   const appendix = props.citations
     .map(citation => `1. "${citation.quote.trim()}"${citation.title ? ` — ${citation.title}` : ''}`)
     .join('\n')
-  return `${props.answer}\n\n---\n\n## ${t('Sources')}\n\n${appendix}`
+  return `${props.answer}\n\n---\n\n## 来源\n\n${appendix}`
 }
 
 async function save() {
@@ -96,13 +95,13 @@ async function save() {
   try {
     const document = await createNote.mutateAsync({
       folderId: folder.value?.id ?? props.kbId,
-      input: { title: title.value.trim() || t('Saved answer'), markdown: noteMarkdown() },
+      input: { title: title.value.trim() || '保存的回答', markdown: noteMarkdown() },
     })
-    Notify.create({ type: 'positive', message: t('Note saved') })
+    Notify.create({ type: 'positive', message: '笔记已保存' })
     emit('created', document.id)
     emit('update:modelValue', false)
   } catch (error) {
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Save failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '保存失败') })
   }
 }
 </script>

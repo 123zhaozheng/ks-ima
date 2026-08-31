@@ -9,7 +9,7 @@
         items-center
       >
         <div class="text-h6">
-          {{ t('Upload files') }}
+          上传文件
         </div>
         <q-space />
         <q-btn
@@ -17,7 +17,7 @@
           dense
           round
           icon="sym_o_close"
-          :title="t('Close')"
+          title="关闭"
           :disable="busy"
           @click="show = false"
         />
@@ -74,14 +74,14 @@
         <q-btn
           v-if="busy"
           flat
-          :label="t('Stop')"
+          label="停止"
           @click="stop"
         />
         <q-btn
           v-close-popup
           flat
           color="primary"
-          :label="t('Close')"
+          label="关闭"
           :disable="busy"
         />
       </q-card-actions>
@@ -95,7 +95,6 @@ import { Notify } from 'quasar'
 import FileInputArea from 'src/components/FileInputArea.vue'
 import { useKnowledgeMutations } from 'src/composables/use-knowledge'
 import { apiErrorMessage } from 'src/utils/api-error'
-import { t } from 'src/utils/i18n'
 
 const props = defineProps<{
   modelValue: boolean
@@ -171,11 +170,11 @@ async function processQueue() {
           break
         }
         task.status = 'error'
-        task.error = apiErrorMessage(error, 'Upload failed')
+        task.error = apiErrorMessage(error, '上传失败')
       }
     }
     if (tasks.value.some(task => task.status === 'done') && !abort?.signal.aborted) {
-      Notify.create({ type: 'positive', message: t('Upload complete') })
+      Notify.create({ type: 'positive', message: '上传完成' })
     }
   } finally {
     processing = false

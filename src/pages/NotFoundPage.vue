@@ -17,7 +17,7 @@
       />
       <hint-card
         img-url="/emotions/nachoneko/19.webp"
-        :message="t('Nothing here...')"
+        message="这里什么都没有..."
       />
       <div h="100px" />
     </q-page>
@@ -27,7 +27,6 @@
 <script setup lang="ts">
 import HintCard from 'src/components/HintCard.vue'
 import { useUiStateStore } from 'src/stores/ui-state'
-import { t } from 'src/utils/i18n'
 
 const uiStateStore = useUiStateStore()
 

@@ -9,7 +9,7 @@
         data-testid="ask-home-menu"
         @click="uiStateStore.toggleMainDrawer"
       />
-      <q-toolbar-title>{{ t('Ask') }}</q-toolbar-title>
+      <q-toolbar-title>提问</q-toolbar-title>
     </q-toolbar>
   </q-header>
   <q-page-container>
@@ -32,17 +32,17 @@
           class="tk-empty-icon"
         />
         <div class="tk-empty-title">
-          {{ t('Start with a knowledge base') }}
+          从一个知识库开始
         </div>
         <div class="tk-empty-subtitle">
-          {{ t('Ask grounds every answer in a knowledge base. Create one, or join with a share link.') }}
+          每个回答都基于知识库中的内容。创建一个知识库，或通过分享链接加入。
         </div>
         <div class="tk-empty-actions">
           <q-btn
             unelevated
             no-caps
             class="tk-cta"
-            :label="t('Create knowledge base')"
+            label="新建知识库"
             data-testid="ask-home-create-kb"
             @click="showCreateKb = true"
           />
@@ -50,7 +50,7 @@
             flat
             no-caps
             class="tk-cta-secondary"
-            :label="t('Join with a link')"
+            label="通过链接加入"
             data-testid="ask-home-join-kb"
             @click="joinWithLink"
           />
@@ -70,7 +70,7 @@
           class="ask-home-greeting"
           text-center
         >
-          {{ t('Ask anything grounded in your knowledge base') }}
+          基于你的知识库，想问点什么？
         </div>
         <ask-composer
           ref="composerRef"
@@ -97,7 +97,7 @@
           class="ask-home-foot"
           text-center
         >
-          {{ t('Answers are grounded in your knowledge base.') }}
+          回答基于你的知识库内容。
         </div>
       </div>
     </q-page>
@@ -111,31 +111,31 @@
       data-testid="ask-home-create-kb-dialog"
     >
       <q-card-section class="text-h6">
-        {{ t('Create knowledge base') }}
+        新建知识库
       </q-card-section>
       <q-card-section>
         <q-input
           v-model="kbName"
           outlined
           autofocus
-          :label="t('Knowledge base name')"
+          label="知识库名称"
           data-testid="kb-name-input"
           @keyup.enter="createKb"
         />
         <div class="tk-caption q-mt-sm">
-          {{ t('You will become the owner of the new knowledge base.') }}
+          你将成为新知识库的所有者。
         </div>
       </q-card-section>
       <q-card-actions align="right">
         <q-btn
           v-close-popup
           flat
-          :label="t('Cancel')"
+          label="取消"
         />
         <q-btn
           flat
           color="primary"
-          :label="t('Create')"
+          label="创建"
           :loading="creating"
           :disable="!kbName.trim()"
           data-testid="kb-create-button"
@@ -158,7 +158,6 @@ import { useKbStore } from 'src/stores/knowledge-base'
 import { useUiStateStore } from 'src/stores/ui-state'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { identityClient } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 
 useRequireLogin()
 
@@ -180,9 +179,9 @@ const listReady = computed(() => kbStore.kbsStatus === 'success')
 
 // Curated example questions; clicking one fills the composer.
 const hints = [
-  t('Summarize the key points of the newest note'),
-  t('What decisions were made in the latest meeting?'),
-  t('List the open risks mentioned in project docs'),
+  '总结最新笔记的要点',
+  '最近的会议做出了哪些决定？',
+  '列出项目文档中提到的未决风险',
 ]
 
 function fillHint(hint: string) {
@@ -196,16 +195,16 @@ async function createKb() {
   try {
     const { data, error } = await identityClient.createKnowledgeBase({ name })
     if (error || !data) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Create failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(error, '创建失败') })
       return
     }
-    Notify.create({ type: 'positive', message: t('Knowledge base created') })
+    Notify.create({ type: 'positive', message: '知识库已创建' })
     showCreateKb.value = false
     // Membership list drives the switcher; refresh then select the new kb.
     await queryClient.invalidateQueries({ queryKey: ['knowledge-bases', 'member'] })
     kbStore.switchKb(data.id)
   } catch (error) {
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Create failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '创建失败') })
   } finally {
     creating.value = false
   }
@@ -213,10 +212,10 @@ async function createKb() {
 
 function joinWithLink() {
   $q.dialog({
-    title: t('Join knowledge base'),
+    title: '加入知识库',
     prompt: {
       model: '',
-      label: t('Share link'),
+      label: '分享链接',
     },
     cancel: true,
   }).onOk((link: string) => {
@@ -241,7 +240,7 @@ async function onSubmit(question: string) {
   try {
     await grounded.ask(question)
   } catch (error) {
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Ask failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '提问失败') })
   } finally {
     asking.value = false
     stopWatch()

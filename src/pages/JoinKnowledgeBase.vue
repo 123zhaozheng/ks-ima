@@ -7,7 +7,7 @@
     >
       <div class="tk-card join-card">
         <div class="join-title">
-          {{ t('Join knowledge base') }}
+          加入知识库
         </div>
         <template v-if="isPending">
           <div
@@ -18,17 +18,17 @@
               size="22px"
               color="primary"
             />
-            <span class="text-secondary">{{ t('Loading…') }}</span>
+            <span class="text-secondary">加载中…</span>
           </div>
         </template>
         <template v-else-if="!userId">
           <div class="join-state">
-            {{ t('Sign in to join this knowledge base.') }}
+            登录后即可加入该知识库。
           </div>
           <q-btn
             unelevated
             color="primary"
-            :label="t('Sign In')"
+            label="登录"
             data-testid="join-sign-in"
             @click="goSignIn"
           />
@@ -42,7 +42,7 @@
               size="22px"
               color="primary"
             />
-            <span class="text-secondary">{{ t('Joining…') }}</span>
+            <span class="text-secondary">加入中…</span>
           </div>
         </template>
         <template v-else-if="state === 'failed'">
@@ -50,12 +50,12 @@
             class="join-state"
             data-testid="join-error"
           >
-            {{ apiErrorMessage(error, 'Failed to join knowledge base') }}
+            {{ apiErrorMessage(error, '加入知识库失败') }}
           </div>
           <q-btn
             unelevated
             color="primary"
-            :label="t('Back')"
+            label="返回"
             data-testid="join-back"
             @click="router.replace('/kb')"
           />
@@ -73,7 +73,6 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { identityClient, session } from 'src/utils/identity-client'
 import { useKbStore } from 'src/stores/knowledge-base'
 import { apiErrorMessage } from 'src/utils/api-error'
-import { t } from 'src/utils/i18n'
 
 const props = defineProps<{
   token: string
@@ -104,7 +103,7 @@ async function join() {
     state.value = 'failed'
     return
   }
-  Notify.create({ type: 'positive', message: t('Joined knowledge base') })
+  Notify.create({ type: 'positive', message: '已加入知识库' })
   // Refresh membership, select the joined knowledge base, and open it.
   await queryClient.invalidateQueries({ queryKey: ['knowledge-bases', 'member'] })
   kbStore.switchKb(result.data.id)

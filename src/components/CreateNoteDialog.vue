@@ -5,14 +5,14 @@
   >
     <q-card min-w="360px">
       <q-card-section class="text-h6">
-        {{ t('New note') }}
+        新建笔记
       </q-card-section>
       <q-card-section>
         <q-input
           v-model="title"
           outlined
           autofocus
-          :label="t('Title')"
+          label="标题"
           data-testid="note-title-input"
           @keyup.enter="create"
         />
@@ -21,12 +21,12 @@
         <q-btn
           v-close-popup
           flat
-          :label="t('Cancel')"
+          label="取消"
         />
         <q-btn
           flat
           color="primary"
-          :label="t('Create')"
+          label="创建"
           :loading="creating"
           :disable="!title.trim()"
           data-testid="note-create-button"
@@ -43,7 +43,6 @@ import { computed, ref } from 'vue'
 import { Notify } from 'quasar'
 import { useKnowledgeMutations } from 'src/composables/use-knowledge'
 import { apiErrorMessage } from 'src/utils/api-error'
-import { t } from 'src/utils/i18n'
 
 type Document = components['schemas']['DocumentResponse']
 
@@ -75,11 +74,11 @@ async function create() {
       folderId: props.folderId,
       input: { title: name, markdown: '' },
     })
-    Notify.create({ type: 'positive', message: t('Note created') })
+    Notify.create({ type: 'positive', message: '笔记已创建' })
     show.value = false
     emit('created', document)
   } catch (error) {
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Create failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '创建失败') })
   } finally {
     creating.value = false
   }

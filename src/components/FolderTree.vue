@@ -36,7 +36,7 @@
           whitespace-nowrap
           overflow-hidden
         >
-          {{ t('All files') }}
+          全部资料
         </q-item-label>
       </q-item-section>
     </q-item>
@@ -103,7 +103,6 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { knowledgeClient } from 'src/api/knowledge-client'
 import { useKbStore } from 'src/stores/knowledge-base'
-import { t } from 'src/utils/i18n'
 
 type Folder = { id: string, title: string, kind: 'folder', version: number }
 

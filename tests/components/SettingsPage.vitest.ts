@@ -8,7 +8,7 @@ import { session } from 'src/utils/identity-client'
 /*
  * The merged /settings page keeps every capability of the old account pages:
  * profile editing, password change entry, TOTP setup, and session management,
- * plus the device preferences (language / send key).
+ * plus the device preference (send key).
  */
 
 vi.mock('src/composables/require-login', () => ({ useRequireLogin: () => undefined }))
@@ -94,26 +94,25 @@ describe('Settings single page', () => {
     await flushPromises()
     // Profile section shows the account identity. The display name renders
     // inside the stubbed input's value rather than the wrapper text.
-    expect(wrapper.text()).toContain('Profile')
+    expect(wrapper.text()).toContain('个人资料')
     expect(wrapper.get('input').element.value).toBe('Test User')
     expect(wrapper.text()).toContain('user@test')
     // Security section keeps the old account capabilities.
-    expect(wrapper.text()).toContain('Security')
-    expect(wrapper.text()).toContain('Change password')
-    expect(wrapper.text()).toContain('Two-factor authentication')
-    expect(wrapper.text()).toContain('Set up TOTP')
-    expect(wrapper.text()).toContain('Active sessions')
-    // Preferences section keeps language and send key.
-    expect(wrapper.text()).toContain('Preferences')
-    expect(wrapper.text()).toContain('Language')
-    expect(wrapper.text()).toContain('Send message')
+    expect(wrapper.text()).toContain('安全')
+    expect(wrapper.text()).toContain('修改密码')
+    expect(wrapper.text()).toContain('两步验证')
+    expect(wrapper.text()).toContain('设置 TOTP')
+    expect(wrapper.text()).toContain('活跃会话')
+    // Preferences section keeps the send key.
+    expect(wrapper.text()).toContain('偏好')
+    expect(wrapper.text()).toContain('发送消息')
   })
 
   test('lists the current session from the sessions endpoint', async () => {
     const wrapper = mountSettings()
     await flushPromises()
     expect(wrapper.text()).toContain('Test browser')
-    expect(wrapper.text()).toContain('Current')
+    expect(wrapper.text()).toContain('当前')
   })
 
   test('shows an error banner when sessions cannot be loaded', async () => {
@@ -135,7 +134,7 @@ describe('Settings single page', () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch
     const wrapper = mountSettings()
     await flushPromises()
-    const revokeAll = wrapper.findAll('button').find(button => button.text() === 'Revoke all')
+    const revokeAll = wrapper.findAll('button').find(button => button.text() === '全部撤销')
     expect(revokeAll).toBeDefined()
     await revokeAll!.trigger('click')
     await flushPromises()

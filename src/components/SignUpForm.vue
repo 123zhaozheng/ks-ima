@@ -6,30 +6,30 @@
       class="signup-notice"
       data-testid="sign-up-closed"
     >
-      {{ t('Registration is closed on this server. Ask an administrator for an invitation.') }}
+      此服务器已关闭注册。请联系管理员获取邀请。
       <template #action>
         <q-btn
           flat
           dense
           no-caps
           color="primary"
-          :label="t('Sign In')"
+          label="登录"
           @click="router.replace('/auth/sign-in')"
         />
       </template>
     </q-banner>
     <template v-else>
       <q-input
-        :label="t('Name')"
+        label="名称"
         type="text"
         v-model="input.name"
         :rules="[
-          val => val.length >= 2 || t('Name must be at least 2 characters long')
+          val => val.length >= 2 || '名称至少 2 个字符'
         ]"
         filled
       />
       <q-input
-        :label="t('Email')"
+        label="电子邮件"
         type="email"
         v-model="input.email"
         required
@@ -42,7 +42,7 @@
         filled
       />
       <q-btn
-        :label="t('Sign Up')"
+        label="注册"
         :loading
         type="submit"
         unelevated
@@ -58,7 +58,6 @@
 
 <script setup lang="ts">
 import { useQuasar } from 'quasar'
-import { t } from 'src/utils/i18n'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { identityClient, session } from 'src/utils/identity-client'
 import { onMounted, reactive, ref, watch } from 'vue'
@@ -99,7 +98,7 @@ async function signUp() {
     loading.value = false
     console.error(error)
     $q.notify({
-      message: apiErrorMessage(error, 'Sign up failed'),
+      message: apiErrorMessage(error, '注册失败'),
       color: 'negative',
     })
     return
@@ -123,11 +122,11 @@ async function signUp() {
     return
   }
   if (signed.error || !signed.data?.user) {
-    $q.notify({ message: t('Account created. You can now sign in.'), color: 'positive' })
+    $q.notify({ message: '账户已创建，现在可以登录了。', color: 'positive' })
     router.push('/auth/sign-in')
     return
   }
-  $q.notify({ message: t('Account created'), color: 'positive' })
+  $q.notify({ message: '账号已创建', color: 'positive' })
 }
 
 watch(() => session.value.data?.user.id, id => {

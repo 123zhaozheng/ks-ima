@@ -5,27 +5,13 @@
   >
     <div class="settings-card-head">
       <h2 class="tk-card-title">
-        {{ t('Preferences') }}
+        偏好
       </h2>
     </div>
     <q-list class="settings-list">
       <common-item
-        icon="sym_o_language"
-        :label="t('Language')"
-      >
-        <q-select
-          v-model="localData.locale"
-          filled
-          dense
-          :options="localeOptions"
-          emit-value
-          map-options
-          class="w-120px"
-        />
-      </common-item>
-      <common-item
         icon="sym_o_keyboard"
-        :label="t('Send message')"
+        label="发送消息"
       >
         <send-key-select
           :model-value="perfs.sendMessageKey"
@@ -37,7 +23,7 @@
       <q-item>
         <q-item-section>
           <q-item-label caption>
-            {{ t('Model capabilities are centrally managed by a platform administrator.') }}
+            模型能力由平台管理员集中管理。
           </q-item-label>
         </q-item-section>
       </q-item>
@@ -51,8 +37,6 @@ import type { Perfs } from 'src/stores/perfs'
 import { usePerfsStore } from 'src/stores/perfs'
 import SendKeySelect from './SendKeySelect.vue'
 import CommonItem from './CommonItem.vue'
-import { localData } from 'src/utils/local-data'
-import { t } from 'src/utils/i18n'
 
 const perfsStore = usePerfsStore()
 const perfs = toRef(perfsStore, 'perfs')
@@ -63,13 +47,6 @@ function update<K extends keyof Perfs>(key: K, value: Perfs[K]) {
     scope: 'local',
   })
 }
-
-const localeOptions = [
-  { label: t('Auto'), value: null },
-  { label: 'English', value: 'en-US' },
-  { label: '简体中文', value: 'zh-CN' },
-  { label: '繁體中文', value: 'zh-TW' },
-]
 </script>
 
 <style scoped>

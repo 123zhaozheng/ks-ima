@@ -2,14 +2,14 @@
   <div>
     <q-form @submit="signIn">
       <q-input
-        :label="t('Email')"
+        label="电子邮件"
         type="email"
         v-model="input.email"
         required
         filled
       />
       <q-input
-        :label="t('Password')"
+        label="密码"
         type="password"
         v-model="input.password"
         required
@@ -17,7 +17,7 @@
         class="mt-4"
       />
       <q-btn
-        :label="t('Sign In')"
+        label="登录"
         :loading
         type="submit"
         unelevated
@@ -33,7 +33,7 @@
     >
       <q-btn
         v-if="registration"
-        :label="t('Sign up')"
+        label="注册"
         to="/auth/sign-up"
         flat
         dense
@@ -41,7 +41,7 @@
         data-testid="sign-up-link"
       />
       <q-btn
-        :label="t('Forgot password')"
+        label="忘记密码"
         flat
         dense
         color="primary"
@@ -55,7 +55,6 @@
 <script setup lang="ts">
 
 import { useQuasar } from 'quasar'
-import { t } from 'src/utils/i18n'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { identityClient, session } from 'src/utils/identity-client'
 import { onMounted, reactive, ref, watch } from 'vue'
@@ -102,7 +101,7 @@ async function signIn() {
   } else if (result.error) {
     console.error(result.error)
     $q.notify({
-      message: apiErrorMessage(result.error, 'Sign in failed'),
+      message: apiErrorMessage(result.error, '登录失败'),
       color: 'negative',
     })
   }

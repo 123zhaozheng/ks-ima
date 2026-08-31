@@ -6,17 +6,17 @@
     <q-card style="width: min(90vw, 400px)">
       <q-card-section>
         <div class="text-h6">
-          {{ t('Forgot Password') }}
+          忘记密码
         </div>
       </q-card-section>
       <q-card-section py-0>
-        {{ t('Please enter your email. We will send you a link to reset your password.') }}
+        请输入您的电子邮件。 我们将向您发送一个重置密码的链接。
       </q-card-section>
       <q-form @submit="send">
         <q-card-section py-2>
           <q-input
             v-model="email"
-            :label="t('Email')"
+            label="电子邮件"
             type="email"
             required
           />
@@ -25,13 +25,13 @@
           <q-btn
             flat
             color="primary"
-            :label="t('Cancel')"
+            label="取消"
             @click="onDialogCancel"
           />
           <q-btn
             flat
             color="primary"
-            :label="t('Send')"
+            label="发送"
             :loading
             type="submit"
           />
@@ -44,7 +44,6 @@
 <script setup lang="ts">
 import { useDialogPluginComponent, useQuasar } from 'quasar'
 import { identityClient } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 import { ref } from 'vue'
 
 defineEmits([
@@ -67,12 +66,12 @@ async function send() {
   if (error) {
     console.error(error)
     $q.notify({
-      message: t('Failed to request password reset: {0}', error.message),
+      message: `请求重置密码失败：${error.message}`,
       color: 'negative',
     })
     return
   }
-  $q.notify(t('Password reset email sent'))
+  $q.notify('密码重置邮件已发送')
   onDialogOK()
 }
 </script>

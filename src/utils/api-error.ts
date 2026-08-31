@@ -1,51 +1,49 @@
 import { IMAApiError } from 'src/api/ima-client'
-import { t } from 'src/utils/i18n'
 
 /**
- * Maps backend problem-details error codes to localized, actionable messages.
+ * Maps backend problem-details error codes to actionable Chinese messages.
  * The keys are the stable `code` values raised by the backend (see
- * backend/src/ima/application/*.py). Values are i18n keys (English text) that
- * must be present in i18n/zh-CN.json and i18n/zh-TW.json.
+ * backend/src/ima/application/*.py).
  */
 const CODE_MESSAGES: Record<string, string> = {
-  FOLDER_NOT_FOUND: 'That folder could not be found. It may have been removed, or you may not have access to it.',
-  DOCUMENT_NOT_FOUND: 'That item could not be found. It may have been removed, or you may not have access to it.',
-  KB_NOT_FOUND: 'That knowledge base could not be found. It may have been removed, or you may not have access to it.',
-  USER_NOT_FOUND: 'That user could not be found.',
-  MEMBER_NOT_FOUND: 'That member could not be found.',
-  CONVERSATION_NOT_FOUND: 'That conversation could not be found. It may have been removed.',
-  VERSION_NOT_FOUND: 'That version could not be found.',
-  ASSIGNMENT_NOT_FOUND: 'No model assignment was found for this knowledge base.',
-  NO_ASSIGNMENT: 'No AI model has been assigned to this knowledge base yet. Ask a platform admin to assign one.',
-  MODEL_UNAVAILABLE: 'The assigned AI model is not available. Ask an administrator to check the model gateway.',
-  STORAGE_UNAVAILABLE: 'File storage is temporarily unavailable. Please try again in a moment.',
-  MEMBERSHIP_FORBIDDEN: 'You do not have the membership needed for this knowledge base.',
-  KB_EDITOR_REQUIRED: 'This action requires edit permission in the knowledge base.',
-  KB_ARCHIVED: 'This knowledge base is archived and can no longer be changed.',
-  KB_ACTIVE: 'This knowledge base is already active.',
-  KB_NOT_ARCHIVED: 'Only archived knowledge bases can be deleted.',
-  KB_CONTENT_DEPENDENCY: 'This knowledge base still has content that must be removed first.',
-  NAME_CONFLICT: 'That name is already in use. Choose a different one.',
-  INVALID_KB_NAME: 'That knowledge base name is not valid.',
-  SHARE_LINK_INVALID: 'This share link is invalid or has been revoked.',
-  SHARE_LINK_EXPIRED: 'This share link has expired.',
-  SHARE_LINK_NOT_FOUND: 'This share link could not be found.',
-  SHARE_LINK_FORBIDDEN: 'Only the knowledge base owner can manage share links.',
-  ACCESS_REVOKED: 'Your access to this knowledge base has been revoked.',
-  VERSION_CONFLICT: 'This item was changed by someone else. Refresh and try again.',
-  CONTENT_TOO_LARGE: 'The content is too large to save.',
-  BODY_TOO_LARGE: 'The file is too large to upload.',
-  INVALID_TITLE: 'That title is not valid.',
-  INVALID_CURSOR: 'The pagination cursor is invalid.',
-  NOT_A_NOTE: 'Only notes support Markdown content.',
-  CROSS_KB: 'The destination is outside this knowledge base.',
-  VALIDATION_ERROR: 'The request is invalid. Please check your input.',
-  IDENTITY_ERROR: 'Your session is no longer valid. Please sign in again.',
-  INTERNAL_ERROR: 'Something went wrong on our side. Please try again.',
-  HTTP_403: 'You do not have permission to do that.',
-  HTTP_404: 'This action is not available right now.',
-  HTTP_409: 'The request conflicts with the current state. Refresh and try again.',
-  HTTP_429: 'Too many requests. Please wait a moment and try again.',
+  FOLDER_NOT_FOUND: '找不到该文件夹。它可能已被删除，或你没有访问权限。',
+  DOCUMENT_NOT_FOUND: '找不到该项目。它可能已被删除，或你没有访问权限。',
+  KB_NOT_FOUND: '找不到该知识库。它可能已被删除，或你没有访问权限。',
+  USER_NOT_FOUND: '找不到该用户。',
+  MEMBER_NOT_FOUND: '找不到该成员。',
+  CONVERSATION_NOT_FOUND: '找不到该对话。它可能已被删除。',
+  VERSION_NOT_FOUND: '找不到该版本。',
+  ASSIGNMENT_NOT_FOUND: '未找到该知识库的模型分配。',
+  NO_ASSIGNMENT: '该知识库尚未分配 AI 模型。请联系平台管理员分配。',
+  MODEL_UNAVAILABLE: '分配的 AI 模型不可用。请联系管理员检查模型网关。',
+  STORAGE_UNAVAILABLE: '文件存储暂时不可用，请稍后重试。',
+  MEMBERSHIP_FORBIDDEN: '你没有该知识库所需的成员身份。',
+  KB_EDITOR_REQUIRED: '此操作需要知识库的编辑权限。',
+  KB_ARCHIVED: '该知识库已归档，无法再更改。',
+  KB_ACTIVE: '该知识库已处于启用状态。',
+  KB_NOT_ARCHIVED: '只有已归档的知识库才能删除。',
+  KB_CONTENT_DEPENDENCY: '该知识库仍有内容，需要先移除。',
+  NAME_CONFLICT: '该名称已被使用，请换一个。',
+  INVALID_KB_NAME: '该知识库名称无效。',
+  SHARE_LINK_INVALID: '该分享链接无效或已被撤销。',
+  SHARE_LINK_EXPIRED: '该分享链接已过期。',
+  SHARE_LINK_NOT_FOUND: '找不到该分享链接。',
+  SHARE_LINK_FORBIDDEN: '只有知识库所有者可以管理分享链接。',
+  ACCESS_REVOKED: '你对该知识库的访问权限已被撤销。',
+  VERSION_CONFLICT: '该内容已被他人修改。请刷新后重试。',
+  CONTENT_TOO_LARGE: '内容过大，无法保存。',
+  BODY_TOO_LARGE: '文件过大，无法上传。',
+  INVALID_TITLE: '该标题无效。',
+  INVALID_CURSOR: '分页游标无效。',
+  NOT_A_NOTE: '只有笔记支持 Markdown 内容。',
+  CROSS_KB: '目标位置不在该知识库内。',
+  VALIDATION_ERROR: '请求无效，请检查输入内容。',
+  IDENTITY_ERROR: '登录已失效，请重新登录。',
+  INTERNAL_ERROR: '服务端出了点问题，请重试。',
+  HTTP_403: '你没有权限执行此操作。',
+  HTTP_404: '该操作当前不可用。',
+  HTTP_409: '请求与当前状态冲突，请刷新后重试。',
+  HTTP_429: '请求过于频繁，请稍后再试。',
 }
 
 /**
@@ -70,14 +68,14 @@ function extractCode(error: unknown): string | undefined {
 }
 
 /**
- * Returns a localized, user-facing message for an arbitrary thrown value.
- * Prefers a mapped problem-details code, then the problem detail, then a
- * generic fallback. Never leaks raw English backend strings into the zh UI.
+ * Returns a user-facing Chinese message for an arbitrary thrown value.
+ * Prefers a mapped problem-details code, then the caller-provided fallback.
+ * Callers must pass a Chinese fallback string.
  */
-export function apiErrorMessage(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
+export function apiErrorMessage(error: unknown, fallback = '出错了，请重试。'): string {
   const code = extractCode(error)
-  if (code && CODE_MESSAGES[code]) return t(CODE_MESSAGES[code])
-  return t(fallback)
+  if (code && CODE_MESSAGES[code]) return CODE_MESSAGES[code]
+  return fallback
 }
 
 /**

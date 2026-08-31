@@ -8,7 +8,7 @@
         icon="sym_o_menu"
         @click="uiStateStore.toggleMainDrawer"
       />
-      <q-toolbar-title>{{ t('Connectors') }}</q-toolbar-title>
+      <q-toolbar-title>连接器</q-toolbar-title>
     </q-toolbar>
   </q-header>
   <q-page-container>
@@ -22,17 +22,17 @@
           />
           <div>
             <h1 class="tk-card-title">
-              {{ t('Agent access') }}
+              智能体访问
             </h1>
             <p class="tk-card-subtitle">
-              {{ t('Interactive connections') }}
+              交互式连接
             </p>
           </div>
         </header>
         <q-list separator>
           <q-item>
             <q-item-section>
-              <q-item-label>{{ t('MCP resource') }}</q-item-label>
+              <q-item-label>MCP 资源</q-item-label>
               <q-item-label
                 caption
                 class="mono"
@@ -46,7 +46,7 @@
                 round
                 dense
                 icon="sym_o_content_copy"
-                :title="t('Copy')"
+                title="复制"
                 @click="copy(mcpUrl)"
               />
             </q-item-section>
@@ -54,15 +54,15 @@
           <q-item>
             <q-item-section>
               <q-item-label caption>
-                {{ t('Connections are linked to your account and cover every knowledge base you can access.') }}
+                连接绑定到你的账户，可访问你有权限的全部知识库。
               </q-item-label>
             </q-item-section>
           </q-item>
           <q-item v-if="!grants.length">
             <q-item-section>
-              <q-item-label>{{ t('Connected agents') }}</q-item-label>
+              <q-item-label>已连接的智能体</q-item-label>
               <q-item-label caption>
-                {{ t('No interactive grants are available.') }}
+                没有可用的交互式授权。
               </q-item-label>
             </q-item-section>
           </q-item>
@@ -83,7 +83,7 @@
                 dense
                 color="negative"
                 icon="sym_o_link_off"
-                :title="t('Revoke')"
+                title="撤销"
                 @click="revokeGrant(grant.id)"
               />
             </q-item-section>
@@ -99,10 +99,10 @@
           />
           <div>
             <h2 class="tk-card-title">
-              {{ t('Service access') }}
+              服务访问
             </h2>
             <p class="tk-card-subtitle">
-              {{ t('Unattended agents') }}
+              无人值守智能体
             </p>
           </div>
         </header>
@@ -119,7 +119,7 @@
           rounded
           class="connectors-secret"
         >
-          <strong>{{ t('One-time credential') }}</strong>
+          <strong>一次性凭据</strong>
           <code class="mono">{{ oneTime.secret }}</code>
           <template #action>
             <q-btn
@@ -127,7 +127,7 @@
               round
               dense
               icon="sym_o_content_copy"
-              :title="t('Copy')"
+              title="复制"
               @click="copy(oneTime.secret)"
             />
             <q-btn
@@ -135,7 +135,7 @@
               round
               dense
               icon="sym_o_close"
-              :title="t('Dismiss')"
+              title="不再提示"
               @click="oneTime = null"
             />
           </template>
@@ -145,13 +145,13 @@
             v-model="form.displayName"
             outlined
             dense
-            :label="t('Name')"
+            label="名称"
           />
           <q-input
             v-model="form.purpose"
             outlined
             dense
-            :label="t('Purpose')"
+            label="用途"
           />
           <q-input
             v-model.number="form.expiresDays"
@@ -160,7 +160,7 @@
             type="number"
             min="1"
             max="90"
-            :label="t('Expires in days')"
+            label="有效天数"
           />
           <div class="scopes">
             <q-checkbox
@@ -176,17 +176,17 @@
             no-caps
             color="primary"
             icon="sym_o_add"
-            :label="t('Create service principal')"
+            label="创建服务主体"
             :loading="creating"
             @click="createPrincipal"
           />
         </div>
         <q-list separator>
           <q-item v-if="loading">
-            <q-item-section>{{ t('Loading service access…') }}</q-item-section>
+            <q-item-section>正在加载服务访问…</q-item-section>
           </q-item>
           <q-item v-else-if="!principals.length">
-            <q-item-section>{{ t('No service principals') }}</q-item-section>
+            <q-item-section>暂无服务主体</q-item-section>
           </q-item>
           <q-item
             v-for="principal in principals"
@@ -214,7 +214,7 @@
                   dense
                   color="negative"
                   icon="sym_o_key_off"
-                  :title="t('Revoke credential')"
+                  title="撤销凭据"
                   @click="revokeCredential(principal.id, credential.credentialId)"
                 />
               </div>
@@ -227,7 +227,7 @@
                   round
                   dense
                   icon="sym_o_refresh"
-                  :title="t('Rotate')"
+                  title="轮换"
                   @click="rotateFirstCredential(principal)"
                 />
                 <q-btn
@@ -236,7 +236,7 @@
                   dense
                   color="negative"
                   icon="sym_o_delete"
-                  :title="t('Revoke')"
+                  title="撤销"
                   @click="revokePrincipal(principal.id)"
                 />
               </div>
@@ -257,10 +257,10 @@
           />
           <div>
             <h2 class="tk-card-title">
-              {{ t('Join knowledge base') }}
+              加入知识库
             </h2>
             <p class="tk-card-subtitle">
-              {{ t('Paste a share link to join a knowledge base.') }}
+              粘贴分享链接即可加入知识库。
             </p>
           </div>
         </header>
@@ -269,13 +269,13 @@
             v-model="shareLink"
             outlined
             dense
-            :placeholder="t('Share link')"
+            placeholder="分享链接"
           />
           <q-btn
             unelevated
             no-caps
             color="primary"
-            :label="t('Join')"
+            label="加入"
             :disable="!shareLink.trim()"
             @click="joinKnowledgeBase"
           />
@@ -294,7 +294,6 @@ import { useKbStore } from 'src/stores/knowledge-base'
 import { useUiStateStore } from 'src/stores/ui-state'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { identityClient, session } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 import { mcpHttpUrl } from 'src/utils/mcp-config'
 
 type ServicePrincipal = components['schemas']['ServicePrincipalResponse']
@@ -364,7 +363,7 @@ async function load() {
     principals.value = list.data ?? []
     credentials.value = {}
     error.value = connected.error || list.error
-      ? apiErrorMessage(connected.error ?? list.error, 'Agent access is unavailable.')
+      ? apiErrorMessage(connected.error ?? list.error, '无法获取智能体访问信息。')
       : ''
     if (list.error) return
     const details = await Promise.all(
@@ -375,9 +374,9 @@ async function load() {
       details.flatMap(detail => detail.data ? [[detail.data.id, detail.data.credentials]] : []),
     )
     const detailError = details.find(detail => detail.error)?.error
-    error.value = detailError ? apiErrorMessage(detailError, 'Agent access is unavailable.') : error.value
+    error.value = detailError ? apiErrorMessage(detailError, '无法获取智能体访问信息。') : error.value
   } catch {
-    if (generation === loadGeneration) error.value = t('Agent access is unavailable.')
+    if (generation === loadGeneration) error.value = '无法获取智能体访问信息。'
   } finally {
     if (generation === loadGeneration) loading.value = false
   }
@@ -389,7 +388,7 @@ async function createPrincipal() {
   error.value = ''
   oneTime.value = null
   if (!form.displayName.trim() || !form.purpose.trim() || !form.scopes.length) {
-    error.value = t('Complete the required service access fields.')
+    error.value = '请填写必需的服务访问字段。'
     return
   }
   creating.value = true
@@ -412,7 +411,7 @@ async function createPrincipal() {
       form.purpose = ''
       await load()
     } else {
-      error.value = apiErrorMessage(result.error, 'Could not create service principal')
+      error.value = apiErrorMessage(result.error, '无法创建服务主体')
     }
   } finally {
     creating.value = false
@@ -421,13 +420,13 @@ async function createPrincipal() {
 
 async function revokePrincipal(id: string) {
   const result = await identityClient.revokeServicePrincipal(id)
-  if (result.error) error.value = apiErrorMessage(result.error, 'Could not revoke service principal')
+  if (result.error) error.value = apiErrorMessage(result.error, '无法撤销服务主体')
   else await load()
 }
 
 async function revokeGrant(id: string) {
   const result = await identityClient.revokeConnectedOAuthGrant(id)
-  if (result.error) error.value = apiErrorMessage(result.error, 'Could not revoke connection')
+  if (result.error) error.value = apiErrorMessage(result.error, '无法撤销连接')
   else await load()
 }
 
@@ -441,20 +440,20 @@ async function rotateFirstCredential(principal: ServicePrincipal) {
     { expiresAt: principal.expiresAt, overlapExpiresAt: null },
   )
   if (result.data) oneTime.value = result.data
-  else error.value = apiErrorMessage(result.error, 'Could not rotate credential')
+  else error.value = apiErrorMessage(result.error, '无法轮换凭据')
   await load()
 }
 
 async function revokeCredential(principalId: string, credentialId: string) {
   const result = await identityClient.revokeServiceCredential(principalId, credentialId)
-  if (result.error) error.value = apiErrorMessage(result.error, 'Could not revoke credential')
+  if (result.error) error.value = apiErrorMessage(result.error, '无法撤销凭据')
   else await load()
 }
 
 function joinKnowledgeBase() {
   const token = shareLink.value.match(/\/join\/([^/?#]+)/)?.[1] ?? shareLink.value.trim().match(/^([^/?#\s]+)$/)?.[1]
   if (!token) {
-    error.value = t('That does not look like a knowledge base share link.')
+    error.value = '这看起来不是知识库分享链接。'
     return
   }
   router.push(`/join/${encodeURIComponent(token)}`)
@@ -462,7 +461,7 @@ function joinKnowledgeBase() {
 
 async function copy(value: string) {
   await copyToClipboard(value)
-  $q.notify({ message: t('Copied'), type: 'positive' })
+  $q.notify({ message: '已复制', type: 'positive' })
 }
 
 watch(

@@ -8,7 +8,7 @@
           color="primary"
         />
         <div>
-          <h1>{{ t('Connect agent') }}</h1>
+          <h1>连接智能体</h1>
           <p v-if="preview">
             {{ preview.clientName }}
           </p>
@@ -19,18 +19,18 @@
         v-if="session.isPending"
         class="state-banner"
       >
-        {{ t('Loading authorization request…') }}
+        正在加载授权请求…
       </q-banner>
       <q-banner
         v-else-if="!session.data"
         class="state-banner text-negative"
       >
-        {{ t('Your session expired. Sign in to continue.') }}
+        会话已过期，请登录以继续。
         <template #action>
           <q-btn
             flat
             no-caps
-            :label="t('Sign in')"
+            label="登录"
             :to="signInTarget"
           />
         </template>
@@ -48,7 +48,7 @@
           <q-btn
             flat
             no-caps
-            :label="t('Sign in')"
+            label="登录"
             :to="signInTarget"
           />
         </template>
@@ -56,19 +56,19 @@
 
       <template v-if="preview && session.data">
         <section class="consent-section">
-          <h2>{{ t('Connection') }}</h2>
+          <h2>连接</h2>
           <q-list separator>
             <q-item>
               <q-item-section>
                 <q-item-label caption>
-                  {{ t('Client') }}
+                  客户端
                 </q-item-label><q-item-label>{{ preview.clientName }}</q-item-label>
               </q-item-section>
             </q-item>
             <q-item>
               <q-item-section>
                 <q-item-label caption>
-                  {{ t('Resource') }}
+                  资源
                 </q-item-label><q-item-label class="mono">
                   {{ preview.resource }}
                 </q-item-label>
@@ -78,7 +78,7 @@
         </section>
 
         <section class="consent-section">
-          <h2>{{ t('Access') }}</h2>
+          <h2>权限</h2>
           <div class="scope-list">
             <q-badge
               v-for="scope in preview.scopes"
@@ -94,13 +94,13 @@
             class="write-warning"
             text-warning
           >
-            <q-icon name="sym_o_edit" /> {{ t('This connection can change knowledge content.') }}
+            <q-icon name="sym_o_edit" /> 此连接可以修改知识内容。
           </q-banner>
           <q-list separator>
             <q-item>
               <q-item-section>
                 <q-item-label caption>
-                  {{ t('Expires') }}
+                  过期
                 </q-item-label><q-item-label>{{ formatTime(preview.expiresAt) }}</q-item-label>
               </q-item-section>
             </q-item>
@@ -112,7 +112,7 @@
             flat
             no-caps
             icon="sym_o_close"
-            :label="t('Deny')"
+            label="拒绝"
             :loading="submitting"
             :disable="submitting"
             @click="submit(false)"
@@ -122,7 +122,7 @@
             no-caps
             color="primary"
             icon="sym_o_check"
-            :label="preview.consentRequired ? t('Approve') : t('Continue')"
+            :label="preview.consentRequired ? '批准' : '继续'"
             :loading="submitting"
             :disable="submitting"
             @click="submit(true)"
@@ -138,7 +138,6 @@ import type { components } from 'src/api/generated/schema'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { identityClient, session } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 
 type ConsentView = components['schemas']['ConsentView']
 type ConsentSubmit = components['schemas']['ConsentSubmit']
@@ -162,14 +161,14 @@ async function load() {
   const result = await identityClient.previewOAuthConsent(authorizationQuery.value)
   if (generation !== loadGeneration) return
   preview.value = result.data ?? null
-  error.value = result.error?.message ?? (needsRecentAuth.value ? t('Sign in again to approve this connection.') : '')
+  error.value = result.error?.message ?? (needsRecentAuth.value ? '请重新登录以批准此连接。' : '')
 }
 
 function submit(approved: boolean) {
   if (!preview.value || submitting.value) return
   const state = one('state')
   const challenge = one('code_challenge')
-  if (!state || !challenge) { error.value = t('The authorization request is incomplete.'); return }
+  if (!state || !challenge) { error.value = '授权请求不完整。'; return }
   submitting.value = true
   error.value = ''
   const payload = {

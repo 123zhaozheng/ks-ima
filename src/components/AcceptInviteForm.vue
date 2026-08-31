@@ -2,20 +2,20 @@
   <q-form @submit="submit">
     <q-input
       v-model="displayName"
-      :label="t('Display name')"
+      label="显示名称"
       required
       filled
     />
     <q-input
       v-model="password"
-      :label="t('Password')"
+      label="密码"
       type="password"
       required
       filled
       class="mt-4"
     />
     <q-btn
-      :label="t('Accept invitation')"
+      label="接受邀请"
       :loading="loading"
       type="submit"
       unelevated
@@ -31,7 +31,6 @@ import { useQuasar } from 'quasar'
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { identityClient } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 
 const route = useRoute()
 const router = useRouter()
@@ -49,7 +48,7 @@ async function submit() {
     $q.notify({ message: result.error.message, color: 'negative' })
     return
   }
-  $q.notify({ message: t('Invitation accepted. Please sign in.'), color: 'positive' })
+  $q.notify({ message: '已接受邀请，请登录。', color: 'positive' })
   await router.replace('/auth/sign-in')
 }
 </script>

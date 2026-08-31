@@ -7,20 +7,20 @@
     <q-card style="width: min(90vw, 400px)">
       <q-card-section>
         <div class="text-h6">
-          {{ t('Change Password') }}
+          更改密码
         </div>
       </q-card-section>
       <q-form @submit="update">
         <q-card-section py-0>
           <q-input
             v-model="password.old"
-            :label="t('Old Password')"
+            label="旧密码"
             type="password"
           />
           <set-password-inputs v-model="password.new" />
           <q-checkbox
             v-model="revokeOtherSessions"
-            :label="t('Revoke other sessions')"
+            label="撤销其他会话"
             dense
           />
         </q-card-section>
@@ -28,13 +28,13 @@
           <q-btn
             flat
             color="primary"
-            :label="t('Cancel')"
+            label="取消"
             @click="onDialogCancel"
           />
           <q-btn
             flat
             color="primary"
-            :label="t('Update')"
+            label="更新"
             type="submit"
             :loading
           />
@@ -46,7 +46,6 @@
 
 <script setup lang="ts">
 import { useDialogPluginComponent, useQuasar } from 'quasar'
-import { t } from 'src/utils/i18n'
 import { reactive, ref } from 'vue'
 import SetPasswordInputs from './SetPasswordInputs.vue'
 import { identityClient } from 'src/utils/identity-client'
@@ -77,13 +76,13 @@ async function update() {
     console.error(error)
     $q.notify({
       type: 'negative',
-      message: t('Failed to change password: {0}', error.message),
+      message: `更改密码失败：${error.message}`,
     })
     return
   }
   $q.notify({
     type: 'positive',
-    message: t('Password updated successfully'),
+    message: '密码更新成功',
   })
   onDialogOK()
 }

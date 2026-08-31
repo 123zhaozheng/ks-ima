@@ -8,7 +8,7 @@
       filled
     />
     <q-btn
-      :label="t('Reset Password')"
+      label="重置密码"
       :loading
       type="submit"
       unelevated
@@ -21,7 +21,7 @@
     v-else
     text="err center xl"
   >
-    {{ t('Invalid or expired token') }}
+    令牌无效或过期
   </div>
 </template>
 
@@ -29,7 +29,6 @@
 import { identityClient } from 'src/utils/identity-client'
 import SetPasswordInputs from './SetPasswordInputs.vue'
 import { useRoute, useRouter } from 'vue-router'
-import { t } from 'src/utils/i18n'
 import { useQuasar } from 'quasar'
 import { ref } from 'vue'
 
@@ -49,13 +48,13 @@ async function resetPassword() {
   if (error) {
     console.error(error)
     $q.notify({
-      message: t('Failed to reset password: {0}', error.message),
+      message: `重置密码失败：${error.message}`,
       color: 'negative',
     })
     return
   }
   $q.notify({
-    message: t('Password reset successfully'),
+    message: '密码重置成功',
     color: 'positive',
   })
   router.push('/auth/sign-in')

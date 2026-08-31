@@ -25,7 +25,7 @@
           text-color="white"
           class="ask-composer-scope"
           data-testid="ask-scope-chip"
-          :title="t('Asking about this document only')"
+          title="仅针对此文档提问"
           @remove="askContext.clearDocumentScope()"
         >
           {{ askContext.documentTitle }}
@@ -57,7 +57,7 @@
         flat
         dense
         icon="sym_o_stop_circle"
-        :label="t('Stop')"
+        label="停止"
         data-testid="ask-stop"
         @click="emit('stop')"
       />
@@ -79,7 +79,6 @@ import type { QInput } from 'quasar'
 import FolderPickerList from 'src/components/FolderPickerList.vue'
 import type { PickedFolder } from 'src/components/folder-picker-list'
 import { useAskContextStore } from 'src/stores/ask-context'
-import { t } from 'src/utils/i18n'
 
 const props = withDefaults(defineProps<{
   mode?: 'home' | 'conversation'
@@ -105,8 +104,8 @@ const scope = ref<PickedFolder | null>(null)
 const scopeMenuOpen = ref(false)
 const inputRef = ref<InstanceType<typeof QInput>>()
 
-const placeholderText = computed(() => props.placeholder ?? t('Ask anything about your knowledge base'))
-const scopeLabel = computed(() => scope.value?.title ?? t('Whole knowledge base'))
+const placeholderText = computed(() => props.placeholder ?? '询问关于你知识库的任何问题')
+const scopeLabel = computed(() => scope.value?.title ?? '整个知识库')
 // A question without a knowledge base can never be answered; block the submit.
 const canSend = computed(() => Boolean(question.value.trim()) && !props.busy && (props.mode === 'conversation' || Boolean(props.kbId)))
 

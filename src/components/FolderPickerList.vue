@@ -26,7 +26,7 @@
           whitespace-nowrap
           overflow-hidden
         >
-          {{ t('Whole knowledge base') }}
+          整个知识库
         </q-item-label>
       </q-item-section>
       <q-item-section
@@ -100,7 +100,7 @@
       v-if="failed"
       class="folder-picker-empty"
     >
-      {{ t('Folders could not be loaded') }}
+      文件夹加载失败
     </div>
   </div>
 </template>
@@ -109,7 +109,6 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { knowledgeClient } from 'src/api/knowledge-client'
 import type { PickedFolder } from 'src/components/folder-picker-list'
-import { t } from 'src/utils/i18n'
 
 const props = defineProps<{
   kbId: string

@@ -17,8 +17,7 @@
     "build:front": "TARGET_APP=front bun quasar build -m pwa",
     "build:admin": "TARGET_APP=admin bun quasar build",
     "generate:api": "bunx openapi-typescript frontend/generated/openapi.json -o src/api/generated/schema.ts",
-    "test:e2e": "playwright test",
-    "t": "bunx i18n t"
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@material/material-color-utilities": "^0.3.0",
@@ -31,7 +30,6 @@
     "date-fns": "^4.1.0",
     "dompurify": "^3.4.14",
     "dotenv": "^17.2.4",
-    "i18n-pro": "^3.0.0",
     "katex": "^0.16.28",
     "lowlight": "^3.3.0",
     "mammoth": "^1.11.0",

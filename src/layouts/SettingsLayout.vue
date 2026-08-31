@@ -8,7 +8,7 @@
         icon="sym_o_menu"
         @click="uiStateStore.toggleMainDrawer"
       />
-      <q-toolbar-title>{{ t('Personal Settings') }}</q-toolbar-title>
+      <q-toolbar-title>个人设置</q-toolbar-title>
     </q-toolbar>
   </q-header>
   <q-page-container>
@@ -20,11 +20,11 @@
         >
           <div class="settings-card-head">
             <h2 class="tk-card-title">
-              {{ t('Profile') }}
+              个人资料
             </h2>
           </div>
           <q-list>
-            <common-item :label="t('Name')">
+            <common-item label="名称">
               <a-input
                 :model-value="user.displayName"
                 dense
@@ -33,7 +33,7 @@
                 @change="updateName"
               />
             </common-item>
-            <common-item :label="t('Email')">
+            <common-item label="电子邮件">
               {{ user.email }}
             </common-item>
           </q-list>
@@ -52,7 +52,7 @@
         rounded
         class="settings-expired"
       >
-        {{ t('Your session expired. Sign in to continue.') }}
+        会话已过期，请登录以继续。
       </q-banner>
     </q-page>
   </q-page-container>
@@ -68,7 +68,6 @@ import SettingsSecurity from 'src/components/SettingsSecurity.vue'
 import { useRequireLogin } from 'src/composables/require-login'
 import { useUiStateStore } from 'src/stores/ui-state'
 import { identityClient, session } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 
 useRequireLogin()
 

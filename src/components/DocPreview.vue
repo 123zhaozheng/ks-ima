@@ -18,7 +18,7 @@
         dense
         round
         icon="sym_o_close"
-        :title="t('Close')"
+        title="关闭"
         data-testid="doc-close-button"
         @click="$emit('close')"
       />
@@ -37,7 +37,7 @@
         flat
         dense
         icon="sym_o_chat"
-        :label="t('Ask about this document')"
+        label="询问这篇文档"
         :disable="!document"
         data-testid="doc-ask-button"
         @click="askAboutDocument"
@@ -46,7 +46,7 @@
         flat
         dense
         icon="sym_o_history"
-        :title="t('History')"
+        title="历史"
         :disable="!document"
         @click="showHistory = true"
       />
@@ -55,7 +55,7 @@
         flat
         dense
         :icon="mode === 'edit' ? 'sym_o_visibility' : 'sym_o_edit'"
-        :label="mode === 'edit' ? t('Preview') : t('Edit')"
+        :label="mode === 'edit' ? '预览' : '编辑'"
         @click="toggleMode"
       />
       <q-btn
@@ -63,7 +63,7 @@
         flat
         dense
         icon="sym_o_upload_file"
-        :label="t('Replace')"
+        label="替换"
         :loading="replacing"
         :disable="!document || query.isError.value"
         @click="replacementInput?.click()"
@@ -79,7 +79,7 @@
         flat
         dense
         icon="sym_o_download"
-        :title="t('Download')"
+        title="下载"
         :disable="!document"
         @click="download"
       />
@@ -88,7 +88,7 @@
         flat
         dense
         icon="sym_o_refresh"
-        :title="t('Preview')"
+        title="预览"
         :disable="!document"
         @click="loadPreviewUrl"
       />
@@ -98,7 +98,7 @@
         dense
         round
         icon="sym_o_delete"
-        :title="t('Delete')"
+        title="删除"
         :disable="!document"
         data-testid="doc-delete-button"
         @click="confirmDelete"
@@ -108,7 +108,7 @@
         color="primary"
         dense
         icon="sym_o_save"
-        :label="t('Save')"
+        label="保存"
         :loading="saving"
         :disable="!document || !dirty"
         @click="save"
@@ -124,19 +124,19 @@
         rounded
         class="bg-negative text-white"
       >
-        {{ t('This document is unavailable or access was revoked.') }}
+        该文档不可用，或访问权限已被撤销。
       </q-banner>
       <q-banner
         v-if="conflict"
         rounded
         class="kb-banner-warning"
       >
-        {{ t('This document changed elsewhere. Your draft is still here.') }}
+        该文档已在别处被修改。你的草稿仍保留在这里。
         <template #action>
           <q-btn
             flat
             dense
-            :label="t('Reload server version')"
+            label="重新加载服务器版本"
             @click="reloadServerVersion"
           />
         </template>
@@ -152,14 +152,14 @@
             v-if="ingestion.jobs.some(job => ['queued', 'running', 'retryable', 'cancel_requested'].includes(job.status))"
             flat
             dense
-            :label="t('Cancel')"
+            label="取消"
             @click="cancelIngestion"
           />
           <q-btn
             v-if="ingestion.jobs.some(job => ['failed', 'dead_letter', 'cancelled'].includes(job.status))"
             flat
             dense
-            :label="t('Retry')"
+            label="重试"
             @click="retryIngestion"
           />
         </template>
@@ -201,12 +201,12 @@
           dense
           round
           icon="sym_o_cancel"
-          :title="t('Cancel')"
+          title="取消"
           @click="abortReplacement"
         />
       </div>
       <div class="text-caption text-on-sur-var">
-        {{ t('Version {0}', document.currentContentVersion) }}
+        版本 {{ document.currentContentVersion }}
       </div>
       <iframe
         v-if="previewUrl"
@@ -222,7 +222,7 @@
         justify-center
         text-on-sur-var
       >
-        {{ t('Preview unavailable') }}
+        无法预览
       </div>
     </div>
     <div
@@ -267,7 +267,7 @@
     <q-dialog v-model="showHistory">
       <q-card min-w="320px">
         <q-card-section class="text-h6">
-          {{ t('History') }}
+          历史
         </q-card-section>
         <q-list v-if="document?.kind === 'file'">
           <q-item
@@ -275,7 +275,7 @@
             :key="version.version"
           >
             <q-item-section>
-              <q-item-label>{{ t('Version {0}', version.version) }}</q-item-label>
+              <q-item-label>版本 {{ version.version }}</q-item-label>
               <q-item-label caption>
                 {{ version.originalFilename }} · {{ version.objectState }}
               </q-item-label>
@@ -292,7 +292,7 @@
             clickable
             @click="restore(version.version)"
           >
-            <q-item-section>{{ t('Version {0}', version.version) }}</q-item-section>
+            <q-item-section>版本 {{ version.version }}</q-item-section>
             <q-item-section side>
               {{ new Date(version.createdAt).toLocaleString() }}
             </q-item-section>
@@ -313,7 +313,6 @@ import { IMAApiError } from 'src/api/ima-client'
 import { useAskContextStore } from 'src/stores/ask-context'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { renderMarkdown } from 'src/utils/markdown'
-import { t } from 'src/utils/i18n'
 
 const props = withDefaults(defineProps<{
   documentId: string
@@ -399,11 +398,11 @@ async function replaceFile(event: Event) {
       onProgress: value => { replacementProgress.value = value },
     })
     await Promise.all([query.refetch(), ingestionQuery.refetch(), fileVersions.refetch()])
-    Notify.create({ type: 'positive', message: t('File replacement started') })
+    Notify.create({ type: 'positive', message: '文件替换已开始' })
   } catch (error) {
     if ((error as DOMException).name === 'AbortError') return
     conflict.value = error instanceof IMAApiError && error.problem.code === 'VERSION_CONFLICT'
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Replacement failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '替换失败') })
   } finally {
     replacing.value = false
     replacementAbort = undefined
@@ -423,7 +422,7 @@ async function download() {
   try {
     window.location.assign((await knowledgeClient.download(document.value.id)).url)
   } catch (error) {
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Download failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '下载失败') })
   }
 }
 
@@ -433,7 +432,7 @@ async function loadPreviewUrl() {
     previewUrl.value = (await knowledgeClient.preview(document.value.id)).url
   } catch (error) {
     previewUrl.value = undefined
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Preview unavailable') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '无法预览') })
   }
 }
 
@@ -464,7 +463,7 @@ async function save() {
     conflict.value = false
   } catch (error) {
     conflict.value = error instanceof IMAApiError && error.problem.code === 'VERSION_CONFLICT'
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Save failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '保存失败') })
   } finally {
     saving.value = false
   }
@@ -486,18 +485,18 @@ async function restore(version: number) {
     showHistory.value = false
     await query.refetch()
   } catch (error) {
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Restore failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '恢复失败') })
   }
 }
 
 function confirmDelete() {
   if (!document.value) return
   $q.dialog({
-    title: t('Delete'),
-    message: `${t('Are you sure you want to delete "{0}"?', document.value.title)} ${t('This cannot be undone.')}`,
+    title: '删除',
+    message: `确定要删除“${document.value.title}”吗？此操作无法撤销。`,
     cancel: true,
     ok: {
-      label: t('Delete'),
+      label: '删除',
       color: 'negative',
       flat: true,
     },
@@ -508,10 +507,10 @@ function confirmDelete() {
         documentId: document.value.id,
         folderId: document.value.folderId,
       })
-      Notify.create({ type: 'positive', message: t('Deleted') })
+      Notify.create({ type: 'positive', message: '已删除' })
       emit('deleted')
     } catch (error) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Delete failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(error, '删除失败') })
     }
   })
 }

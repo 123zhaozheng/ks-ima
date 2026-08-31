@@ -6,16 +6,16 @@
     <q-card style="width: min(90vw, 400px)">
       <q-card-section>
         <div class="text-h6">
-          {{ t('Two-Factor Authentication') }}
+          双因素验证
         </div>
       </q-card-section>
       <q-card-section py-0>
-        {{ recoveryMode ? t('Enter one unused recovery code.') : t('Please enter the TOTP code from your authenticator app.') }}
+        {{ recoveryMode ? '输入一个未使用的恢复码。' : '请输入您的身份验证器应用程序中的 TOTP 代码。' }}
       </q-card-section>
       <q-card-section py-2>
         <q-input
           v-model="totp"
-          :label="recoveryMode ? t('Recovery code') : t('TOTP code')"
+          :label="recoveryMode ? '恢复码' : 'TOTP 代码'"
           :type="recoveryMode ? 'text' : 'number'"
         />
       </q-card-section>
@@ -23,14 +23,14 @@
         <q-btn
           flat
           color="primary"
-          :label="recoveryMode ? t('Use authenticator code') : t('Use recovery code')"
+          :label="recoveryMode ? '使用身份验证码' : '使用恢复码'"
           @click="useBackupCode"
         />
         <q-space />
         <q-btn
           flat
           color="primary"
-          :label="t('Verify')"
+          label="验证"
           :loading
           @click="verify"
         />
@@ -42,7 +42,6 @@
 <script setup lang="ts">
 import { useDialogPluginComponent, useQuasar } from 'quasar'
 import { identityClient } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 import { ref } from 'vue'
 
 defineEmits([
@@ -68,7 +67,7 @@ async function verify() {
   if (error) {
     console.error(error)
     $q.notify({
-      message: t('Verification failed: {0}', error.message),
+      message: `验证失败：${error.message}`,
       color: 'negative',
     })
     return

@@ -1,7 +1,7 @@
 <template>
   <div class="cv-sources">
     <div class="cv-sources-title">
-      {{ t('Sources') }}
+      来源
     </div>
     <button
       v-for="citation in citations"
@@ -19,7 +19,6 @@
 
 <script setup lang="ts">
 import type { components } from 'src/api/generated/schema'
-import { t } from 'src/utils/i18n'
 
 type Citation = components['schemas']['CitationResponse'] & { title?: string }
 

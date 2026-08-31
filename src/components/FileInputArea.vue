@@ -12,9 +12,9 @@
     @drop.stop.prevent="onDrop"
   >
     <div text="center out">
-      {{ t('Click to Select {0}', image ? t('Image') : t('File')) }}<br>
-      {{ t('Drag here') }}<br>
-      {{ t('Or Ctrl+V to Paste') }}
+      {{ image ? '点击选择图像' : '点击选择文件' }}<br>
+      拖到这里<br>
+      或 Ctrl+V 粘贴
     </div>
     <input
       ref="fileInput"
@@ -28,7 +28,6 @@
 </template>
 
 <script setup lang="ts">
-import { t } from 'src/utils/i18n'
 import { onUnmounted, useTemplateRef } from 'vue'
 
 const props = defineProps<{

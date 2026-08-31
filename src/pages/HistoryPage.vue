@@ -8,7 +8,7 @@
         icon="sym_o_menu"
         @click="uiStateStore.toggleMainDrawer"
       />
-      <q-toolbar-title>{{ t('History') }}</q-toolbar-title>
+      <q-toolbar-title>历史</q-toolbar-title>
     </q-toolbar>
   </q-header>
   <q-page-container>
@@ -32,13 +32,13 @@
             size="40px"
           />
           <div mt-3>
-            {{ t('Conversations could not be loaded.') }}
+            对话列表加载失败。
           </div>
           <q-btn
             flat
             dense
             color="primary"
-            :label="t('Retry')"
+            label="重试"
             mt-2
             @click="conversations.refetch()"
           />
@@ -72,19 +72,19 @@
             size="48px"
           />
           <div mt-3>
-            {{ t('No conversations yet') }}
+            暂无对话
           </div>
           <div
             class="text-caption"
             mt-2
           >
-            {{ t('Conversations you start will appear here.') }}
+            你发起的对话将显示在这里。
           </div>
           <q-btn
             unelevated
             no-caps
             class="tk-cta"
-            :label="t('Start a conversation')"
+            label="开始对话"
             mt-4
             data-testid="history-go-ask"
             @click="router.push('/')"
@@ -118,9 +118,9 @@
               {{ conversation.title }}
             </q-item-label>
             <q-item-label caption>
-              {{ conversation.kbName }} · {{ t('Updated {0}', new Date(conversation.updatedAt).toLocaleString()) }}
+              {{ conversation.kbName }} · 更新于 {{ new Date(conversation.updatedAt).toLocaleString() }}
               <template v-if="conversation.lifecycle === 'archived'">
-                · {{ t('Archived') }}
+                · 已归档
               </template>
             </q-item-label>
           </q-item-section>
@@ -145,7 +145,7 @@
                     <q-item-section avatar>
                       <q-icon name="sym_o_edit" />
                     </q-item-section>
-                    <q-item-section>{{ t('Rename') }}</q-item-section>
+                    <q-item-section>重命名</q-item-section>
                   </q-item>
                   <q-item
                     v-close-popup
@@ -155,7 +155,7 @@
                     <q-item-section avatar>
                       <q-icon :name="conversation.lifecycle === 'archived' ? 'sym_o_unarchive' : 'sym_o_archive'" />
                     </q-item-section>
-                    <q-item-section>{{ conversation.lifecycle === 'archived' ? t('Restore') : t('Archive') }}</q-item-section>
+                    <q-item-section>{{ conversation.lifecycle === 'archived' ? '恢复' : '归档' }}</q-item-section>
                   </q-item>
                   <q-item
                     v-close-popup
@@ -165,7 +165,7 @@
                     <q-item-section avatar>
                       <q-icon name="sym_o_delete" />
                     </q-item-section>
-                    <q-item-section>{{ t('Delete') }}</q-item-section>
+                    <q-item-section>删除</q-item-section>
                   </q-item>
                 </q-list>
               </q-menu>
@@ -189,7 +189,6 @@ import { useRequireLogin } from 'src/composables/require-login'
 import { useKbStore } from 'src/stores/knowledge-base'
 import { useUiStateStore } from 'src/stores/ui-state'
 import { apiErrorMessage } from 'src/utils/api-error'
-import { t } from 'src/utils/i18n'
 
 type Conversation = components['schemas']['ConversationResponse']
 
@@ -218,7 +217,7 @@ async function refresh() {
 
 function rename(conversation: Conversation) {
   $q.dialog({
-    title: t('Rename conversation'),
+    title: '重命名对话',
     prompt: { model: conversation.title, type: 'text' },
     cancel: true,
   }).onOk(async (title: string) => {
@@ -228,7 +227,7 @@ function rename(conversation: Conversation) {
       await groundedClient.updateConversation(conversation.kbId, conversation.id, { title: next, expectedVersion: conversation.version })
       await refresh()
     } catch (error) {
-      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Rename failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(error, '重命名失败') })
     }
   })
 }
@@ -238,21 +237,21 @@ function toggleArchive(conversation: Conversation) {
   groundedClient.updateConversation(conversation.kbId, conversation.id, { archived, expectedVersion: conversation.version })
     .then(refresh)
     .catch(error => {
-      Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Archive failed') })
+      Notify.create({ type: 'negative', message: apiErrorMessage(error, '归档失败') })
     })
 }
 
 function remove(conversation: Conversation) {
   $q.dialog({
-    title: t('Delete conversation'),
-    message: t('Are you sure you want to delete "{0}"?', conversation.title),
+    title: '删除对话',
+    message: `确定要删除“${conversation.title}”吗？此操作无法撤销。`,
     cancel: true,
-    ok: { label: t('Delete'), color: 'negative', flat: true },
+    ok: { label: '删除', color: 'negative', flat: true },
   }).onOk(() => {
     groundedClient.deleteConversation(conversation.kbId, conversation.id, conversation.version)
       .then(refresh)
       .catch(error => {
-        Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Delete failed') })
+        Notify.create({ type: 'negative', message: apiErrorMessage(error, '删除失败') })
       })
   })
 }

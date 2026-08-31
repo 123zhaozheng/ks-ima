@@ -13,7 +13,7 @@ vi.mock('src/components/FolderPickerList.vue', () => ({
     emits: ['select'],
     template: `<div data-testid="folder-picker-stub">
       <button data-testid="pick-folder-a" @click="$emit('select', { id: 'folder-a', title: 'Folder A' })">Folder A</button>
-      <button data-testid="pick-whole-kb" @click="$emit('select', null)">Whole knowledge base</button>
+      <button data-testid="pick-whole-kb" @click="$emit('select', null)">整个知识库</button>
     </div>`,
   },
 }))
@@ -52,7 +52,7 @@ describe('AskComposer', () => {
     const wrapper = mountComposer({ kbId: 'kb-1' })
     const chip = wrapper.find('[data-testid="ask-scope-chip"]')
     expect(chip.exists()).toBe(true)
-    expect(chip.text()).toContain('Whole knowledge base')
+    expect(chip.text()).toContain('整个知识库')
   })
 
   test('picks a folder scope from the picker and can return to the knowledge base', async () => {
@@ -60,7 +60,7 @@ describe('AskComposer', () => {
     await wrapper.find('[data-testid="pick-folder-a"]').trigger('click')
     expect(wrapper.find('[data-testid="ask-scope-chip"]').text()).toContain('Folder A')
     await wrapper.find('[data-testid="pick-whole-kb"]').trigger('click')
-    expect(wrapper.find('[data-testid="ask-scope-chip"]').text()).toContain('Whole knowledge base')
+    expect(wrapper.find('[data-testid="ask-scope-chip"]').text()).toContain('整个知识库')
   })
 
   test('blocks sending in home mode without a selected knowledge base', async () => {

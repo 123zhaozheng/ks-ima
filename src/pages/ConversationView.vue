@@ -39,12 +39,12 @@
               name="sym_o_cloud_off"
               size="40px"
             />
-            <div>{{ t('This conversation could not be loaded.') }}</div>
+            <div>该对话加载失败。</div>
             <q-btn
               flat
               dense
               color="primary"
-              :label="t('Retry')"
+              label="重试"
               data-testid="conversation-reload"
               @click="query.refetch()"
             />
@@ -90,7 +90,7 @@
                       flat
                       dense
                       icon="sym_o_note_add"
-                      :label="t('Save as note')"
+                      label="保存为笔记"
                       data-testid="save-as-note"
                       @click="openSaveNote(message, message.content, [])"
                     />
@@ -101,19 +101,19 @@
                   class="cv-gap"
                 >
                   <q-icon name="sym_o_search_off" />
-                  <span>{{ t('The knowledge base does not contain an answer to this question.') }}</span>
+                  <span>知识库中没有找到这个问题的答案。</span>
                 </div>
                 <div
                   v-else-if="message.status === 'failed' || message.status === 'cancelled'"
                   class="cv-error"
                 >
                   <q-icon name="sym_o_error" />
-                  <span>{{ message.status === 'cancelled' ? t('The answer was stopped.') : t('The answer failed to generate.') }}</span>
+                  <span>{{ message.status === 'cancelled' ? '回答已停止。' : '回答生成失败。' }}</span>
                   <q-btn
                     flat
                     dense
                     color="primary"
-                    :label="t('Retry')"
+                    label="重试"
                     data-testid="answer-retry"
                     @click="retryAfter(message)"
                   />
@@ -177,7 +177,7 @@
                     flat
                     dense
                     icon="sym_o_note_add"
-                    :label="t('Save as note')"
+                    label="保存为笔记"
                     data-testid="save-as-note"
                     @click="openSaveNote(null, grounded.answer.value, liveCitations)"
                   />
@@ -188,19 +188,19 @@
                 class="cv-gap"
               >
                 <q-icon name="sym_o_search_off" />
-                <span>{{ t('The knowledge base does not contain an answer to this question.') }}</span>
+                <span>知识库中没有找到这个问题的答案。</span>
               </div>
               <div
                 v-else-if="liveStatus === 'failed' || liveStatus === 'cancelled'"
                 class="cv-error"
               >
                 <q-icon name="sym_o_error" />
-                <span>{{ liveStatus === 'cancelled' ? t('The answer was stopped.') : t('The answer failed to generate.') }}</span>
+                <span>{{ liveStatus === 'cancelled' ? '回答已停止。' : '回答生成失败。' }}</span>
                 <q-btn
                   flat
                   dense
                   color="primary"
-                  :label="t('Retry')"
+                  label="重试"
                   data-testid="answer-retry"
                   @click="retryLastUser"
                 />
@@ -212,7 +212,7 @@
           <ask-composer
             mode="conversation"
             :busy="streaming"
-            :placeholder="t('Follow up in this conversation')"
+            placeholder="在这个对话中继续追问"
             @submit="followUp"
             @stop="grounded.cancel()"
           />
@@ -256,7 +256,6 @@ import { useKbStore } from 'src/stores/knowledge-base'
 import { useUiStateStore } from 'src/stores/ui-state'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { pageFhStyle } from 'src/utils/functions'
-import { t } from 'src/utils/i18n'
 import { citationMarkerRanks, injectCitationMarks, renderMarkdown } from 'src/utils/markdown'
 
 type Message = components['schemas']['MessageResponse']
@@ -282,7 +281,7 @@ watch(conversationId, id => {
 
 const query = grounded.conversation
 const messages = computed(() => query.data.value?.messages ?? [])
-const title = computed(() => query.data.value?.title ?? t('Ask'))
+const title = computed(() => query.data.value?.title ?? '提问')
 
 // Citations and saved notes live in the knowledge base that owns this
 // conversation, which may differ from the currently selected one.
@@ -336,7 +335,7 @@ async function followUp(question: string) {
   try {
     await grounded.ask(question)
   } catch (error) {
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Ask failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '提问失败') })
   }
 }
 
@@ -345,7 +344,7 @@ function retryAfter(message: Message) {
   const user = [...messages.value.slice(0, index)].reverse().find(item => item.role === 'user')
   if (!user) return
   grounded.retry(user).catch(error => {
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Retry failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '重试失败') })
   })
 }
 
@@ -353,7 +352,7 @@ function retryLastUser() {
   const user = [...messages.value].reverse().find(item => item.role === 'user')
   if (!user) return
   grounded.retry(user).catch(error => {
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, 'Retry failed') })
+    Notify.create({ type: 'negative', message: apiErrorMessage(error, '重试失败') })
   })
 }
 
@@ -377,7 +376,7 @@ async function openCitation(mark: Element, rank: number) {
     const citation = await groundedClient.citation(citationKbId.value, messageId, rank) as Citation
     openSource(citation)
   } catch {
-    Notify.create({ type: 'negative', message: t('Citation unavailable') })
+    Notify.create({ type: 'negative', message: '引用不可用' })
   }
 }
 

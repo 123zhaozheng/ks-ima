@@ -5,7 +5,7 @@
   >
     <div class="settings-card-head">
       <h2 class="tk-card-title">
-        {{ t('Security') }}
+        安全
       </h2>
     </div>
     <q-banner
@@ -18,7 +18,7 @@
     <q-list>
       <common-item
         icon="sym_o_lock"
-        :label="t('Change password')"
+        label="修改密码"
         clickable
         data-testid="settings-change-password"
         @click="changePassword"
@@ -31,10 +31,10 @@
       <div class="settings-sub-head">
         <div>
           <h3 class="settings-sub-title">
-            {{ t('Two-factor authentication') }}
+            两步验证
           </h3>
           <p class="tk-card-subtitle">
-            {{ t('Use an authenticator app or a recovery code at sign-in.') }}
+            登录时使用身份验证应用或恢复码。
           </p>
         </div>
         <q-space />
@@ -43,7 +43,7 @@
           unelevated
           no-caps
           color="primary"
-          :label="t('Set up TOTP')"
+          label="设置 TOTP"
           :loading="loading"
           data-testid="settings-totp-setup"
           @click="startTotp"
@@ -53,7 +53,7 @@
           flat
           no-caps
           color="negative"
-          :label="t('Disable TOTP')"
+          label="停用 TOTP"
           :loading="loading"
           @click="disableTotp"
         />
@@ -67,19 +67,19 @@
           readonly
           type="textarea"
           outlined
-          :label="t('Authenticator setup URI')"
+          label="身份验证器配置 URI"
         />
         <q-input
           v-model="totpCode"
           outlined
           inputmode="numeric"
-          :label="t('Verification code')"
+          label="验证码"
         />
         <q-btn
           unelevated
           no-caps
           color="primary"
-          :label="t('Confirm and show recovery codes')"
+          label="确认并显示恢复码"
           :loading="loading"
           @click="confirmTotp"
         />
@@ -89,7 +89,7 @@
         class="settings-codes"
       >
         <div class="settings-codes-title">
-          {{ t('Save these recovery codes now') }}
+          请立即保存这些恢复码
         </div>
         <pre>{{ recoveryCodes.join('\n') }}</pre>
         <q-btn
@@ -97,7 +97,7 @@
           dense
           no-caps
           icon="sym_o_download"
-          :label="t('Download recovery codes')"
+          label="下载恢复码"
           @click="downloadCodes"
         />
       </div>
@@ -106,14 +106,14 @@
     <div class="settings-sub">
       <div class="settings-sub-head">
         <h3 class="settings-sub-title">
-          {{ t('Active sessions') }}
+          活跃会话
         </h3>
         <q-space />
         <q-btn
           flat
           no-caps
           color="negative"
-          :label="t('Revoke all')"
+          label="全部撤销"
           :loading="loading"
           data-testid="settings-revoke-all"
           @click="revokeAll"
@@ -126,16 +126,16 @@
         >
           <q-item-section>
             <q-item-label>
-              {{ item.userAgent || t('Unknown browser') }}
+              {{ item.userAgent || '未知浏览器' }}
               <q-badge
                 v-if="item.current"
                 color="primary"
               >
-                {{ t('Current') }}
+                当前
               </q-badge>
             </q-item-label>
             <q-item-label caption>
-              {{ t('Last active {0}; expires {1}', new Date(item.lastActivityAt).toLocaleString(), new Date(item.expiresAt).toLocaleString()) }}
+              {{ `最后活跃于 ${new Date(item.lastActivityAt).toLocaleString()}；过期于 ${new Date(item.expiresAt).toLocaleString()}` }}
             </q-item-label>
           </q-item-section>
           <q-item-section side>
@@ -145,14 +145,14 @@
               flat
               round
               dense
-              :title="t('Revoke')"
+              title="撤销"
               @click="revoke(item.id)"
             />
           </q-item-section>
         </q-item>
         <q-item v-if="!sessions.length">
           <q-item-section class="settings-empty">
-            {{ t('No other active sessions.') }}
+            没有其他活跃会话。
           </q-item-section>
         </q-item>
       </q-list>
@@ -167,7 +167,6 @@ import type { components } from 'src/api/generated/schema'
 import ChangePasswordDialog from 'src/components/ChangePasswordDialog.vue'
 import CommonItem from 'src/components/CommonItem.vue'
 import { identityClient } from 'src/utils/identity-client'
-import { t } from 'src/utils/i18n'
 
 type SessionInfo = components['schemas']['SessionInfo']
 

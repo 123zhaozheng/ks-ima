@@ -25,15 +25,19 @@
             label="初始所有者用户 ID"
           />
           <q-btn
-            icon="add"
-            flat
+            color="primary"
+            unelevated
+            icon="sym_o_add"
             :disable="!newName || !newOwnerUserId"
             @click="create"
-          />
+          >
+            新建
+          </q-btn>
         </template>
         <q-btn
-          icon="refresh"
           flat
+          icon="sym_o_refresh"
+          label="刷新"
           @click="load"
         />
       </div>
@@ -60,19 +64,22 @@
           <q-td v-if="canManage">
             <q-btn
               v-if="props.row.isActive"
-              icon="archive"
+              icon="sym_o_archive"
               flat
+              label="归档"
               @click="archive(props.row.id)"
             />
             <q-btn
               v-else
-              icon="restore"
+              icon="sym_o_restore_from_trash"
               flat
+              label="恢复"
               @click="restore(props.row.id)"
             />
             <q-btn
-              icon="delete"
+              icon="sym_o_delete"
               flat
+              label="删除"
               @click="remove(props.row.id)"
             />
           </q-td>

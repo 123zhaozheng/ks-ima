@@ -42,10 +42,6 @@
           name="scenes"
           label="场景配置"
         />
-        <q-tab
-          name="assignment"
-          label="知识库分配"
-        />
       </q-tabs>
       <q-separator />
 
@@ -262,7 +258,7 @@
           class="q-px-none"
         >
           <div class="text-caption text-grey-7 q-mb-md">
-            每个场景对应系统里的一类任务。修改草稿后先「验证」，再「发布」才会在知识库里生效。
+            为每个场景选择要使用的模型。修改后点击「保存」即可生效。
           </div>
           <div class="row q-col-gutter-lg">
             <div
@@ -288,346 +284,67 @@
                     </div>
                   </div>
                   <q-space />
-                  <q-badge
-                    v-if="activeSceneProfile(scene.id)"
-                    outline
-                    class="q-ml-sm"
-                    :color="sceneBadgeColor(scene.id)"
-                  >
-                    {{ sceneBadgeText(scene.id) }}
-                  </q-badge>
                 </div>
 
-                <template v-if="sceneProfiles(scene.id).length">
-                  <q-select
-                    v-if="sceneProfiles(scene.id).length > 1"
-                    v-model="sceneState[scene.id].profileId"
-                    outlined
-                    dense
-                    emit-value
-                    map-options
-                    class="q-mb-md"
-                    label="配置项"
-                    :options="sceneProfiles(scene.id).map(profile => ({ label: profile.businessAlias, value: profile.id }))"
-                    @update:model-value="loadDraft(scene.id)"
-                  />
-
-                  <template v-if="sceneState[scene.id].profileId">
-                    <div class="row q-col-gutter-sm">
-                      <template v-if="scene.id === 'grounded_ask'">
-                        <div class="col-12">
-                          <q-select
-                            v-model="sceneState[scene.id].form.chatModelId"
-                            outlined
-                            dense
-                            emit-value
-                            map-options
-                            label="对话模型"
-                            :options="modelOptions('chat')"
-                          />
-                        </div>
-                        <div class="col-12 col-md-6">
-                          <q-select
-                            v-model="sceneState[scene.id].form.embeddingModelId"
-                            outlined
-                            dense
-                            emit-value
-                            map-options
-                            clearable
-                            label="向量模型（可选）"
-                            :options="modelOptions('embedding')"
-                          />
-                        </div>
-                        <div class="col-12 col-md-6">
-                          <q-select
-                            v-model="sceneState[scene.id].form.rerankModelId"
-                            outlined
-                            dense
-                            emit-value
-                            map-options
-                            clearable
-                            label="重排序模型（可选）"
-                            :options="modelOptions('rerank')"
-                          />
-                        </div>
-                        <div class="col-12 col-md-4">
-                          <q-input
-                            v-model.number="sceneState[scene.id].form.topK"
-                            outlined
-                            dense
-                            type="number"
-                            label="召回条数（topK）"
-                          />
-                        </div>
-                        <div class="col-12 col-md-4">
-                          <q-input
-                            v-model.number="sceneState[scene.id].form.contextLimit"
-                            outlined
-                            dense
-                            type="number"
-                            label="上下文上限"
-                          />
-                        </div>
-                        <div class="col-12 col-md-4">
-                          <q-input
-                            v-model.number="sceneState[scene.id].form.outputLimit"
-                            outlined
-                            dense
-                            type="number"
-                            label="输出上限"
-                          />
-                        </div>
-                      </template>
-                      <template v-else-if="scene.id === 'title_generation' || scene.id === 'summarization'">
-                        <div class="col-12 col-md-6">
-                          <q-select
-                            v-model="sceneState[scene.id].form.chatModelId"
-                            outlined
-                            dense
-                            emit-value
-                            map-options
-                            label="对话模型"
-                            :options="modelOptions('chat')"
-                          />
-                        </div>
-                        <div class="col-12 col-md-6">
-                          <q-input
-                            v-model.number="sceneState[scene.id].form.outputLimit"
-                            outlined
-                            dense
-                            type="number"
-                            label="输出上限"
-                          />
-                        </div>
-                      </template>
-                      <template v-else-if="scene.id === 'embedding'">
-                        <div class="col-12 col-md-6">
-                          <q-select
-                            v-model="sceneState[scene.id].form.embeddingModelId"
-                            outlined
-                            dense
-                            emit-value
-                            map-options
-                            label="向量模型"
-                            :options="modelOptions('embedding')"
-                            @update:model-value="syncEmbeddingDimension(scene.id)"
-                          />
-                        </div>
-                        <div class="col-12 col-md-3">
-                          <q-input
-                            v-model.number="sceneState[scene.id].form.dimension"
-                            outlined
-                            dense
-                            type="number"
-                            label="向量维度"
-                          />
-                        </div>
-                        <div class="col-12 col-md-3">
-                          <q-input
-                            v-model.number="sceneState[scene.id].form.batchSize"
-                            outlined
-                            dense
-                            type="number"
-                            label="批量大小"
-                          />
-                        </div>
-                      </template>
-                      <template v-else>
-                        <div class="col-12 col-md-6">
-                          <q-select
-                            v-model="sceneState[scene.id].form.rerankModelId"
-                            outlined
-                            dense
-                            emit-value
-                            map-options
-                            label="重排序模型"
-                            :options="modelOptions('rerank')"
-                          />
-                        </div>
-                        <div class="col-12 col-md-3">
-                          <q-input
-                            v-model.number="sceneState[scene.id].form.maxDocuments"
-                            outlined
-                            dense
-                            type="number"
-                            label="单次精排候选数"
-                          />
-                        </div>
-                        <div class="col-12 col-md-3">
-                          <q-input
-                            v-model.number="sceneState[scene.id].form.resultLimit"
-                            outlined
-                            dense
-                            type="number"
-                            label="返回条数"
-                          />
-                        </div>
-                      </template>
-                    </div>
-
-                    <q-expansion-item
-                      dense
-                      label="高级"
-                      class="q-mt-sm text-grey-8"
-                    >
-                      <q-input
-                        v-model="sceneState[scene.id].configText"
+                <div class="row q-col-gutter-sm">
+                  <template v-if="scene.id === 'grounded_ask' || scene.id === 'title_generation' || scene.id === 'summarization'">
+                    <div class="col-12">
+                      <q-select
+                        v-model="sceneState[scene.id].chatModelId"
                         outlined
                         dense
-                        type="textarea"
-                        rows="8"
-                        class="q-mt-sm"
-                        label="原始配置 JSON"
-                        @blur="applyConfigText(scene.id)"
-                      />
-                    </q-expansion-item>
-
-                    <div class="row q-gutter-sm q-mt-md">
-                      <q-btn
-                        color="primary"
-                        unelevated
-                        dense
-                        no-caps
-                        label="保存草稿"
-                        :disable="!canManage"
-                        @click="saveDraft(scene.id)"
-                      />
-                      <q-btn
-                        flat
-                        dense
-                        no-caps
-                        label="验证"
-                        :disable="!canManage"
-                        @click="validateScene(scene.id)"
-                      />
-                      <q-btn
-                        flat
-                        dense
-                        no-caps
-                        label="发布"
-                        :disable="!canManage"
-                        @click="publishScene(scene.id)"
-                      />
-                      <q-btn
-                        flat
-                        dense
-                        no-caps
-                        class="text-negative"
-                        :label="sceneProfile(scene.id)?.lifecycle === 'disabled' ? '恢复' : '停用'"
-                        :disable="!canManage"
-                        @click="toggleScene(scene.id)"
+                        emit-value
+                        map-options
+                        clearable
+                        label="对话模型"
+                        :options="modelOptions('chat')"
                       />
                     </div>
                   </template>
-                </template>
-                <div
-                  v-else
-                  class="row items-center text-grey-7 q-my-md"
-                >
-                  该场景还没有配置。
-                  <q-btn
-                    v-if="canManage"
-                    flat
-                    dense
-                    no-caps
-                    color="primary"
-                    label="新建草稿"
-                    class="q-ml-xs"
-                    @click="createSceneProfile(scene.id)"
-                  />
+                  <template v-else-if="scene.id === 'embedding'">
+                    <div class="col-12">
+                      <q-select
+                        v-model="sceneState[scene.id].embeddingModelId"
+                        outlined
+                        dense
+                        emit-value
+                        map-options
+                        clearable
+                        label="向量模型"
+                        :options="modelOptions('embedding')"
+                      />
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="col-12">
+                      <q-select
+                        v-model="sceneState[scene.id].rerankModelId"
+                        outlined
+                        dense
+                        emit-value
+                        map-options
+                        clearable
+                        label="重排序模型"
+                        :options="modelOptions('rerank')"
+                      />
+                    </div>
+                  </template>
                 </div>
+
+                <q-btn
+                  v-if="canManage"
+                  color="primary"
+                  unelevated
+                  no-caps
+                  label="保存"
+                  class="q-mt-md"
+                  @click="saveSceneConfig(scene.id)"
+                />
               </q-card>
             </div>
           </div>
         </q-tab-panel>
 
-        <!-- Tab 3：知识库分配 -->
-        <q-tab-panel
-          name="assignment"
-          class="q-px-none"
-        >
-          <div class="text-caption text-grey-7 q-mb-md">
-            为每个知识库选择各场景要使用的已发布配置。更换向量化配置前可以先「检查影响」。
-          </div>
-          <div
-            v-if="!kbs.length && !loading"
-            class="text-grey-7"
-          >
-            还没有知识库。
-          </div>
-          <div class="row q-col-gutter-lg">
-            <div
-              v-for="kb in kbs"
-              :key="kb.id"
-              class="col-12 col-xl-6"
-            >
-              <q-card
-                flat
-                bordered
-                class="surface-card q-pa-lg full-height"
-              >
-                <div class="row items-center q-mb-md">
-                  <div class="text-subtitle1 text-weight-medium ellipsis">
-                    {{ kb.name }}
-                  </div>
-                  <q-space />
-                  <q-badge
-                    v-if="!kb.isActive"
-                    outline
-                    color="grey-7"
-                  >
-                    已归档
-                  </q-badge>
-                </div>
-                <div class="row q-col-gutter-sm">
-                  <div
-                    v-for="scene in SCENES"
-                    :key="scene.id"
-                    class="col-12 col-md-6"
-                  >
-                    <q-select
-                      v-model="selectionFor(kb.id)[scene.id]"
-                      outlined
-                      dense
-                      emit-value
-                      map-options
-                      clearable
-                      :label="scene.name"
-                      :options="publishedOptions(scene.id)"
-                    />
-                  </div>
-                </div>
-                <q-banner
-                  v-if="impactState[kb.id]"
-                  rounded
-                  dense
-                  class="q-mt-md"
-                  :class="impactState[kb.id].requiresReindex ? 'bg-orange-2 text-orange-10' : 'bg-green-2 text-positive'"
-                >
-                  {{ impactState[kb.id].requiresReindex ? `切换后将有 ${impactState[kb.id].count} 个索引需要重建` : '无需重建索引' }}
-                </q-banner>
-                <div class="row q-gutter-sm q-mt-md">
-                  <q-btn
-                    color="primary"
-                    unelevated
-                    dense
-                    no-caps
-                    label="保存分配"
-                    :disable="!canManage"
-                    @click="saveAssignments(kb.id)"
-                  />
-                  <q-btn
-                    flat
-                    dense
-                    no-caps
-                    label="检查影响"
-                    @click="checkImpact(kb.id)"
-                  />
-                </div>
-              </q-card>
-            </div>
-          </div>
-        </q-tab-panel>
       </q-tab-panels>
 
       <!-- 添加/编辑服务商对话框 -->
@@ -838,7 +555,6 @@ import type { Capability } from 'src/admin/model-catalog'
 type Gateway = components['schemas']['ModelGateway']
 type GovernedModel = components['schemas']['GovernedModel']
 type Profile = components['schemas']['CapabilityProfile']
-type Assignment = components['schemas']['Assignment']
 type KbInfo = components['schemas']['KnowledgeBaseInfo']
 type Workflow = components['schemas']['ProfileCreateRequest']['workflow']
 
@@ -850,13 +566,6 @@ const SCENES: Array<{ id: Workflow, name: string, desc: string }> = [
   { id: 'reranking', name: '重排序', desc: '对检索结果精排，让最相关的内容排在前面' },
 ]
 
-const PROFILE_REASON_LABELS: Record<string, string> = {
-  MODEL_UNAVAILABLE: '引用的模型不可用（需已验证、已启用，且服务商健康）',
-  INVALID_PROFILE_CONFIG: '配置格式无效',
-  VERSION_CONFLICT: '草稿已被其他管理员修改，请刷新后重试',
-  NO_DRAFT: '该配置没有可编辑的草稿',
-}
-
 const tab = ref('services')
 const loading = ref(false)
 const error = ref('')
@@ -864,9 +573,20 @@ const gateways = ref<Gateway[]>([])
 const models = ref<GovernedModel[]>([])
 const profiles = ref<Profile[]>([])
 const kbs = ref<KbInfo[]>([])
-const assignmentsByKb = ref<Record<string, Assignment[]>>({})
-const assignmentState = ref<Record<string, Partial<Record<Workflow, string | null>>>>({})
-const impactState = ref<Record<string, { requiresReindex: boolean, count: number }>>({})
+const sceneState = ref<Record<Workflow, { chatModelId: string | null, embeddingModelId: string | null, rerankModelId: string | null }>>({
+  grounded_ask: { chatModelId: null, embeddingModelId: null, rerankModelId: null },
+  title_generation: { chatModelId: null, embeddingModelId: null, rerankModelId: null },
+  summarization: { chatModelId: null, embeddingModelId: null, rerankModelId: null },
+  embedding: { chatModelId: null, embeddingModelId: null, rerankModelId: null },
+  reranking: { chatModelId: null, embeddingModelId: null, rerankModelId: null },
+})
+
+// ---------- 场景配置 ----------
+function modelOptions(capability: Capability) {
+  return models.value
+    .filter(model => model.enabled && model.capability === capability)
+    .map(model => ({ label: modelLabel(model), value: model.id }))
+}
 const canManage = computed(() => session.value.data?.user.platformRoles?.some(role => role === 'super_admin' || role === 'platform_admin') ?? false)
 const $q = useQuasar()
 
@@ -1113,11 +833,6 @@ function modelLabel(model: GovernedModel) {
     ? `${model.businessLabel}（${model.remoteName}）`
     : model.businessLabel
 }
-function modelOptions(capability: Capability) {
-  return models.value
-    .filter(model => model.enabled && model.capability === capability)
-    .map(model => ({ label: modelLabel(model), value: model.id }))
-}
 
 async function validateModel(model: GovernedModel) {
   const result = await withRecentAuth(() => identityClient.validateGovernedModel(model.id, { expectedVersion: model.version }))
@@ -1151,340 +866,7 @@ function deleteModel(model: GovernedModel) {
   })
 }
 
-// ---------- 场景配置 ----------
-interface SceneForm {
-  chatModelId: string | null
-  embeddingModelId: string | null
-  rerankModelId: string | null
-  topK: number | null
-  contextLimit: number | null
-  outputLimit: number | null
-  dimension: number | null
-  batchSize: number | null
-  maxDocuments: number | null
-  resultLimit: number | null
-}
-interface SceneState {
-  profileId: string
-  draftVersion: number
-  configText: string
-  form: SceneForm
-}
-
-function emptyForm(): SceneForm {
-  return { chatModelId: null, embeddingModelId: null, rerankModelId: null, topK: null, contextLimit: null, outputLimit: null, dimension: null, batchSize: null, maxDocuments: null, resultLimit: null }
-}
-
-const sceneState = reactive<Record<Workflow, SceneState>>({
-  grounded_ask: { profileId: '', draftVersion: 1, configText: '{}', form: emptyForm() },
-  title_generation: { profileId: '', draftVersion: 1, configText: '{}', form: emptyForm() },
-  summarization: { profileId: '', draftVersion: 1, configText: '{}', form: emptyForm() },
-  embedding: { profileId: '', draftVersion: 1, configText: '{}', form: emptyForm() },
-  reranking: { profileId: '', draftVersion: 1, configText: '{}', form: emptyForm() },
-})
-
-function sceneProfiles(workflow: Workflow) {
-  return profiles.value.filter(profile => profile.workflow === workflow)
-}
-function activeSceneProfile(workflow: Workflow) {
-  const list = sceneProfiles(workflow)
-  return list.find(profile => profile.lifecycle === 'active') ?? list[0] ?? null
-}
-function sceneProfile(workflow: Workflow) {
-  return profiles.value.find(profile => profile.id === sceneState[workflow].profileId) ?? null
-}
-function sceneBadgeText(workflow: Workflow) {
-  const profile = activeSceneProfile(workflow)
-  if (!profile) return ''
-  if (profile.lifecycle === 'disabled') return '已停用'
-  return profile.currentVersion > 0 ? `已生效 v${profile.currentVersion}` : '草稿（未发布）'
-}
-function sceneBadgeColor(workflow: Workflow) {
-  const profile = activeSceneProfile(workflow)
-  if (profile?.lifecycle === 'active' && profile.currentVersion > 0) return 'positive'
-  return 'grey-7'
-}
-
-async function loadDraft(workflow: Workflow) {
-  const state = sceneState[workflow]
-  if (!state.profileId) return
-  const result = await identityClient.listCapabilityProfileVersions(state.profileId)
-  if (result.error) {
-    notify(`读取草稿失败：${result.error.message}`, 'negative')
-    return
-  }
-  const draft = result.data?.items.find(version => version.state === 'draft')
-  state.draftVersion = draft?.draftVersion ?? 1
-  const config = (draft?.config ?? {}) as Record<string, unknown>
-  state.configText = JSON.stringify(config, null, 2)
-  configToForm(workflow, config, state.form)
-}
-
-function configToForm(workflow: Workflow, config: Record<string, unknown>, form: SceneForm) {
-  Object.assign(form, emptyForm())
-  const str = (value: unknown) => (typeof value === 'string' ? value : null)
-  const num = (value: unknown) => (typeof value === 'number' ? value : null)
-  form.chatModelId = str(config.chatModelId)
-  form.embeddingModelId = str(config.embeddingModelId)
-  form.rerankModelId = str(config.rerankModelId)
-  if (workflow === 'grounded_ask') {
-    form.topK = num(config.topK)
-    form.contextLimit = num(config.contextLimit)
-    form.outputLimit = num(config.outputLimit)
-  } else if (workflow === 'title_generation' || workflow === 'summarization') {
-    form.outputLimit = num(config.outputLimit)
-  } else if (workflow === 'embedding') {
-    form.dimension = num(config.dimension)
-    form.batchSize = num(config.batchSize)
-  } else {
-    form.maxDocuments = num(config.maxDocuments)
-    form.resultLimit = num(config.resultLimit)
-  }
-}
-
-function buildConfig(workflow: Workflow, state: SceneState): Record<string, unknown> {
-  let base: Record<string, unknown> = {}
-  try {
-    const parsed = JSON.parse(state.configText) as unknown
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) base = parsed as Record<string, unknown>
-  } catch {
-    // 高级区 JSON 暂时损坏时以表单为准
-  }
-  const form = state.form
-  const assign = (key: string, value: string | number | null | undefined) => {
-    if (value === '' || value === null || value === undefined) delete base[key]
-    else base[key] = value
-  }
-  if (workflow === 'grounded_ask') {
-    assign('chatModelId', form.chatModelId)
-    assign('embeddingModelId', form.embeddingModelId)
-    assign('rerankModelId', form.rerankModelId)
-    assign('topK', form.topK)
-    assign('contextLimit', form.contextLimit)
-    assign('outputLimit', form.outputLimit)
-  } else if (workflow === 'title_generation') {
-    assign('chatModelId', form.chatModelId)
-    assign('outputLimit', form.outputLimit)
-  } else if (workflow === 'summarization') {
-    assign('chatModelId', form.chatModelId)
-    assign('outputLimit', form.outputLimit)
-  } else if (workflow === 'embedding') {
-    assign('embeddingModelId', form.embeddingModelId)
-    assign('dimension', form.dimension)
-    assign('batchSize', form.batchSize)
-  } else {
-    assign('rerankModelId', form.rerankModelId)
-    assign('maxDocuments', form.maxDocuments)
-    assign('resultLimit', form.resultLimit)
-  }
-  base.workflow = workflow
-  return base
-}
-
-function applyConfigText(workflow: Workflow) {
-  const state = sceneState[workflow]
-  try {
-    const config = JSON.parse(state.configText) as Record<string, unknown>
-    configToForm(workflow, config, state.form)
-  } catch {
-    notify('高级区的 JSON 格式有误，请检查', 'warning')
-  }
-}
-
-function syncEmbeddingDimension(workflow: Workflow) {
-  const state = sceneState[workflow]
-  const model = models.value.find(item => item.id === state.form.embeddingModelId)
-  if (model?.embeddingDimension) state.form.dimension = model.embeddingDimension
-}
-
-function profileReasonLabel(code?: string | null) {
-  if (!code) return '未知原因'
-  return PROFILE_REASON_LABELS[code] ?? code
-}
-
-async function saveDraft(workflow: Workflow) {
-  const state = sceneState[workflow]
-  if (!state.profileId) return
-  const config = buildConfig(workflow, state)
-  const result = await withRecentAuth(() => identityClient.patchCapabilityProfileDraft(state.profileId, { config, expectedDraftVersion: state.draftVersion }))
-  if (result.error) {
-    notify(`保存失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
-    return
-  }
-  state.draftVersion += 1
-  state.configText = JSON.stringify(config, null, 2)
-  notify('草稿已保存')
-}
-
-async function validateScene(workflow: Workflow) {
-  const state = sceneState[workflow]
-  if (!state.profileId) return
-  // 先把当前表单写入草稿，保证验证的就是页面上的内容
-  const config = buildConfig(workflow, state)
-  const patched = await withRecentAuth(() => identityClient.patchCapabilityProfileDraft(state.profileId, { config, expectedDraftVersion: state.draftVersion }))
-  if (patched.error) {
-    notify(`保存失败：${apiErrorMessage(patched.error, '请稍后重试')}`, 'negative')
-    return
-  }
-  state.draftVersion += 1
-  state.configText = JSON.stringify(config, null, 2)
-  const result = await withRecentAuth(() => identityClient.validateCapabilityProfile(state.profileId))
-  if (result.error) {
-    notify(`验证失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
-    return
-  }
-  const data = result.data as { ok?: boolean, reasonCode?: string | null } | undefined
-  if (data?.ok) notify('验证通过，可以发布')
-  else notify(`验证未通过：${profileReasonLabel(data?.reasonCode)}`, 'negative')
-}
-
-async function publishScene(workflow: Workflow) {
-  const state = sceneState[workflow]
-  if (!state.profileId) return
-  const config = buildConfig(workflow, state)
-  const patched = await withRecentAuth(() => identityClient.patchCapabilityProfileDraft(state.profileId, { config, expectedDraftVersion: state.draftVersion }))
-  if (patched.error) {
-    notify(`保存失败：${apiErrorMessage(patched.error, '请稍后重试')}`, 'negative')
-    return
-  }
-  const nextDraftVersion = state.draftVersion + 1
-  const published = await withRecentAuth(() => identityClient.publishCapabilityProfile(state.profileId, { config, expectedDraftVersion: nextDraftVersion }))
-  if (published.error) {
-    const reason = published.error.code && PROFILE_REASON_LABELS[published.error.code]
-      ? profileReasonLabel(published.error.code)
-      : apiErrorMessage(published.error, '请稍后重试')
-    notify(`发布失败：${reason}`, 'negative')
-    return
-  }
-  notify('已发布，新版本立即生效')
-  await refresh()
-}
-
-async function toggleScene(workflow: Workflow) {
-  const profile = sceneProfile(workflow)
-  if (!profile) return
-  const result = profile.lifecycle === 'disabled'
-    ? await withRecentAuth(() => identityClient.restoreCapabilityProfile(profile.id))
-    : await withRecentAuth(() => identityClient.disableCapabilityProfile(profile.id))
-  if (result.error) notify(`操作失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
-  else await refresh()
-}
-
-function defaultConfig(workflow: Workflow): Record<string, unknown> {
-  if (workflow === 'grounded_ask') return { workflow, chatModelId: '', systemPrompt: '基于知识库内容回答用户问题。', contextLimit: 4096, outputLimit: 512, topK: 8, retrievalMode: 'hybrid' }
-  if (workflow === 'title_generation') return { workflow, chatModelId: '', systemPrompt: '根据对话内容生成简洁的标题。', contextLimit: 4096, outputLimit: 64 }
-  if (workflow === 'summarization') return { workflow, chatModelId: '', systemPrompt: '概括给定内容的主要信息。', contextLimit: 8192, outputLimit: 512, maxContextChars: 30000 }
-  if (workflow === 'embedding') return { workflow, embeddingModelId: '', dimension: 1024, batchSize: 32 }
-  return { workflow, rerankModelId: '', maxDocuments: 50, resultLimit: 10 }
-}
-
-async function createSceneProfile(workflow: Workflow) {
-  const scene = SCENES.find(item => item.id === workflow)
-  if (!scene) return
-  const result = await withRecentAuth(() => identityClient.createCapabilityProfile({ workflow, businessAlias: scene.name, description: scene.desc, config: defaultConfig(workflow) }))
-  if (result.error) {
-    notify(`创建失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
-    return
-  }
-  await refresh()
-}
-
-// ---------- 知识库分配 ----------
-function selectionFor(kbId: string) {
-  if (!assignmentState.value[kbId]) assignmentState.value[kbId] = {}
-  return assignmentState.value[kbId]
-}
-
-function publishedOptions(workflow: Workflow) {
-  return profiles.value
-    .filter(profile => profile.workflow === workflow && profile.lifecycle === 'active' && profile.currentVersion > 0)
-    .map(profile => ({ label: `${profile.businessAlias} · v${profile.currentVersion}`, value: profile.id }))
-}
-
-async function saveAssignments(kbId: string) {
-  const selection = selectionFor(kbId)
-  const current = assignmentsByKb.value[kbId] ?? []
-  let failed = 0
-  for (const scene of SCENES) {
-    const workflow = scene.id
-    const selected = selection[workflow]
-    const existing = current.find(assignment => assignment.workflow === workflow)
-    if (selected === null || selected === undefined) {
-      if (existing) {
-        const result = await withRecentAuth(() => identityClient.removeCapabilityProfile(kbId, workflow, existing.version))
-        if (result.error) {
-          failed += 1
-          notify(`${scene.name}：移除失败（${apiErrorMessage(result.error, '请稍后重试')}）`, 'negative')
-          if (apiErrorCode(result.error) === 'HTTP_401') return
-        }
-      }
-      continue
-    }
-    if (existing?.profileId === selected) continue
-    const profile = profiles.value.find(item => item.id === selected)
-    if (!profile) continue
-    const result = await withRecentAuth(() => identityClient.assignCapabilityProfile(kbId, workflow, { workflow, profileId: selected, profileVersion: profile.currentVersion, expectedVersion: existing?.version }))
-    if (result.error) {
-      failed += 1
-      notify(`${scene.name}：分配失败（${apiErrorMessage(result.error, '请稍后重试')}）`, 'negative')
-      if (apiErrorCode(result.error) === 'HTTP_401') return
-    }
-  }
-  await loadAssignments(kbId)
-  if (!failed) notify('分配已保存')
-}
-
-async function checkImpact(kbId: string) {
-  const selected = selectionFor(kbId).embedding
-  if (!selected) {
-    notify('请先为该知识库选择「向量化」配置', 'warning')
-    return
-  }
-  const profile = profiles.value.find(item => item.id === selected)
-  const versions = await identityClient.listCapabilityProfileVersions(selected)
-  if (versions.error) {
-    notify(`读取配置失败：${versions.error.message}`, 'negative')
-    return
-  }
-  const published = versions.data?.items.find(version => version.state === 'published' && version.version === profile?.currentVersion) ??
-    versions.data?.items.filter(version => version.state === 'published').slice(-1)[0]
-  const modelId = (published?.config as Record<string, unknown> | undefined)?.embeddingModelId
-  if (typeof modelId !== 'string' || !modelId) {
-    notify('该配置没有设置向量模型，无法评估影响', 'warning')
-    return
-  }
-  const result = await identityClient.modelGovernanceImpact(modelId)
-  if (result.error || !result.data) {
-    notify(`检查影响失败：${result.error?.message ?? ''}`, 'negative')
-    return
-  }
-  const count = result.data.affected.reduce((sum, item) => sum + item.affectedIndexes, 0) || result.data.affected.length
-  impactState.value[kbId] = { requiresReindex: result.data.requiresReindex, count }
-}
-
 // ---------- 数据加载 ----------
-async function syncSceneSelection() {
-  for (const scene of SCENES) {
-    const state = sceneState[scene.id]
-    const options = sceneProfiles(scene.id)
-    if (!options.find(profile => profile.id === state.profileId)) {
-      state.profileId = options.find(profile => profile.lifecycle === 'active')?.id ?? options[0]?.id ?? ''
-    }
-    if (state.profileId) await loadDraft(scene.id)
-  }
-}
-
-async function loadAssignments(kbId: string) {
-  const result = await identityClient.listCapabilityAssignments(kbId)
-  const items = result.data?.items ?? []
-  assignmentsByKb.value[kbId] = items
-  const selection = selectionFor(kbId)
-  for (const scene of SCENES) {
-    const existing = items.find(assignment => assignment.workflow === scene.id)
-    selection[scene.id] = existing?.profileId ?? null
-  }
-}
-
 async function refresh() {
   loading.value = true
   error.value = ''
@@ -1500,11 +882,23 @@ async function refresh() {
   kbs.value = kbResult.data?.items ?? []
   error.value = gatewayResult.error?.message || modelResult.error?.message || profileResult.error?.message || kbResult.error?.message || ''
   loading.value = false
-  await syncSceneSelection()
-  await Promise.all(kbs.value.map(kb => loadAssignments(kb.id)))
 }
 
 onMounted(refresh)
+
+// ---------- 场景配置保存 ----------
+async function saveSceneConfig(_id: Workflow) { // eslint-disable-line @typescript-eslint/no-unused-vars, @typescript-eslint/require-await
+  // TODO: Implement backend API for updating scene model bindings directly
+  notify('功能开发中：模型绑定即将支持直接保存', 'warning')
+  /*
+  const result = await withRecentAuth(() => identityClient.updateSceneConfiguration(id, { chatModelId: state.chatModelId, embeddingModelId: state.embeddingModelId, rerankModelId: state.rerankModelId }))
+  if (result.error) {
+    notify(`保存失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
+    return
+  }
+  notify('已保存')
+  */
+}
 </script>
 
 <style scoped>

@@ -573,3 +573,24 @@ Session summary was not supplied.
 ### Status
 
 [OK] **Completed**
+
+
+## Session 17: Simplified model scene configuration and fixed Chinese UI
+
+**Date**: 2026-09-09
+**Task**: Simplified model scene configuration and fixed Chinese UI
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+Removed 'Knowledge Base Assignment' tab, simplified scene config with direct model dropdowns per capability type, fixed KnowledgeBasesPage icon/button text to display Chinese labels instead of English fallback
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c4ff55f` | (see git log) |
+
+### Status
+
+[OK] **Completed**

@@ -344,7 +344,6 @@
             </div>
           </div>
         </q-tab-panel>
-
       </q-tab-panels>
 
       <!-- 添加/编辑服务商对话框 -->

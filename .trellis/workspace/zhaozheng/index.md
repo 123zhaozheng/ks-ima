@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 16
-- **Last Active**: 2026-08-31
+- **Total Sessions**: 17
+- **Last Active**: 2026-09-09
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~575 | Active |
+| `journal-1.md` | ~596 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 17 | 2026-09-09 | Simplified model scene configuration and fixed Chinese UI | `c4ff55f` | `feat/intranet-ima` |
 | 16 | 2026-08-31 | 管理后台中文化与模型一键接入 | `80a93e2`, `fbb2361`, `0e12c53`, `fe26ff3`, `b3f861d`, `9cc63af` | `feat/intranet-ima` |
 | 15 | 2026-08-31 | 移除工作区概念，知识库一等公民与极简UX重构 | `c24ed33`, `15e2753`, `7bfb99c`, `afd3f84`, `080dc07` | `feat/intranet-ima` |
 | 14 | 2026-08-30 | Frontend UX overhaul: audit fixes + self-service workspace + Apple-style polish | `b6588a2` | `feat/intranet-ima` |

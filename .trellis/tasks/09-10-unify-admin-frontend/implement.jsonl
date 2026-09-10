@@ -1,0 +1,6 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/identity-admin-contracts.md", "reason": "管理端路由守卫/capability-aware 控制台契约——合并后守卫与入口可见性必须遵守"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端构建/测试质量关卡（lint、vue-tsc、vitest、e2e）"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "admin 目录与路由/布局放置规范"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "路由组件动态 import 与类型检查约束"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "去重原则——本任务核心是删除双构建/双端口冗余"}

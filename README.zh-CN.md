@@ -42,7 +42,7 @@ uv sync --frozen
 IMA_DATABASE_URL=postgresql+asyncpg://postgres:identity-gate-password@127.0.0.1:55432/app uv run ima migrate
 IMA_DATABASE_URL=postgresql+asyncpg://postgres:identity-gate-password@127.0.0.1:55432/app uv run uvicorn ima.main:app --reload --port 8000
 cd ..
-bun dev:front # 或：bun dev:admin
+bun dev
 ```
 
 `docker compose -f docker-compose.example.yml up --build` 会运行完整的部署示例（Postgres、API、worker、带 Caddy 的 web）。

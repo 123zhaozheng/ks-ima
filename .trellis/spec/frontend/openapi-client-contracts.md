@@ -57,7 +57,7 @@ lives outside that directory and passes ESLint.
 1. Backend contract asserts path, operation ID, success, and problem responses.
 2. OpenAPI export/check and TypeScript regeneration leave no diff.
 3. ESLint checks all handwritten client/composable/component code.
-4. `vue-tsc --noEmit`, Bun tests, PWA build, and admin build pass.
+4. `vue-tsc --noEmit`, Bun tests, and the PWA build pass.
 5. Caddy contract verifies exact Python routing and legacy fallback.
 
 ## 7. Wrong vs Correct

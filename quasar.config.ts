@@ -2,7 +2,6 @@
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
 
 import { defineConfig } from '#q-app/wrappers'
-import { fileURLToPath } from 'node:url'
 import { compression } from 'vite-plugin-compression2'
 import dotenv from 'dotenv'
 
@@ -10,7 +9,7 @@ dotenv.config()
 
 const ANALYZE = process.argv.includes('--analyze')
 
-export default defineConfig((ctx) => {
+export default defineConfig(() => {
   return {
     // https://v2.quasar.dev/quasar-cli-vite/prefetch-feature
     // preFetch: true,
@@ -47,8 +46,8 @@ export default defineConfig((ctx) => {
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#build
     build: {
       target: {
-        // Chrome 109 compatibility contract: the built apps must run on
-        // early-2023 Chromium. Applies to both TARGET_APP builds.
+        // Chrome 109 compatibility contract: the built app must run on
+        // early-2023 Chromium.
         browser: ['chrome109'],
         node: 'node20',
       },
@@ -78,6 +77,43 @@ export default defineConfig((ctx) => {
       // viteVuePluginOptions: {},
       sourcemap: ANALYZE ? 'hidden' : false,
 
+      // The admin console is lazy-loaded but still part of this app. Give its
+      // chunks and stylesheets their own directory so the PWA precache can
+      // exclude them (see pwa.extendGenerateSWOptions below).
+      extendViteConf (viteConf) {
+        const output = viteConf.build?.rollupOptions?.output
+        const baseOutput = Array.isArray(output) ? output[0] : output
+        // Matches absolute module ids and root-relative asset names.
+        const ADMIN_PATH = /(^|[\\/])src[\\/]admin[\\/]/
+        // QTable is shared by several admin pages, so Rollup lifts it into its
+        // own vendor-only chunk with no /src/admin/ module to match on.
+        const ADMIN_ONLY_VENDOR = /[\\/]node_modules[\\/]quasar[\\/]src[\\/]components[\\/](?:table|markup-table)[\\/]/
+        const isAdmin = (id: string) => ADMIN_PATH.test(id) || ADMIN_ONLY_VENDOR.test(id)
+        viteConf.build = {
+          ...(viteConf.build ?? {}),
+          rollupOptions: {
+            ...(viteConf.build?.rollupOptions ?? {}),
+            output: {
+              ...(baseOutput ?? {}),
+              chunkFileNames: (chunk: { moduleIds: string[] }) =>
+                chunk.moduleIds.some(isAdmin)
+                  ? 'assets/admin/[name]-[hash].js'
+                  : 'assets/[name]-[hash].js',
+              // Admin page stylesheets are emitted beside their chunk, not into
+              // the chunk directory, so route them too. Vite probes this hook
+              // with no original file name when resolving CSS `url()` bases;
+              // admin page CSS uses tokens only, so the fallback dir is unused.
+              assetFileNames: (assetInfo: { originalFileNames?: string[], originalFileName?: string | null }) => {
+                const origin = assetInfo.originalFileNames?.[0] ?? assetInfo.originalFileName ?? ''
+                return isAdmin(origin)
+                  ? 'assets/admin/[name]-[hash].[ext]'
+                  : 'assets/[name]-[hash].[ext]'
+              },
+            },
+          },
+        }
+      },
+
       vitePlugins: [
         ['vite-plugin-checker', {
           vueTsc: true,
@@ -90,18 +126,13 @@ export default defineConfig((ctx) => {
         ...ANALYZE ? [['sonda/vite', { gzip: true, brotli: true }] as any] : [],
         compression(),
       ],
-      alias: {
-        '@routes': fileURLToPath(
-          new URL(`./src/${process.env.TARGET_APP === 'admin' ? 'admin' : 'router'}/routes`, import.meta.url),
-        ),
-      },
     },
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#devserver
     devServer: {
       // https: true,
       open: false, // opens browser window automatically
-      port: process.env.TARGET_APP === 'admin' ? 9017 : 'pwa' in ctx.mode ? 9016 : 9015,
+      port: 9015,
       proxy: {
         '/api': {
           target: process.env.PYTHON_API_URL,
@@ -189,6 +220,8 @@ export default defineConfig((ctx) => {
       // extendPWACustomSWConf (esbuildConf) {},
       extendGenerateSWOptions (cfg) {
         cfg.globPatterns = ['**/*.{js,css,html,ico,png,svg,woff2}']
+        // Lazy admin chunks must not be precached for end users.
+        cfg.globIgnores = ['**/assets/admin/**']
         cfg.navigateFallbackDenylist = [
           /^\/api\//,
           /^\/oauth(?:\/|$)/,

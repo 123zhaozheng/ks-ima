@@ -30,7 +30,7 @@ Tools: `kb_list_knowledge_bases`, `kb_list_dir`, `kb_get_tree`, `kb_search`, `kb
 
 ## Development
 
-The Python API in `backend/` is the only backend; the frontend dev servers proxy `/api` to it.
+The Python API in `backend/` is the only backend; the frontend dev server proxies `/api` to it.
 
 ```sh
 cp .env.example .env
@@ -42,7 +42,7 @@ uv sync --frozen
 IMA_DATABASE_URL=postgresql+asyncpg://postgres:identity-gate-password@127.0.0.1:55432/app uv run ima migrate
 IMA_DATABASE_URL=postgresql+asyncpg://postgres:identity-gate-password@127.0.0.1:55432/app uv run uvicorn ima.main:app --reload --port 8000
 cd ..
-bun dev:front # or: bun dev:admin
+bun dev
 ```
 
 `docker compose -f docker-compose.example.yml up --build` runs the full deployment example (Postgres, API, worker, web with Caddy).

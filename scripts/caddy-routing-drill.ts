@@ -35,7 +35,7 @@ export const INTERNAL_PATH = '/api/v1/internal/session/introspect'
 type Marker = 'python' | 'none'
 
 export interface RouteEvidence {
-  listener: 8080 | 8081
+  listener: 8080
   path: string
   status: number
   upstream: Marker
@@ -132,7 +132,7 @@ export function resolveImageDigest(value: unknown): string {
   return digests[0]
 }
 
-async function mappedPort(container: string, port: 8080 | 8081): Promise<number> {
+async function mappedPort(container: string, port: 8080): Promise<number> {
   const { stdout } = await command(['docker', 'port', container, `${port}/tcp`])
   const matches = [...stdout.matchAll(/:(\d+)\s*$/gm)]
   assert(matches.length > 0, `Docker did not publish Caddy listener ${port}`)
@@ -156,7 +156,7 @@ async function waitForCaddy(port: number): Promise<void> {
 
 async function probe(
   port: number,
-  listener: 8080 | 8081,
+  listener: 8080,
   path: string,
   expectedStatus: number,
   expectedMarker: Marker,
@@ -177,28 +177,23 @@ function totalHits(markers: MarkerServer[]): number {
 }
 
 async function validateTerminal(container: string, markers: MarkerServer[]): Promise<PhaseEvidence> {
-  const ports = {
-    8080: await mappedPort(container, 8080),
-    8081: await mappedPort(container, 8081),
-  }
-  await Promise.all([waitForCaddy(ports[8080]), waitForCaddy(ports[8081])])
+  const port = await mappedPort(container, 8080)
+  await waitForCaddy(port)
   const routes: RouteEvidence[] = []
-  for (const listener of [8080, 8081] as const) {
-    for (const path of PYTHON_PATHS) routes.push(await probe(ports[listener], listener, path, 200, 'python'))
-    for (const path of GONE_PATHS) {
-      const hitsBefore = totalHits(markers)
-      routes.push(await probe(ports[listener], listener, path, 410, 'none'))
-      assert(totalHits(markers) === hitsBefore, `${listener}${path} reached an upstream`)
-    }
-    for (const path of NOT_FOUND_PATHS) {
-      const hitsBefore = totalHits(markers)
-      routes.push(await probe(ports[listener], listener, path, 404, 'none'))
-      assert(totalHits(markers) === hitsBefore, `${listener}${path} reached an upstream`)
-    }
-    const hitsBeforeInternal = totalHits(markers)
-    routes.push(await probe(ports[listener], listener, INTERNAL_PATH, 404, 'none'))
-    assert(totalHits(markers) === hitsBeforeInternal, `${listener}${INTERNAL_PATH} reached an upstream`)
+  for (const path of PYTHON_PATHS) routes.push(await probe(port, 8080, path, 200, 'python'))
+  for (const path of GONE_PATHS) {
+    const hitsBefore = totalHits(markers)
+    routes.push(await probe(port, 8080, path, 410, 'none'))
+    assert(totalHits(markers) === hitsBefore, `${path} reached an upstream`)
   }
+  for (const path of NOT_FOUND_PATHS) {
+    const hitsBefore = totalHits(markers)
+    routes.push(await probe(port, 8080, path, 404, 'none'))
+    assert(totalHits(markers) === hitsBefore, `${path} reached an upstream`)
+  }
+  const hitsBeforeInternal = totalHits(markers)
+  routes.push(await probe(port, 8080, INTERNAL_PATH, 404, 'none'))
+  assert(totalHits(markers) === hitsBeforeInternal, `${INTERNAL_PATH} reached an upstream`)
   return { phase: 'terminal', routes }
 }
 
@@ -206,17 +201,16 @@ async function startCaddy(
   container: string,
   configPath: string,
   configTarget: string,
-  frontDir: string,
-  adminDir: string,
+  appDir: string,
   markers: MarkerServer[],
 ): Promise<void> {
   const marker = Object.fromEntries(markers.map(item => [item.marker, item])) as Record<string, MarkerServer>
   await command([
     'docker', 'run', '--detach', '--name', container,
     '--add-host', 'host.docker.internal:host-gateway',
-    '--publish', '127.0.0.1::8080', '--publish', '127.0.0.1::8081',
+    '--publish', '127.0.0.1::8080',
     '--volume', `${configPath}:${configTarget}:ro`,
-    '--volume', `${frontDir}:/srv/front:ro`, '--volume', `${adminDir}:/srv/admin:ro`,
+    '--volume', `${appDir}:/srv/app:ro`,
     '--env', `PYTHON_API_URL=${dockerHostUrl(marker.python)}`,
     CADDY_IMAGE, 'caddy', 'run', '--config', configTarget,
   ])
@@ -230,8 +224,7 @@ async function main(): Promise<void> {
   const root = resolve(import.meta.dir, '..')
   const caddyfile = join(root, 'Caddyfile')
   const temporary = await mkdtemp(join(tmpdir(), 'ima-caddy-routing-'))
-  const frontDir = join(temporary, 'front')
-  const adminDir = join(temporary, 'admin')
+  const appDir = join(temporary, 'app')
   const prefix = `ima-caddy-drill-${randomUUID()}`
   const containers = new Set<string>()
   const markers = [markerServer('python')]
@@ -257,11 +250,8 @@ async function main(): Promise<void> {
   process.once('SIGTERM', onSignal)
 
   try {
-    await Promise.all([mkdir(frontDir), mkdir(adminDir)])
-    await Promise.all([
-      writeFile(join(frontDir, 'index.html'), 'front'),
-      writeFile(join(adminDir, 'index.html'), 'admin'),
-    ])
+    await mkdir(appDir)
+    await writeFile(join(appDir, 'index.html'), 'app')
     await command(['docker', 'pull', CADDY_IMAGE], 120_000)
     const { stdout: digestOutput } = await command([
       'docker', 'image', 'inspect', '--format', '{{json .RepoDigests}}', CADDY_IMAGE,
@@ -271,7 +261,7 @@ async function main(): Promise<void> {
 
     const terminalContainer = `${prefix}-terminal`
     containers.add(terminalContainer)
-    await startCaddy(terminalContainer, caddyfile, '/etc/caddy/Caddyfile', frontDir, adminDir, markers)
+    await startCaddy(terminalContainer, caddyfile, '/etc/caddy/Caddyfile', appDir, markers)
     const terminal = await validateTerminal(terminalContainer, markers)
 
     console.log(JSON.stringify({

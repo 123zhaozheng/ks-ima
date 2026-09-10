@@ -9,6 +9,6 @@ import { watch } from 'vue'
 const router = useRouter()
 watch(() => [session.value.isPending, session.value.data?.user.id] as const, ([isPending, id]) => {
   if (isPending) return
-  router.replace(id ? '/users' : '/auth/sign-in')
+  router.replace(id ? '/admin/users' : '/auth/sign-in')
 }, { immediate: true })
 </script>

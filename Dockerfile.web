@@ -8,16 +8,14 @@ RUN bun install
 COPY . .
 
 RUN bun quasar prepare
-RUN bun run build:front
-RUN bun run build:admin
+RUN bun run build
 
 FROM caddy:2-alpine AS runner
 
 WORKDIR /srv
 
-COPY --from=builder /app/dist/pwa   ./front
-COPY --from=builder /app/dist/spa   ./admin
+COPY --from=builder /app/dist/pwa   ./app
 
 COPY Caddyfile /etc/caddy/Caddyfile
 
-EXPOSE 8080 8081
+EXPOSE 8080

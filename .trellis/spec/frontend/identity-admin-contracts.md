@@ -33,15 +33,17 @@ bun run test:e2e
 - Successful password/TOTP/recovery authentication refreshes the central
   session ref. Route guards watch both pending state and identity, because
   `undefined -> undefined` user IDs do not trigger a user-ID-only watcher.
-- The admin SPA is capability-aware: auditors see knowledge-base/audit read
-  views and Sign Out, but no user/knowledge-base/settings mutation controls.
+- The admin console is a **capability-aware route section** (`/admin/*`, lazy
+  chunks) of the same app, not a separate SPA: auditors see knowledge-base/audit
+  read views and Sign Out, but no user/knowledge-base/settings mutation controls.
   Only super admins see role actions. API authorization remains authoritative.
 - Account security exposes current/other/all session revocation, TOTP
   enrollment/confirmation/disablement, and one-time recovery display/download,
   with loading/empty/error/expired/recent-auth states.
-- Front and admin builds share Quasar generation state and must not run dev/build
-  concurrently. E2E builds sequentially, then serves `dist/pwa` and `dist/spa`
-  through independent static API proxies.
+- One build, one dev server: `bun run build` (PWA) and `bun run dev`. Admin
+  routes are lazy `() => import('src/admin/...')`; their chunks are isolated from
+  the end-user first load and the PWA precache (see Quality Guidelines). E2E
+  serves the single `dist/pwa` build through one static API proxy.
 
 ## 4. Validation & Error Matrix
 
@@ -54,6 +56,7 @@ bun run test:e2e
 | Registration closed | Signup surface may render; API 404 handled clearly |
 | SMTP disabled | Explicit unavailable reset/invite state |
 | Auditor opens admin | Audit/knowledge bases read-only; settings/mutations hidden |
+| Non-admin opens `/admin/*` | Router guard redirects to `/`; rail entry absent |
 | Generated API error | Typed message; no internal response/secret logging |
 | Invalid invite | Safe error; token never rendered/logged after submission |
 

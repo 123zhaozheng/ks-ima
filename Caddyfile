@@ -5,65 +5,7 @@
 }
 
 :8080 {
-	root * /srv/front
-
-	@ima_health path /health/*
-	handle @ima_health {
-		reverse_proxy {$PYTHON_API_URL}
-	}
-
-	@ima_system path /api/v1/system/*
-	handle @ima_system {
-		reverse_proxy {$PYTHON_API_URL}
-	}
-
-	@ima_identity path /api/v1/auth/* /api/v1/account/* /api/v1/admin/*
-	handle @ima_identity {
-		reverse_proxy {$PYTHON_API_URL}
-	}
-
-	@ima_mcp path /mcp /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/mcp /.well-known/oauth-authorization-server /oauth/authorize /oauth/authorize/decision /oauth/token /oauth/revoke /api/v1/oauth/*
-	handle @ima_mcp {
-		reverse_proxy {$PYTHON_API_URL}
-	}
-
-	@ima_kb path /api/v1/knowledge-bases /api/v1/knowledge-bases/* /api/v1/kb-share-links /api/v1/kb-share-links/* /api/v1/folders/* /api/v1/documents/*
-	@ima_storage path /api/v1/folders/*/files/upload-ticket /api/v1/documents/*/file /api/v1/documents/*/file/* /api/v1/documents/*/ingestion
-	handle @ima_kb {
-		reverse_proxy {$PYTHON_API_URL}
-	}
-	handle @ima_storage {
-		reverse_proxy {$PYTHON_API_URL}
-	}
-
-	# The Python internal paths are private API-to-API traffic, never a browser route.
-	@ima_internal_forbidden path /api/v1/internal/*
-	handle @ima_internal_forbidden {
-		respond "Not Found" 404
-	}
-
-	# Retired legacy resources answer Gone so consumers repoint to canonical /mcp.
-	@api_gone path /api/mcp /api/mcp/* /api/kb /api/kb/* /api/s3 /api/s3/* /api/search /api/search/* /api/v1/chat /api/v1/chat/* /api/connectors /api/connectors/*
-	handle @api_gone {
-		respond "Gone" 410
-	}
-
-	# The legacy API has no backend left; residual /api/* space answers 404.
-	@api path /api/*
-	handle @api {
-		respond "Not Found" 404
-	}
-
-	handle {
-		try_files {path} /index.html
-		file_server {
-			precompressed br gzip
-		}
-	}
-}
-
-:8081 {
-	root * /srv/admin
+	root * /srv/app
 
 	@ima_health path /health/*
 	handle @ima_health {

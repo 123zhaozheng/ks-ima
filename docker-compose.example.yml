@@ -113,8 +113,7 @@ services:
     #   context: .
     #   dockerfile: Dockerfile.web
     ports:
-      - 8080:8080 # user frontend
-      - 8081:8081 # admin frontend
+      - 8080:8080 # app (user frontend + admin console at /admin)
     environment:
       PYTHON_API_URL: http://ima-api:8000
 

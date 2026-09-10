@@ -159,8 +159,7 @@
           </q-item>
           <q-item
             v-if="canSeeAdminConsole"
-            :href="adminConsoleUrl"
-            target="_blank"
+            to="/admin"
             item-rd
             min-h="40px"
           >
@@ -199,7 +198,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, provide } from 'vue'
+import { computed, onBeforeUnmount, provide } from 'vue'
 import { useQuasar } from 'quasar'
 import { useRouter } from 'vue-router'
 import { useKbStore } from 'src/stores/knowledge-base'
@@ -210,6 +209,7 @@ import AAvatar from 'src/components/AAvatar.vue'
 import KbManageDialog from 'src/components/KbManageDialog.vue'
 import KbMenuList from 'src/components/KbMenuList.vue'
 import { groundedKey, useGroundedKnowledge } from 'src/composables/use-grounded-knowledge'
+import { waitingWorker } from 'app/src-pwa/register-service-worker'
 
 const uiStateStore = useUiStateStore()
 const kbStore = useKbStore()
@@ -226,13 +226,22 @@ const adminRoles = ['super_admin', 'platform_admin', 'security_auditor']
 const canSeeAdminConsole = computed(() =>
   session.value.data?.user.platformRoles?.some(role => adminRoles.includes(role)) ?? false)
 
-// The admin console is a separate deployment: same host, port 8081 in
-// production (Caddyfile), port 9017 for local development.
-const adminConsoleUrl = computed(() => {
-  const { protocol, hostname, port } = location
-  const adminPort = port === '9015' || port === '9016' ? '9017' : '8081'
-  return `${protocol}//${hostname}:${adminPort}/`
+// A background-updated service worker is applied on the next route change so
+// users pick up the new build without a manual hard refresh. The admin console
+// lives in this same app (`/admin`), reached with an internal navigation.
+const stopUpdateGuard = router.beforeEach((to, from) => {
+  if (!waitingWorker || to.path === from.path) return
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    location.href = to.fullPath
+  }, { once: true })
+  waitingWorker.postMessage({ type: 'SKIP_WAITING' })
+  // Prevent hanging
+  setTimeout(() => {
+    location.href = to.fullPath
+  }, 3000)
+  return false
 })
+onBeforeUnmount(stopUpdateGuard)
 
 function signOut() {
   $q.dialog({

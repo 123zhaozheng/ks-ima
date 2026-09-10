@@ -8,7 +8,7 @@
     <q-list>
       <q-item
         v-if="canManageUsers"
-        to="/users"
+        to="/admin/users"
         item-rd
       >
         <q-item-section avatar>
@@ -19,7 +19,7 @@
         </q-item-section>
       </q-item>
       <q-item
-        to="/knowledge-bases"
+        to="/admin/knowledge-bases"
         item-rd
       >
         <q-item-section avatar>
@@ -31,7 +31,7 @@
       </q-item>
       <q-item
         v-if="canReadModelGovernance"
-        to="/models"
+        to="/admin/models"
         item-rd
       >
         <q-item-section avatar>
@@ -42,7 +42,7 @@
         </q-item-section>
       </q-item>
       <q-item
-        to="/audit"
+        to="/admin/audit"
         item-rd
       >
         <q-item-section avatar>

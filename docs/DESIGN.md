@@ -43,7 +43,7 @@
 | 设置 | `/settings` | 登录用户 | 单页：个人资料、密码、TOTP、恢复码、会话吊销 |
 | 加入库 | `/join/:token` | 拿到分享链接的人 | 展示库名与拟授予角色，确认后入成员表 |
 | 授权页 | `/oauth/consent` | MCP 客户端用户 | 仅勾选 scope；不选库、不选文件夹 |
-| 平台后台 | Admin 应用（独立部署，生产 8081 / 本地 9015） | `super_admin` / `platform_admin` / `security_auditor` | 用户、知识库登记、审计、模型治理 |
+| 平台后台 | `/admin`（同一应用内，与用户端同端口） | `super_admin` / `platform_admin` / `security_auditor` | 用户、知识库登记、审计、模型治理 |
 
 没有会员（无成员记录）时 `/kb` 渲染 onboarding：创建或凭分享链接加入。
 标签（tags）、回收站、文件夹 ACL、邀请制群组已全部删除：删除是服务端依赖检查把关的硬删除。
@@ -83,7 +83,7 @@
 ### 4.1 运行时
 
 ```
-浏览器 Vue/Quasar（PWA 前端 :9016 / Admin SPA :9015，生产经 Caddy :8080/:8081）
+浏览器 Vue/Quasar（单应用 PWA，dev :9015，生产经 Caddy :8080；管理端在 `/admin`）
     │  /api、/mcp、/oauth 代理
     ▼
 Python FastAPI（唯一后端）   Postgres（zhparser + vector）   MinIO   Procrastinate worker

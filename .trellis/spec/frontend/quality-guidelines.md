@@ -17,11 +17,11 @@ Questions to answer:
 -->
 
 The retained Vue 3/TypeScript frontend uses Quasar and TanStack Vue Query. Run
-`bun test`, `bun run lint`, and the relevant Quasar build before handoff. The
-release matrix is: `bun run lint` (0 errors/0 warnings), `bun test`,
-`bun run test:unit`, `bun run build:front`, `bun run build:admin`,
-`bun run test:e2e` (against the isolated Postgres, default port override
-`IMA_E2E_POSTGRES_PORT`), and `bun run test:caddy-routing`.
+`bun test`, `bun run lint`, and the Quasar PWA build before handoff. The
+release matrix is: `bun run lint` (0 errors/0 warnings), `bunx vue-tsc --noEmit`,
+`bun test`, `bun run test:unit`, `bun run build`, `bun run test:e2e` (against
+the isolated Postgres, default port override `IMA_E2E_POSTGRES_PORT`), and
+`bun run test:caddy-routing`.
 
 ---
 
@@ -46,6 +46,34 @@ nesting, `color-mix()`, `oklch()`, container queries, or unprefixed
 
 Register shared query behavior in `src/boot/vue-query.ts`; keep API calls in the
 generated client/composables and preserve existing product stores.
+
+### Admin bundle isolation (single-app console)
+
+The admin console lives at `/admin/*` in the **same** PWA, with lazy
+`() => import('src/admin/...')` routes. Its JS/CSS must never reach end-user
+first load or the service-worker precache. Enforced in `quasar.config.ts`:
+
+- `build.extendViteConf` → `rollupOptions.output.chunkFileNames` and
+  `assetFileNames` route admin-owned output to `assets/admin/[name]-[hash].*`.
+- `pwa.extendGenerateSWOptions` → `cfg.globIgnores = ['**/assets/admin/**']`.
+
+Three non-obvious traps (all previously shipped bugs):
+
+1. **Match root-relative names too.** Vite passes `assetFileNames` names like
+   `src/admin/pages/UsersPage.vue` (no leading slash). Use
+   `/(^|[\\/])src[\\/]admin[\\/]/`, not `id.includes('/src/admin/')`.
+2. **CSS is an asset, not a chunk.** Admin page stylesheets are emitted by
+   `assetFileNames` (named after the chunk), so a `chunkFileNames`-only rule
+   leaves `assets/UsersPage-*.css` in the precache. Route admin assets too.
+3. **Shared vendor chunks need their own pattern.** A component used only by
+   admin pages (e.g. `QTable`) is lifted by Rollup into a vendor-only chunk with
+   no `/src/admin/` module id, so the path check misses it and it gets precached
+   for everyone. Match the vendor path explicitly
+   (`node_modules/quasar/src/components/(table|markup-table)/`).
+
+Assertion point after `bun run build`: `dist/pwa/assets/admin/` exists; the
+`sw.js` precache manifest and `index.html` contain **zero** `assets/admin`
+entries.
 
 ---
 

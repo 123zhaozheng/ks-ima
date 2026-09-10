@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { TOTP } from 'otpauth'
-import { adminOrigin, frontOrigin } from './environment'
+import { frontOrigin } from './environment'
 
 const identityProjectSuffixes = {
   chromium: { suffix: 'CHROMIUM', totpSecret: 'JBSWY3DPEHPK3PXP' },
@@ -60,7 +60,7 @@ test.describe('local identity journeys', () => {
   })
 
   test('unauthenticated admin is redirected', async ({ page }) => {
-    await page.goto(`${adminOrigin}/users`)
+    await page.goto('/admin/users')
     await expect(page).toHaveURL(/auth\/sign-in/)
   })
 
@@ -110,11 +110,11 @@ test.describe('local identity journeys', () => {
 
   test('super admin can manage roles, knowledge bases, and audit', async ({ page }) => {
     await login(page, accounts.super[0], accounts.super[1])
-    await page.goto(`${adminOrigin}/users`)
+    await page.goto('/admin/users')
     await expect(page.getByText('e2e-ordinary@example.com')).toBeVisible()
-    await page.goto(`${adminOrigin}/knowledge-bases`)
+    await page.goto('/admin/knowledge-bases')
     await expect(page.getByLabel('搜索知识库')).toBeVisible()
-    await page.goto(`${adminOrigin}/audit`)
+    await page.goto('/admin/audit')
     await expect(page.getByRole('table')).toBeVisible()
     await expect(page.getByText('动作', { exact: true })).toBeVisible()
     await expect.poll(() => page.getByRole('row').count()).toBeGreaterThan(1)
@@ -174,7 +174,7 @@ test.describe('local identity journeys', () => {
   test('security auditor has read-only audit access', async ({ page }) => {
     await login(page, accounts.auditor[0], accounts.auditor[1])
     expect((await page.request.get('/api/v1/admin/audit-events')).ok()).toBeTruthy()
-    await page.goto(`${adminOrigin}/audit`)
+    await page.goto('/admin/audit')
     await expect(page.getByRole('table')).toBeVisible()
     await expect.poll(() => page.getByRole('row').count()).toBeGreaterThan(1)
     const response = await page.request.post('/api/v1/admin/knowledge-bases', { data: { name: 'auditor-must-not-create', initialOwnerUserId: 'e2e-ordinary-id' }, headers: await csrfHeaders(page) })

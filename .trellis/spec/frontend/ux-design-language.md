@@ -51,9 +51,13 @@ Rail order: **knowledge base switcher** (`kb-switcher`, top — `KbMenuList`
 popover: switch between memberships, create, join via share link) → **Ask
 (`/`)** → **Knowledge base (`/kb`)** → **History (`/history`)** →
 **Connectors (`/connectors`)** → **Settings (`/settings`)** → conditional
-**Admin console** external link (only for `super_admin` / `platform_admin` /
-`security_auditor`; separate deployment on the same host, port 8081 in
-production, 9015 in local dev) → Sign out.
+**Admin console** in-app link (`to="/admin"`, only for `super_admin` /
+`platform_admin` / `security_auditor`) → Sign out.
+
+The admin console is a **route section of this same app** (`/admin/*`), not a
+separate deployment: same origin, same port (9015 dev), lazy-loaded chunks.
+Only admin roles see the rail entry; non-admins who deep-link are redirected to
+`/` by the router guard.
 
 ### Route map (front app)
 
@@ -67,6 +71,7 @@ production, 9015 in local dev) → Sign out.
 | `/settings` | `SettingsLayout.vue` | single settings page (profile, security, sessions); the old `/account*` pages are gone |
 | `/join/:token` | `JoinKnowledgeBase.vue` | knowledge base share-link join |
 | `/oauth/consent` | `OAuthConsentPage.vue` | scope-only MCP consent |
+| `/admin/*` | `src/admin/**` (lazy) | admin console section — `meta.requiresAdmin`; own `MainLayout` + drawer |
 | auth routes, catchAll | unchanged / `NotFoundPage.vue` | restyled with tokens |
 
 The legacy admin pages (Overview/Tags/Models), `/trash`, and the

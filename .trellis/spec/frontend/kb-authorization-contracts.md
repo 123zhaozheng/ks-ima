@@ -95,8 +95,8 @@ share-link DTOs, or HTTP error shapes.
 3. Full Playwright uses real Python/PostgreSQL and covers all three roles,
    nonmember platform admin, share-link join, membership revoke,
    archive/delete gating, and cleanup with zero skips.
-4. OpenAPI export/generation/drift, ESLint, `vue-tsc`, Bun/Vitest, and
-   front/admin builds pass after any contract or component change.
+4. OpenAPI export/generation/drift, ESLint, `vue-tsc`, Bun/Vitest, and the
+   single PWA build pass after any contract or component change.
 
 ## 7. Wrong vs Correct
 

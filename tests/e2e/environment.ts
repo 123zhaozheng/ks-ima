@@ -20,10 +20,8 @@ export const e2eEnvironment = {
   postgresPort,
   apiPort: port('IMA_E2E_API_PORT', '8787'),
   frontPort: port('IMA_E2E_FRONT_PORT', '9016'),
-  adminPort: port('IMA_E2E_ADMIN_PORT', '9017'),
   composeProject,
 } as const
 
 export const frontOrigin = `http://127.0.0.1:${e2eEnvironment.frontPort}`
-export const adminOrigin = `http://127.0.0.1:${e2eEnvironment.adminPort}`
 export const apiOrigin = `http://127.0.0.1:${e2eEnvironment.apiPort}`

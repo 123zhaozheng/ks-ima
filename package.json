@@ -12,10 +12,8 @@
     "test:unit": "vitest run --config vitest.config.ts",
     "test:all": "bun test && bun run test:unit",
     "test:caddy-routing": "bun scripts/caddy-routing-drill.ts",
-    "dev:front": "TARGET_APP=front bun quasar dev",
-    "dev:admin": "TARGET_APP=admin bun quasar dev",
-    "build:front": "TARGET_APP=front bun quasar build -m pwa",
-    "build:admin": "TARGET_APP=admin bun quasar build",
+    "dev": "bun quasar dev",
+    "build": "bun quasar build -m pwa",
     "generate:api": "bunx openapi-typescript frontend/generated/openapi.json -o src/api/generated/schema.ts",
     "test:e2e": "playwright test"
   },

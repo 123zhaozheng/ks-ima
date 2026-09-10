@@ -1,4 +1,4 @@
-import Front from 'src/AppFront.vue'
+import AppShell from 'src/layouts/AppShell.vue'
 import MainLayout from 'src/layouts/MainLayout.vue'
 import NotFoundPage from 'src/pages/NotFoundPage.vue'
 import type { RouteRecordRaw } from 'vue-router'
@@ -12,10 +12,12 @@ import HistoryPage from 'src/pages/HistoryPage.vue'
 import JoinKnowledgeBase from 'src/pages/JoinKnowledgeBase.vue'
 import OAuthConsentPage from 'src/pages/OAuthConsentPage.vue'
 
+// The admin console is a section of this same app (`/admin/*`), not a separate
+// deployment. Its pages are loaded lazily so end users never download them.
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    component: Front,
+    component: AppShell,
     children: [
       {
         path: '/',
@@ -61,6 +63,18 @@ const routes: RouteRecordRaw[] = [
           title: '未找到页面',
         },
       },
+    ],
+  },
+  {
+    path: '/admin',
+    component: () => import('src/admin/layouts/MainLayout.vue'),
+    meta: { requiresAdmin: true },
+    children: [
+      { path: '', component: () => import('src/admin/pages/EmptyPage.vue'), meta: { title: '管理控制台' } },
+      { path: 'users', component: () => import('src/admin/pages/UsersPage.vue'), meta: { title: '用户' } },
+      { path: 'knowledge-bases', component: () => import('src/admin/pages/KnowledgeBasesPage.vue'), meta: { title: '知识库' } },
+      { path: 'models', component: () => import('src/admin/pages/ModelsPage.vue'), meta: { title: '模型配置' } },
+      { path: 'audit', component: () => import('src/admin/pages/AuditPage.vue'), meta: { title: '审计' } },
     ],
   },
 ]

@@ -111,3 +111,17 @@ def test_retry_cancel_and_status_are_scoped_to_the_current_file_version() -> Non
 def test_parser_rejects_invalid_json() -> None:
     with pytest.raises(ParseError, match="MALFORMED_DOCUMENT"):
         Parser(Settings()).parse(b"{", "bad.json", "application/json")
+
+
+def test_embed_stage_resolves_through_the_shared_embedding_target() -> None:
+    # Ingestion must not query kb_profile_assignments directly: that bypassed
+    # the scene-default fallback retrieval already honours.
+    source = (
+        Path(__file__).parents[2] / "src" / "ima" / "infrastructure" / "tasks" / "ingestion.py"
+    ).read_text()
+    embed = source[source.index('name="ima.ingestion.embed"') :]
+    embed = embed[: embed.index('name="ima.ingestion.cleanup"')]
+    assert "kb_profile_assignments" not in embed
+    assert "embedding_target(" in embed
+    assert '"NO_ASSIGNMENT"' in embed
+    assert "managed_embeddings(" in embed

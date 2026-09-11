@@ -293,20 +293,6 @@ def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
                 kb_id = await conn.scalar(
                     text("SELECT kb_id FROM ima.documents WHERE id=:id"), {"id": identifier}
                 )
-                model = (
-                    (
-                        await conn.execute(
-                            text("""SELECT m.id,m.version,m.embedding_dimension FROM ima.kb_profile_assignments a
-                            JOIN ima.capability_profile_versions p ON p.profile_id=a.profile_id AND p.version=a.profile_version
-                            JOIN ima.governed_models m ON m.id=CAST(p.config->>'embeddingModelId' AS uuid)
-                            WHERE a.kb_id=:kb AND a.workflow='embedding'
-                              AND m.capability='embedding' AND m.enabled AND m.validated"""),
-                            {"kb": kb_id},
-                        )
-                    )
-                    .mappings()
-                    .first()
-                )
                 chunks = (
                     (
                         await conn.execute(
@@ -325,11 +311,30 @@ def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
                 if not kb_id:
                     await failed(conn, job, "DOCUMENT_NOT_FOUND", retryable=False)
                     return
-                if not model:
-                    await failed(conn, job, "NO_ASSIGNMENT", retryable=False)
-                    return
+            # Resolve the embedding target through the governed service so the
+            # ingestion stage shares the exact assignment/scene-default
+            # precedence (and denial semantics) used by retrieval.  This runs
+            # outside the ingest transaction; the service owns its connections.
+            service = ModelGovernanceService(engine, settings)
             try:
-                vectors = await ModelGovernanceService(engine, settings).managed_embeddings(
+                target = await service.embedding_target(str(kb_id))
+            except ModelGovernanceError as exc:
+                async with engine.begin() as conn:
+                    await failed(conn, job, exc.code, retryable=exc.status_code >= 500)
+                return
+            if target is None:
+                async with engine.begin() as conn:
+                    await failed(conn, job, "NO_ASSIGNMENT", retryable=False)
+                return
+            if target.get("reason"):
+                async with engine.begin() as conn:
+                    await failed(conn, job, str(target["reason"]), retryable=False)
+                return
+            model_id = target["model_id"]
+            model_version = target["model_version"]
+            dimension = target["embedding_dimension"]
+            try:
+                vectors = await service.managed_embeddings(
                     str(kb_id), [row["text_content"] for row in chunks]
                 )
                 if (
@@ -338,7 +343,7 @@ def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
                         not vector or any(not math.isfinite(value) for value in vector)
                         for vector in vectors
                     )
-                    or any(len(vector) != int(model["embedding_dimension"]) for vector in vectors)
+                    or any(len(vector) != int(dimension) for vector in vectors)
                 ):
                     raise ValueError
                 dimensions = {len(vector) for vector in vectors}
@@ -363,8 +368,8 @@ def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
                         {
                             "embedding": "[" + ",".join(str(value) for value in vector) + "]",
                             "kb": kb_id,
-                            "model": model["id"],
-                            "model_version": model["version"],
+                            "model": model_id,
+                            "model_version": model_version,
                             "dimension": len(vector),
                             "id": identifier,
                             "version": version,

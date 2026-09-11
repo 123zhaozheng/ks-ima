@@ -2056,7 +2056,7 @@ class ModelGovernanceService:
                 (
                     await conn.execute(
                         text(
-                            """SELECT a.*,p.workflow,p.lifecycle,v.state,v.config,g.id gateway_id,g.normalized_base_url,g.insecure_private,g.enabled gateway_enabled,g.secret_id,g.custom_ca_ref,g.allowed_hosts,g.allowed_cidrs,g.max_response_bytes,g.connect_timeout_ms,g.read_timeout_ms,g.write_timeout_ms,g.pool_timeout_ms,m.id model_id,m.remote_name,m.capability,m.enabled model_enabled,m.validated,COALESCE(h.state,'unknown') health_state FROM ima.kb_profile_assignments a JOIN ima.capability_profiles p ON p.id=a.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=a.profile_id AND v.version=a.profile_version JOIN ima.governed_models m ON m.id=CAST(CASE WHEN :operation='chat' THEN v.config->>'chatModelId' WHEN :operation='embedding' THEN v.config->>'embeddingModelId' WHEN :operation='rerank' THEN v.config->>'rerankModelId' END AS uuid) JOIN ima.model_gateways g ON g.id=m.gateway_id LEFT JOIN ima.model_gateway_health h ON h.gateway_id=g.id AND h.capability=m.capability WHERE a.kb_id=:kb AND a.workflow=:workflow"""
+                            """SELECT a.*,p.workflow,p.lifecycle,v.state,v.config,g.id gateway_id,g.normalized_base_url,g.insecure_private,g.enabled gateway_enabled,g.secret_id,g.custom_ca_ref,g.allowed_hosts,g.allowed_cidrs,g.max_response_bytes,g.connect_timeout_ms,g.read_timeout_ms,g.write_timeout_ms,g.pool_timeout_ms,m.id model_id,m.version model_version,m.remote_name,m.capability,m.enabled model_enabled,m.validated,m.embedding_dimension,COALESCE(h.state,'unknown') health_state FROM ima.kb_profile_assignments a JOIN ima.capability_profiles p ON p.id=a.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=a.profile_id AND v.version=a.profile_version JOIN ima.governed_models m ON m.id=CAST(CASE WHEN :operation='chat' THEN v.config->>'chatModelId' WHEN :operation='embedding' THEN v.config->>'embeddingModelId' WHEN :operation='rerank' THEN v.config->>'rerankModelId' END AS uuid) JOIN ima.model_gateways g ON g.id=m.gateway_id LEFT JOIN ima.model_gateway_health h ON h.gateway_id=g.id AND h.capability=m.capability WHERE a.kb_id=:kb AND a.workflow=:workflow"""
                         ),
                         {
                             "kb": kb_id,
@@ -2101,7 +2101,7 @@ class ModelGovernanceService:
                     (
                         await conn.execute(
                             text(
-                                """SELECT p.id profile_id,p.current_version profile_version,p.workflow,p.lifecycle,v.state,v.config,g.id gateway_id,g.normalized_base_url,g.insecure_private,g.enabled gateway_enabled,g.secret_id,g.custom_ca_ref,g.allowed_hosts,g.allowed_cidrs,g.max_response_bytes,g.connect_timeout_ms,g.read_timeout_ms,g.write_timeout_ms,g.pool_timeout_ms,m.id model_id,m.remote_name,m.capability,m.enabled model_enabled,m.validated,COALESCE(h.state,'unknown') health_state FROM ima.scene_defaults d JOIN ima.capability_profiles p ON p.id=d.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=p.id AND v.version=p.current_version AND v.state='published' JOIN ima.governed_models m ON m.id=CAST(CASE WHEN :operation='chat' THEN v.config->>'chatModelId' WHEN :operation='embedding' THEN v.config->>'embeddingModelId' WHEN :operation='rerank' THEN v.config->>'rerankModelId' END AS uuid) JOIN ima.model_gateways g ON g.id=m.gateway_id LEFT JOIN ima.model_gateway_health h ON h.gateway_id=g.id AND h.capability=m.capability WHERE d.workflow=:workflow"""
+                                """SELECT p.id profile_id,p.current_version profile_version,p.workflow,p.lifecycle,v.state,v.config,g.id gateway_id,g.normalized_base_url,g.insecure_private,g.enabled gateway_enabled,g.secret_id,g.custom_ca_ref,g.allowed_hosts,g.allowed_cidrs,g.max_response_bytes,g.connect_timeout_ms,g.read_timeout_ms,g.write_timeout_ms,g.pool_timeout_ms,m.id model_id,m.version model_version,m.remote_name,m.capability,m.enabled model_enabled,m.validated,m.embedding_dimension,COALESCE(h.state,'unknown') health_state FROM ima.scene_defaults d JOIN ima.capability_profiles p ON p.id=d.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=p.id AND v.version=p.current_version AND v.state='published' JOIN ima.governed_models m ON m.id=CAST(CASE WHEN :operation='chat' THEN v.config->>'chatModelId' WHEN :operation='embedding' THEN v.config->>'embeddingModelId' WHEN :operation='rerank' THEN v.config->>'rerankModelId' END AS uuid) JOIN ima.model_gateways g ON g.id=m.gateway_id LEFT JOIN ima.model_gateway_health h ON h.gateway_id=g.id AND h.capability=m.capability WHERE d.workflow=:workflow"""
                             ),
                             {"workflow": workflow.value, "operation": operation},
                         )
@@ -2227,6 +2227,15 @@ class ModelGovernanceService:
             insecure_private=row["insecure_private"],
         ):
             yield chunk
+
+    async def embedding_target(self, kb_id: str) -> dict[str, Any] | None:
+        """Resolve the exact embedding execution target for a knowledge base.
+
+        Thin public wrapper over :meth:`_execution_target` so ingestion resolves
+        the embedding model through the same assignment-then-scene-default
+        precedence and the same audit/denial semantics as retrieval.
+        """
+        return await self._execution_target(kb_id, Workflow.EMBEDDING, "embedding")
 
     async def managed_embeddings(
         self, kb_id: str, inputs: list[str]

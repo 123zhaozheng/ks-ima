@@ -28,14 +28,13 @@
           class="kb-manage-section"
         >
           <div class="kb-manage-section-title">
-            重命名知识库
+            名称
           </div>
           <div class="kb-rename-row">
             <q-input
               v-model="name"
               dense
               outlined
-              label="知识库名称"
               data-testid="kb-rename-input"
               @keyup.enter="rename"
             />
@@ -102,9 +101,6 @@
               data-testid="kb-delete"
               @click="confirmDeleteKb"
             />
-          </div>
-          <div class="tk-caption">
-            {{ archived ? '只有已归档的知识库才能删除。' : '删除前需要先归档该知识库。' }}
           </div>
         </div>
       </q-card-section>
@@ -269,6 +265,20 @@ function confirmDeleteKb() {
 
 .kb-rename-row .q-input {
   flex: 1;
+}
+
+/* 36px row: shrink the dense field (40px) and rebalance native padding so text stays centered. */
+.kb-rename-row .q-btn {
+  height: var(--tk-control-h);
+}
+
+.kb-rename-row :deep(.q-field__control) {
+  height: var(--tk-control-h);
+}
+
+.kb-rename-row :deep(.q-field__native) {
+  padding-top: var(--tk-space-1);
+  padding-bottom: var(--tk-space-1);
 }
 
 .kb-danger-row {

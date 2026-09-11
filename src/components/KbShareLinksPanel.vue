@@ -3,9 +3,6 @@
     <div class="kb-manage-section-title">
       分享链接
     </div>
-    <div class="tk-caption">
-      拿到分享链接的人都可以加入该知识库。
-    </div>
     <div class="kb-share-create">
       <q-btn-toggle
         v-model="role"
@@ -28,8 +25,7 @@
         type="number"
         min="1"
         class="kb-share-expiry"
-        label="有效期（天）"
-        hint="留空表示不过期。"
+        placeholder="有效期（天），留空不过期"
       />
       <q-btn
         dense
@@ -245,6 +241,21 @@ function confirmRevoke(link: ShareLink) {
 
 .kb-share-expiry {
   width: 150px;
+}
+
+/* 36px row: shrink the dense field (40px) and rebalance native padding so text stays centered. */
+.kb-share-create .q-btn,
+.kb-share-create :deep(.q-btn-toggle .q-btn) {
+  height: var(--tk-control-h);
+}
+
+.kb-share-create :deep(.q-field__control) {
+  height: var(--tk-control-h);
+}
+
+.kb-share-create :deep(.q-field__native) {
+  padding-top: var(--tk-space-1);
+  padding-bottom: var(--tk-space-1);
 }
 
 .kb-share-new {

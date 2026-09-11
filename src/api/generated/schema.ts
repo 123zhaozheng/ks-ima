@@ -710,6 +710,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/scene-defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Scene Defaults */
+        get: operations["listSceneDefaults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/scene-defaults/{workflow}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Scene Default */
+        put: operations["updateSceneDefault"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings": {
         parameters: {
             query?: never;
@@ -3058,6 +3092,11 @@ export interface components {
             /** Name */
             name: string;
             /**
+             * Owned
+             * @default false
+             */
+            owned: boolean;
+            /**
              * Role
              * @enum {string}
              */
@@ -3438,6 +3477,30 @@ export interface components {
             sizeBytes: number;
             /** Title */
             title: string;
+        };
+        /** SceneDefaultItem */
+        SceneDefaultItem: {
+            /** Modelid */
+            modelId?: string | null;
+            /** Profileid */
+            profileId?: string | null;
+            /** Profileversion */
+            profileVersion?: number | null;
+            /**
+             * Workflow
+             * @enum {string}
+             */
+            workflow: "grounded_ask" | "title_generation" | "summarization" | "embedding" | "reranking";
+        };
+        /** SceneDefaultList */
+        SceneDefaultList: {
+            /** Items */
+            items: components["schemas"]["SceneDefaultItem"][];
+        };
+        /** SceneDefaultUpdateRequest */
+        SceneDefaultUpdateRequest: {
+            /** Modelid */
+            modelId?: string | null;
         };
         /** SearchResponse */
         SearchResponse: {
@@ -5317,6 +5380,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImpactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listSceneDefaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SceneDefaultList"];
+                };
+            };
+        };
+    };
+    updateSceneDefault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SceneDefaultUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SceneDefaultItem"];
                 };
             };
             /** @description Validation Error */

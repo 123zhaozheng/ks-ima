@@ -28,6 +28,30 @@ def test_openapi_has_model_governance_operations_but_no_private_bridge() -> None
     assert "gatewayBaseUrl" not in str(schema)
 
 
+def test_scene_default_endpoints_and_contracts_are_registered() -> None:
+    app = create_app(
+        Settings(environment="test", database_url="postgresql+asyncpg://x:x@localhost/app")
+    )
+    schema = app.openapi()
+    paths = schema["paths"]
+    assert paths["/api/v1/admin/scene-defaults"]["get"]["operationId"] == "listSceneDefaults"
+    assert (
+        paths["/api/v1/admin/scene-defaults/{workflow}"]["put"]["operationId"]
+        == "updateSceneDefault"
+    )
+    components = schema["components"]["schemas"]
+    item = components["SceneDefaultItem"]
+    assert set(item["properties"]) == {"workflow", "profileId", "profileVersion", "modelId"}
+    assert item["properties"]["workflow"]["enum"] == [
+        "grounded_ask",
+        "title_generation",
+        "summarization",
+        "embedding",
+        "reranking",
+    ]
+    assert set(components["SceneDefaultUpdateRequest"]["properties"]) == {"modelId"}
+
+
 def test_liveness_has_correlation_header() -> None:
     app = create_app(Settings(environment="test"))
     response = TestClient(app).get("/health/live")

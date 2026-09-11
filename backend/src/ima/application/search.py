@@ -21,7 +21,13 @@ from ima.application.knowledge import effective_user_id, kb_membership, role_per
 from ima.application.mcp_contracts import McpActor
 from ima.application.model_governance import ModelGovernanceError, ModelGovernanceService
 from ima.domain.authorization import KbAction, KbRole
-from ima.domain.model_governance import GroundedAskConfig, Workflow, parse_profile_config
+from ima.domain.model_governance import (
+    EmbeddingConfig,
+    GroundedAskConfig,
+    RerankingConfig,
+    Workflow,
+    parse_profile_config,
+)
 
 
 class SearchError(Exception):
@@ -85,8 +91,45 @@ class SearchService:
             .first()
         )
         if not row:
-            raise SearchError(409, "NO_ASSIGNMENT", "No grounded Ask profile is assigned")
+            # An assignment row that misses its profile/version join keeps the
+            # historical denial; only a truly unassigned KB falls back to the
+            # platform scene defaults.
+            assigned = await conn.scalar(
+                text(
+                    "SELECT 1 FROM ima.kb_profile_assignments WHERE kb_id=:kb AND workflow='grounded_ask'"
+                ),
+                {"kb": kb_id},
+            )
+            if assigned:
+                raise SearchError(409, "NO_ASSIGNMENT", "No grounded Ask profile is assigned")
+            return await self._scene_profile()
         return cast(GroundedAskConfig, parse_profile_config(row["config"], Workflow.GROUNDED_ASK))
+
+    async def _scene_profile(self) -> GroundedAskConfig:
+        """Compose a grounded profile from the platform scene defaults."""
+        scene = await self.models.scene_default_config(Workflow.GROUNDED_ASK)
+        if not scene:
+            raise SearchError(409, "NO_ASSIGNMENT", "No grounded Ask profile is assigned")
+        config = cast(GroundedAskConfig, parse_profile_config(scene, Workflow.GROUNDED_ASK))
+        if not config.embedding_model_id:
+            embedding = await self.models.scene_default_config(Workflow.EMBEDDING)
+            if embedding:
+                embedding_config = cast(
+                    EmbeddingConfig, parse_profile_config(embedding, Workflow.EMBEDDING)
+                )
+                config = config.model_copy(
+                    update={"embedding_model_id": embedding_config.embedding_model_id}
+                )
+        if not config.rerank_model_id:
+            reranking = await self.models.scene_default_config(Workflow.RERANKING)
+            if reranking:
+                rerank_config = cast(
+                    RerankingConfig, parse_profile_config(reranking, Workflow.RERANKING)
+                )
+                config = config.model_copy(
+                    update={"rerank_model_id": rerank_config.rerank_model_id}
+                )
+        return config
 
     async def _require_kb(
         self,

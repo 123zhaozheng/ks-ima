@@ -258,91 +258,72 @@
           class="q-px-none"
         >
           <div class="text-caption text-grey-7 q-mb-md">
-            为每个场景选择要使用的模型。修改后点击「保存」即可生效。
+            为每个场景选择要使用的模型。修改后点击对应行「保存」即可生效。
           </div>
-          <div class="row q-col-gutter-lg">
-            <div
-              v-for="scene in SCENES"
-              :key="scene.id"
-              class="col-12 col-xl-6"
-            >
-              <q-card
-                flat
-                bordered
-                class="surface-card q-pa-lg full-height"
-              >
-                <div class="row items-start q-mb-md">
-                  <div
-                    class="column"
-                    style="min-width: 0"
-                  >
-                    <div class="text-subtitle1 text-weight-medium">
-                      {{ scene.name }}
-                    </div>
-                    <div class="text-caption text-grey-7 q-mt-xs">
-                      {{ scene.desc }}
-                    </div>
-                  </div>
-                  <q-space />
+          <q-table
+            flat
+            bordered
+            separator="horizontal"
+            class="surface-card"
+            :rows="SCENES"
+            :columns="sceneColumns"
+            row-key="id"
+            hide-bottom
+            :pagination="{ rowsPerPage: 0 }"
+          >
+            <template #body-cell-scene="props">
+              <q-td :props="props">
+                <div class="text-subtitle2 text-weight-medium">
+                  {{ props.row.name }}
                 </div>
-
-                <div class="row q-col-gutter-sm">
-                  <template v-if="scene.id === 'grounded_ask' || scene.id === 'title_generation' || scene.id === 'summarization'">
-                    <div class="col-12">
-                      <q-select
-                        v-model="sceneState[scene.id].chatModelId"
-                        outlined
-                        dense
-                        emit-value
-                        map-options
-                        clearable
-                        label="对话模型"
-                        :options="modelOptions('chat')"
-                      />
-                    </div>
-                  </template>
-                  <template v-else-if="scene.id === 'embedding'">
-                    <div class="col-12">
-                      <q-select
-                        v-model="sceneState[scene.id].embeddingModelId"
-                        outlined
-                        dense
-                        emit-value
-                        map-options
-                        clearable
-                        label="向量模型"
-                        :options="modelOptions('embedding')"
-                      />
-                    </div>
-                  </template>
-                  <template v-else>
-                    <div class="col-12">
-                      <q-select
-                        v-model="sceneState[scene.id].rerankModelId"
-                        outlined
-                        dense
-                        emit-value
-                        map-options
-                        clearable
-                        label="重排序模型"
-                        :options="modelOptions('rerank')"
-                      />
-                    </div>
-                  </template>
+                <div class="text-caption text-grey-7">
+                  {{ props.row.desc }}
                 </div>
-
+              </q-td>
+            </template>
+            <template #body-cell-model="props">
+              <q-td :props="props">
+                <q-select
+                  :model-value="sceneState[props.row.id][sceneSlot(props.row.id)]"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  clearable
+                  :options="modelOptions(sceneCapability(props.row.id))"
+                  :disable="!canManage"
+                  style="min-width: 220px"
+                  class="scene-model-select"
+                  @update:model-value="(val: string | null) => setSceneModel(props.row.id, val)"
+                />
+              </q-td>
+            </template>
+            <template #body-cell-status="props">
+              <q-td :props="props">
+                <q-badge
+                  outline
+                  :color="sceneState[props.row.id][sceneSlot(props.row.id)] ? 'positive' : 'grey-6'"
+                >
+                  {{ sceneState[props.row.id][sceneSlot(props.row.id)] ? '已设' : '未设' }}
+                </q-badge>
+              </q-td>
+            </template>
+            <template #body-cell-actions="props">
+              <q-td :props="props">
                 <q-btn
                   v-if="canManage"
                   color="primary"
                   unelevated
+                  dense
                   no-caps
                   label="保存"
-                  class="q-mt-md"
-                  @click="saveSceneConfig(scene.id)"
+                  :loading="savingScene === props.row.id"
+                  :disable="savingScene !== null && savingScene !== props.row.id"
+                  @click="saveSceneConfig(props.row.id)"
                 />
-              </q-card>
-            </div>
-          </div>
+              </q-td>
+            </template>
+          </q-table>
         </q-tab-panel>
       </q-tab-panels>
 
@@ -581,6 +562,20 @@ const sceneState = ref<Record<Workflow, { chatModelId: string | null, embeddingM
 })
 
 // ---------- 场景配置 ----------
+type SceneSlot = 'chatModelId' | 'embeddingModelId' | 'rerankModelId'
+function sceneSlot(id: Workflow): SceneSlot {
+  if (id === 'embedding') return 'embeddingModelId'
+  if (id === 'reranking') return 'rerankModelId'
+  return 'chatModelId'
+}
+function sceneCapability(id: Workflow): Capability {
+  if (id === 'embedding') return 'embedding'
+  if (id === 'reranking') return 'rerank'
+  return 'chat'
+}
+function setSceneModel(id: Workflow, val: string | null) {
+  sceneState.value[id][sceneSlot(id)] = val ?? null
+}
 function modelOptions(capability: Capability) {
   return models.value
     .filter(model => model.enabled && model.capability === capability)
@@ -596,6 +591,13 @@ const modelColumns: QTableColumn[] = [
   { name: 'status', label: '状态', field: 'validated' },
   { name: 'enabled', label: '启用', field: 'enabled' },
   { name: 'actions', label: '操作', field: 'id' },
+]
+
+const sceneColumns: QTableColumn[] = [
+  { name: 'scene', label: '场景', field: 'name', align: 'left' },
+  { name: 'model', label: '使用的模型', field: 'model', align: 'left' },
+  { name: 'status', label: '状态', field: 'status' },
+  { name: 'actions', label: '操作', field: 'actions' },
 ]
 
 function notify(message: string, color: 'positive' | 'negative' | 'warning' = 'positive') {
@@ -869,34 +871,45 @@ function deleteModel(model: GovernedModel) {
 async function refresh() {
   loading.value = true
   error.value = ''
-  const [gatewayResult, modelResult, profileResult, kbResult] = await Promise.all([
+  const [gatewayResult, modelResult, profileResult, kbResult, sceneResult] = await Promise.all([
     identityClient.listModelGateways(),
     identityClient.listGovernedModels(),
     identityClient.listCapabilityProfiles(),
     identityClient.adminListKnowledgeBases(),
+    identityClient.listSceneDefaults(),
   ])
   gateways.value = gatewayResult.data?.items ?? []
   models.value = modelResult.data?.items ?? []
   profiles.value = profileResult.data?.items ?? []
   kbs.value = kbResult.data?.items ?? []
-  error.value = gatewayResult.error?.message || modelResult.error?.message || profileResult.error?.message || kbResult.error?.message || ''
+  for (const item of sceneResult.data?.items ?? []) {
+    const slot = sceneState.value[item.workflow]
+    if (slot) {
+      slot.chatModelId = item.workflow === 'embedding' || item.workflow === 'reranking' ? null : (item.modelId ?? null)
+      slot.embeddingModelId = item.workflow === 'embedding' ? (item.modelId ?? null) : null
+      slot.rerankModelId = item.workflow === 'reranking' ? (item.modelId ?? null) : null
+    }
+  }
+  error.value = gatewayResult.error?.message || modelResult.error?.message || profileResult.error?.message || kbResult.error?.message || sceneResult.error?.message || ''
   loading.value = false
 }
 
 onMounted(refresh)
 
 // ---------- 场景配置保存 ----------
-async function saveSceneConfig(_id: Workflow) { // eslint-disable-line @typescript-eslint/no-unused-vars, @typescript-eslint/require-await
-  // TODO: Implement backend API for updating scene model bindings directly
-  notify('功能开发中：模型绑定即将支持直接保存', 'warning')
-  /*
-  const result = await withRecentAuth(() => identityClient.updateSceneConfiguration(id, { chatModelId: state.chatModelId, embeddingModelId: state.embeddingModelId, rerankModelId: state.rerankModelId }))
+const savingScene = ref<Workflow | null>(null)
+
+async function saveSceneConfig(id: Workflow) {
+  savingScene.value = id
+  const modelId = sceneState.value[id][sceneSlot(id)]
+  const result = await withRecentAuth(() => identityClient.updateSceneDefault(id, modelId))
+  savingScene.value = null
   if (result.error) {
     notify(`保存失败：${apiErrorMessage(result.error, '请稍后重试')}`, 'negative')
     return
   }
   notify('已保存')
-  */
+  await refresh()
 }
 </script>
 
@@ -922,5 +935,9 @@ async function saveSceneConfig(_id: Workflow) { // eslint-disable-line @typescri
 
 .discover-item-exists {
   opacity: 0.5;
+}
+
+.scene-model-select {
+  max-width: 320px;
 }
 </style>

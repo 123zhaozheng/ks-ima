@@ -42,6 +42,22 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+# Every workflow resolves exactly one governed operation; the scene default
+# and the resolver must agree on this mapping.
+WORKFLOW_OPERATION: dict[Workflow, str] = {
+    Workflow.GROUNDED_ASK: "chat",
+    Workflow.TITLE_GENERATION: "chat",
+    Workflow.SUMMARIZATION: "chat",
+    Workflow.EMBEDDING: "embedding",
+    Workflow.RERANKING: "rerank",
+}
+
+# The system-managed capability profile backing a scene default.  At most one
+# profile per workflow carries this alias (unique index
+# ux_capability_profiles_workflow_alias).
+SCENE_DEFAULT_ALIAS = "场景默认"
+
+
 class ModelGovernanceError(RuntimeError):
     def __init__(self, status_code: int, code: str, detail: str) -> None:
         super().__init__(detail)
@@ -113,6 +129,36 @@ class ModelGovernanceService:
             if model_id:
                 references.append((str(model_id), capability))
         return tuple(references)
+
+    async def _locked_model_health(self, conn: AsyncConnection, model_id: str) -> Any:
+        """Read one governed model row under FOR SHARE with its health state.
+
+        The health row sits on the nullable side of a LEFT JOIN and PostgreSQL
+        rejects FOR SHARE there, so it is read without a lock separately.
+        """
+        model = (
+            (
+                await conn.execute(
+                    text(
+                        "SELECT m.gateway_id,m.capability,m.embedding_dimension,m.enabled,m.validated,g.enabled gateway_enabled FROM ima.governed_models m JOIN ima.model_gateways g ON g.id=m.gateway_id WHERE m.id=:id FOR SHARE"
+                    ),
+                    {"id": model_id},
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if not model:
+            return None
+        state = await conn.scalar(
+            text(
+                "SELECT state FROM ima.model_gateway_health WHERE gateway_id=:gateway AND capability=:capability"
+            ),
+            {"gateway": model["gateway_id"], "capability": model["capability"]},
+        )
+        row = dict(model)
+        row["health_state"] = state or "unknown"
+        return row
 
     async def _audit(
         self,
@@ -1066,18 +1112,7 @@ class ModelGovernanceService:
             cfg = parse_profile_config(draft["config"], profile["workflow"])
             refs = self._profile_model_references(cfg)
             for ref, expected_capability in refs:
-                model = (
-                    (
-                        await conn.execute(
-                            text(
-                                "SELECT m.capability,m.embedding_dimension,m.enabled,m.validated,g.enabled gateway_enabled,COALESCE(h.state,'unknown') health_state FROM ima.governed_models m JOIN ima.model_gateways g ON g.id=m.gateway_id LEFT JOIN ima.model_gateway_health h ON h.gateway_id=g.id AND h.capability=m.capability WHERE m.id=:id FOR SHARE"
-                            ),
-                            {"id": ref},
-                        )
-                    )
-                    .mappings()
-                    .first()
-                )
+                model = await self._locked_model_health(conn, ref)
                 if (
                     not model
                     or model["capability"] != expected_capability.value
@@ -1671,6 +1706,267 @@ class ModelGovernanceService:
                 metadata={"workflow": workflow.value},
             )
 
+    @staticmethod
+    def _scene_default_slot(operation: str) -> str:
+        return {
+            "chat": "chatModelId",
+            "embedding": "embeddingModelId",
+            "rerank": "rerankModelId",
+        }[operation]
+
+    async def list_scene_defaults(self) -> list[dict[str, Any]]:
+        """Report every workflow's scene default (model slot or None)."""
+        async with self.engine.connect() as conn:
+            rows = (
+                (
+                    await conn.execute(
+                        text(
+                            """SELECT d.workflow,p.id profile_id,p.current_version profile_version,v.config FROM ima.scene_defaults d JOIN ima.capability_profiles p ON p.id=d.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=p.id AND v.version=p.current_version AND v.state='published' ORDER BY d.workflow"""
+                        )
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        by_workflow = {row["workflow"]: row for row in rows}
+        result: list[dict[str, Any]] = []
+        for workflow in Workflow:
+            row = by_workflow.get(workflow.value)
+            model_id = None
+            if row:
+                try:
+                    config = parse_profile_config(row["config"], workflow)
+                except Exception:
+                    config = None
+                slot = {
+                    "chat": "chat_model_id",
+                    "embedding": "embedding_model_id",
+                    "rerank": "rerank_model_id",
+                }[WORKFLOW_OPERATION[workflow]]
+                model_id = getattr(config, slot, None) if config else None
+            result.append(
+                {
+                    "workflow": workflow.value,
+                    "profileId": row["profile_id"] if row else None,
+                    "profileVersion": int(row["profile_version"]) if row else None,
+                    "modelId": str(model_id) if model_id else None,
+                }
+            )
+        return result
+
+    async def scene_default_config(self, workflow: Workflow) -> dict[str, Any] | None:
+        """Return the workflow's published scene-default config, or None if unset.
+
+        Uses the same joins as the ``_execution_target`` fallback so config
+        composition and execution resolution always agree on what is active.
+        """
+        async with self.engine.connect() as conn:
+            config = await conn.scalar(
+                text(
+                    """SELECT v.config FROM ima.scene_defaults d JOIN ima.capability_profiles p ON p.id=d.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=p.id AND v.version=p.current_version AND v.state='published' WHERE d.workflow=:workflow"""
+                ),
+                {"workflow": workflow.value},
+            )
+        return dict(config) if config else None
+
+    @staticmethod
+    def _scene_default_config(workflow: Workflow, model: Any) -> dict[str, Any]:
+        """Build a minimal valid profile config around one scene-default model."""
+        if workflow == Workflow.EMBEDDING:
+            return {
+                "embeddingModelId": str(model["id"]),
+                "dimension": int(model["embedding_dimension"]),
+            }
+        if workflow == Workflow.RERANKING:
+            return {"rerankModelId": str(model["id"])}
+        return {
+            "chatModelId": str(model["id"]),
+            "systemPrompt": "You are a helpful assistant.",
+            "contextLimit": int(model["context_limit"] or 32768),
+            "outputLimit": int(model["output_limit"] or 2048),
+        }
+
+    async def set_scene_default(
+        self, actor_id: str, workflow: Workflow, model_id: UUID | None
+    ) -> dict[str, Any]:
+        """Publish ``model_id`` as the workflow's scene default (None clears it)."""
+        if model_id is None:
+            return await self.clear_scene_default(actor_id, workflow)
+        operation = WORKFLOW_OPERATION[workflow]
+        capability = {
+            "chat": ModelCapability.CHAT,
+            "embedding": ModelCapability.EMBEDDING,
+            "rerank": ModelCapability.RERANK,
+        }[operation]
+        async with self.engine.connect() as conn:
+            model = (
+                (
+                    await conn.execute(
+                        text(
+                            "SELECT id,capability,enabled,embedding_dimension,context_limit,output_limit FROM ima.governed_models WHERE id=:id"
+                        ),
+                        {"id": model_id},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+        if not model:
+            raise ModelGovernanceError(422, "MODEL_NOT_FOUND", "Model not found")
+        if not model["enabled"]:
+            raise ModelGovernanceError(422, "MODEL_DISABLED", "Model is disabled")
+        if model["capability"] != capability.value:
+            raise ModelGovernanceError(
+                422,
+                "CAPABILITY_MISMATCH",
+                "Model capability does not match the workflow operation",
+            )
+        current = next(
+            item for item in await self.list_scene_defaults() if item["workflow"] == workflow.value
+        )
+        if current["modelId"] == str(model_id):
+            return current
+        async with self.engine.connect() as conn:
+            profile = (
+                (
+                    await conn.execute(
+                        text(
+                            "SELECT id FROM ima.capability_profiles WHERE workflow=:workflow AND lower(business_alias)=lower(:alias)"
+                        ),
+                        {"workflow": workflow.value, "alias": SCENE_DEFAULT_ALIAS},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+        fresh = False
+        if profile:
+            profile_id = UUID(str(profile["id"]))
+        else:
+            try:
+                created = await self.create_profile(
+                    actor_id,
+                    workflow,
+                    SCENE_DEFAULT_ALIAS,
+                    "系统管理的场景默认模型配置",
+                    self._scene_default_config(workflow, model),
+                )
+            except Exception as exc:
+                # Two administrators racing to create the same managed profile
+                # resolve to the existing winner instead of a raw 500.
+                if "unique" not in str(exc).lower():
+                    raise
+                async with self.engine.connect() as conn:
+                    profile = (
+                        (
+                            await conn.execute(
+                                text(
+                                    "SELECT id FROM ima.capability_profiles WHERE workflow=:workflow AND lower(business_alias)=lower(:alias)"
+                                ),
+                                {"workflow": workflow.value, "alias": SCENE_DEFAULT_ALIAS},
+                            )
+                        )
+                        .mappings()
+                        .first()
+                    )
+                if not profile:
+                    raise
+                profile_id = UUID(str(profile["id"]))
+            else:
+                profile_id = UUID(str(created["id"]))
+                fresh = True
+                try:
+                    await self.publish_profile(actor_id, profile_id, 1)
+                except ModelGovernanceError:
+                    await self._discard_scene_profile(profile_id)
+                    raise
+        if not fresh:
+            published_config = await self._scene_published_config(profile_id)
+            versions = await self.list_profile_versions(profile_id, include_config=False)
+            draft = next((item for item in versions if item["state"] == "draft"), None)
+            if draft is None:
+                raise ModelGovernanceError(
+                    409, "NO_DRAFT", "Scene default profile has no editable draft"
+                )
+            base = (
+                dict(published_config)
+                if published_config
+                else self._scene_default_config(workflow, model)
+            )
+            base[self._scene_default_slot(operation)] = str(model_id)
+            if workflow == Workflow.EMBEDDING:
+                base["dimension"] = int(model["embedding_dimension"])
+            await self.patch_profile_draft(actor_id, profile_id, base, draft["draftVersion"])
+            await self.publish_profile(actor_id, profile_id, draft["draftVersion"] + 1)
+        async with self.engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO ima.scene_defaults(workflow,profile_id,updated_at,updated_by) VALUES (:workflow,:profile,:now,:actor) ON CONFLICT(workflow) DO UPDATE SET profile_id=EXCLUDED.profile_id,updated_at=EXCLUDED.updated_at,updated_by=EXCLUDED.updated_by"
+                ),
+                {
+                    "workflow": workflow.value,
+                    "profile": profile_id,
+                    "now": utcnow(),
+                    "actor": actor_id,
+                },
+            )
+            await self._audit(
+                conn,
+                actor_id,
+                "model.scene_default.updated",
+                target_type="scene_default",
+                target_id=workflow.value,
+                metadata={"profileId": str(profile_id), "modelId": str(model_id)},
+            )
+        return next(
+            item for item in await self.list_scene_defaults() if item["workflow"] == workflow.value
+        )
+
+    async def clear_scene_default(self, actor_id: str, workflow: Workflow) -> dict[str, Any]:
+        """Remove the workflow's scene default pointer; the managed profile stays."""
+        current = next(
+            item for item in await self.list_scene_defaults() if item["workflow"] == workflow.value
+        )
+        if current["profileId"] is None:
+            return current
+        async with self.engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM ima.scene_defaults WHERE workflow=:workflow"),
+                {"workflow": workflow.value},
+            )
+            await self._audit(
+                conn,
+                actor_id,
+                "model.scene_default.cleared",
+                target_type="scene_default",
+                target_id=workflow.value,
+                metadata={"profileId": str(current["profileId"])},
+            )
+        return next(
+            item for item in await self.list_scene_defaults() if item["workflow"] == workflow.value
+        )
+
+    async def _scene_published_config(self, profile_id: UUID) -> dict[str, Any] | None:
+        async with self.engine.connect() as conn:
+            config = await conn.scalar(
+                text(
+                    "SELECT v.config FROM ima.capability_profile_versions v WHERE v.profile_id=:id AND v.version=(SELECT current_version FROM ima.capability_profiles WHERE id=:id) AND v.state='published'"
+                ),
+                {"id": profile_id},
+            )
+        return dict(config) if config else None
+
+    async def _discard_scene_profile(self, profile_id: UUID) -> None:
+        """Remove a just-created scene profile whose first publish failed."""
+        async with self.engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM ima.capability_profile_versions WHERE profile_id=:id"),
+                {"id": profile_id},
+            )
+            await conn.execute(
+                text("DELETE FROM ima.capability_profiles WHERE id=:id"), {"id": profile_id}
+            )
+
     async def kb_capabilities(self, user_id: str, kb_id: str) -> list[dict[str, Any]]:
         async with self.engine.connect() as conn:
             if not await conn.scalar(
@@ -1772,6 +2068,7 @@ class ModelGovernanceService:
                 .mappings()
                 .first()
             )
+        source: str | None = None
         if not raw_row:
             # A target assignment is authoritative even when its typed config
             # references a missing model (or a partially migrated row).  The
@@ -1796,19 +2093,42 @@ class ModelGovernanceService:
                     "profile_version": assignment["profile_version"],
                     "reason": "UNAVAILABLE",
                 }
-            async with self.engine.begin() as conn:
-                await self._audit(
-                    conn,
-                    None,
-                    "model.execution.denied",
-                    target_type="knowledge_base",
-                    target_id=kb_id,
-                    result="failed",
-                    reason="NO_ASSIGNMENT",
-                    metadata={"workflow": workflow.value, "operation": operation},
+            # No assignment row exists at all: the workflow's scene default
+            # (if configured) is the managed fallback, resolved through the
+            # same profile/version/model/gateway/health joins.
+            async with self.engine.connect() as conn:
+                raw_row = (
+                    (
+                        await conn.execute(
+                            text(
+                                """SELECT p.id profile_id,p.current_version profile_version,p.workflow,p.lifecycle,v.state,v.config,g.id gateway_id,g.normalized_base_url,g.insecure_private,g.enabled gateway_enabled,g.secret_id,g.custom_ca_ref,g.allowed_hosts,g.allowed_cidrs,g.max_response_bytes,g.connect_timeout_ms,g.read_timeout_ms,g.write_timeout_ms,g.pool_timeout_ms,m.id model_id,m.remote_name,m.capability,m.enabled model_enabled,m.validated,COALESCE(h.state,'unknown') health_state FROM ima.scene_defaults d JOIN ima.capability_profiles p ON p.id=d.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=p.id AND v.version=p.current_version AND v.state='published' JOIN ima.governed_models m ON m.id=CAST(CASE WHEN :operation='chat' THEN v.config->>'chatModelId' WHEN :operation='embedding' THEN v.config->>'embeddingModelId' WHEN :operation='rerank' THEN v.config->>'rerankModelId' END AS uuid) JOIN ima.model_gateways g ON g.id=m.gateway_id LEFT JOIN ima.model_gateway_health h ON h.gateway_id=g.id AND h.capability=m.capability WHERE d.workflow=:workflow"""
+                            ),
+                            {"workflow": workflow.value, "operation": operation},
+                        )
+                    )
+                    .mappings()
+                    .first()
                 )
-            return None
+            if not raw_row:
+                async with self.engine.begin() as conn:
+                    await self._audit(
+                        conn,
+                        None,
+                        "model.execution.denied",
+                        target_type="knowledge_base",
+                        target_id=kb_id,
+                        result="failed",
+                        reason="NO_ASSIGNMENT",
+                        metadata={"workflow": workflow.value, "operation": operation},
+                    )
+                return None
+            source = "scene_default"
         row = dict(raw_row)
+        if source:
+            row["source"] = source
+        denial_metadata: dict[str, object] = {"workflow": workflow.value, "operation": operation}
+        if source:
+            denial_metadata["source"] = source
         if (
             row["lifecycle"] != "active"
             or row["state"] != "published"
@@ -1827,7 +2147,7 @@ class ModelGovernanceService:
                     target_id=kb_id,
                     result="failed",
                     reason="UNAVAILABLE",
-                    metadata={"workflow": workflow.value, "operation": operation},
+                    metadata=denial_metadata,
                 )
             return row
         row["reason"] = None

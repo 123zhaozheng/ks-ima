@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/model-governance-contracts.md", "reason": "解析器/profile/assignment 语义与不变量——回退层必须遵守"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "新表迁移与查询模式规范"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "ModelGovernanceError code/HTTP 映射约定"}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "路由/测试/迁移的基础契约"}
+{"file": ".trellis/spec/frontend/model-governance-contracts.md", "reason": "管理端模型工作流与安全投影约定"}
+{"file": ".trellis/spec/frontend/identity-admin-contracts.md", "reason": "identityClient 模式与角色门禁 UI 约定"}
+{"file": ".trellis/spec/frontend/openapi-client-contracts.md", "reason": "契约命名与前端 client 对接约定"}

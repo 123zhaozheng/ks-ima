@@ -34,6 +34,9 @@ from ima.api.v1.model_governance_contracts import (
     ProfileList,
     ProfilePatchRequest,
     ProfileVersionList,
+    SceneDefaultItem,
+    SceneDefaultList,
+    SceneDefaultUpdateRequest,
     SecretRotateRequest,
     VersionRequest,
 )
@@ -49,10 +52,10 @@ def service(request: Request) -> ModelGovernanceService:
 
 
 async def require(
-    request: Request, current: Current, *, mutate: bool
+    request: Request, current: Current, *, mutate: bool, recent: bool = True
 ) -> tuple[dict[str, Any], Any]:
     session, user = current
-    if mutate:
+    if mutate and recent:
         check_recent_auth(request, session)
     capability = "model_governance_manage" if mutate else "model_governance_read"
     identity = cast(Any, request.app.state.identity_service)
@@ -420,6 +423,27 @@ async def profile_diff(
 ) -> dict[str, Any]:
     await require(request, current, mutate=False)
     return await service(request).profile_diff(profile_id, from_version, to_version)
+
+
+@router.get("/scene-defaults", response_model=SceneDefaultList, operation_id="listSceneDefaults")
+async def list_scene_defaults(request: Request, current: Current) -> dict[str, Any]:
+    await require(request, current, mutate=False)
+    return {"items": await service(request).list_scene_defaults()}
+
+
+@router.put(
+    "/scene-defaults/{workflow}",
+    response_model=SceneDefaultItem,
+    operation_id="updateSceneDefault",
+)
+async def update_scene_default(
+    workflow: str, payload: SceneDefaultUpdateRequest, request: Request, current: Current
+) -> dict[str, Any]:
+    # Scene-default saves are routine configuration: keep the manage capability
+    # and CSRF gates, but skip the recent-auth re-verification so admins are not
+    # prompted for their password on every save.
+    _, actor = await require(request, current, mutate=True, recent=False)
+    return await service(request).set_scene_default(actor.id, Workflow(workflow), payload.model_id)
 
 
 @router.put(

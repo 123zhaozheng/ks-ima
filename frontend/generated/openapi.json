@@ -3019,6 +3019,11 @@
             "title": "Name",
             "type": "string"
           },
+          "owned": {
+            "default": false,
+            "title": "Owned",
+            "type": "boolean"
+          },
           "role": {
             "enum": [
               "owner",
@@ -4057,6 +4062,98 @@
           "expectedContentVersion"
         ],
         "title": "ReplaceFileRequest",
+        "type": "object"
+      },
+      "SceneDefaultItem": {
+        "additionalProperties": false,
+        "properties": {
+          "modelId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelid"
+          },
+          "profileId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profileid"
+          },
+          "profileVersion": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profileversion"
+          },
+          "workflow": {
+            "enum": [
+              "grounded_ask",
+              "title_generation",
+              "summarization",
+              "embedding",
+              "reranking"
+            ],
+            "title": "Workflow",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow"
+        ],
+        "title": "SceneDefaultItem",
+        "type": "object"
+      },
+      "SceneDefaultList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SceneDefaultItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "SceneDefaultList",
+        "type": "object"
+      },
+      "SceneDefaultUpdateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "modelId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelid"
+          }
+        },
+        "title": "SceneDefaultUpdateRequest",
         "type": "object"
       },
       "SearchResponse": {
@@ -7154,6 +7251,79 @@
           }
         },
         "summary": "Impact",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/scene-defaults": {
+      "get": {
+        "operationId": "listSceneDefaults",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SceneDefaultList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Scene Defaults",
+        "tags": [
+          "model-governance"
+        ]
+      }
+    },
+    "/api/v1/admin/scene-defaults/{workflow}": {
+      "put": {
+        "operationId": "updateSceneDefault",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workflow",
+            "required": true,
+            "schema": {
+              "title": "Workflow",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneDefaultUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SceneDefaultItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Scene Default",
         "tags": [
           "model-governance"
         ]

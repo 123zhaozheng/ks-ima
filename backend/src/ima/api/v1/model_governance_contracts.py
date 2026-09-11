@@ -250,6 +250,21 @@ class KbCapability(IdentityModel):
     reason: str | None = None
 
 
+class SceneDefaultItem(IdentityModel):
+    workflow: Workflow
+    profile_id: UUID | None = Field(default=None, alias="profileId")
+    profile_version: int | None = Field(default=None, alias="profileVersion")
+    model_id: UUID | None = Field(default=None, alias="modelId")
+
+
+class SceneDefaultList(IdentityModel):
+    items: tuple[SceneDefaultItem, ...]
+
+
+class SceneDefaultUpdateRequest(IdentityModel):
+    model_id: UUID | None = Field(default=None, alias="modelId")
+
+
 class ImpactItem(IdentityModel):
     kb_id: str = Field(alias="kbId")
     workflow: Workflow

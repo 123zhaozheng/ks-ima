@@ -67,7 +67,9 @@ secret to the browser.
   bounded multi-step loops remain persisted by the existing chat flow.
 - Governance GET reports, including embedding impact, require read capability
   but not mutation CSRF or recent authentication. Every mutation still requires
-  manage capability, recent authentication, and CSRF.
+  manage capability and CSRF. Recent authentication is required for every
+  mutation except the scene-default save (`PUT /admin/scene-defaults/{workflow}`),
+  which is routine configuration and intentionally omits the recent-auth step.
 - Health is durable Procrastinate work with retry/backoff and persisted next
   eligibility; manual checks are rate-limited.
 

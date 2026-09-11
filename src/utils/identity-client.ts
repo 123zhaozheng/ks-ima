@@ -52,6 +52,8 @@ type ProfileCreateRequest = components['schemas']['ProfileCreateRequest']
 type ProfilePatchRequest = components['schemas']['ProfilePatchRequest']
 type AssignmentList = components['schemas']['AssignmentList']
 type AssignmentRequest = components['schemas']['AssignmentRequest']
+type SceneDefaultList = components['schemas']['SceneDefaultList']
+type SceneDefaultItem = components['schemas']['SceneDefaultItem']
 type ImpactResponse = components['schemas']['ImpactResponse']
 type ConsentView = components['schemas']['ConsentView']
 type ConsentSubmit = components['schemas']['ConsentSubmit']
@@ -201,6 +203,8 @@ export const identityClient = {
   listCapabilityAssignments: (kbId: string) => request<AssignmentList>(`/admin/knowledge-bases/${encodeURIComponent(kbId)}/profile-assignments`),
   assignCapabilityProfile: (kbId: string, workflow: string, input: AssignmentRequest) => request(`/admin/knowledge-bases/${encodeURIComponent(kbId)}/profile-assignments/${encodeURIComponent(workflow)}`, { method: 'PUT', body: JSON.stringify(input) }),
   removeCapabilityProfile: (kbId: string, workflow: string, expectedVersion?: number) => request(`/admin/knowledge-bases/${encodeURIComponent(kbId)}/profile-assignments/${encodeURIComponent(workflow)}${expectedVersion ? `?expected_version=${expectedVersion}` : ''}`, { method: 'DELETE' }),
+  listSceneDefaults: () => request<SceneDefaultList>('/admin/scene-defaults'),
+  updateSceneDefault: (workflow: string, modelId: string | null) => request<SceneDefaultItem>(`/admin/scene-defaults/${encodeURIComponent(workflow)}`, { method: 'PUT', body: JSON.stringify({ modelId }) }),
   modelGovernanceImpact: (modelId: string) => request<ImpactResponse>(`/admin/model-governance/impact?model_id=${encodeURIComponent(modelId)}`),
   previewOAuthConsent: (query: string) => request<ConsentView>(`/oauth/authorize?${query}`, {}, ''),
   submitOAuthConsent: (input: ConsentSubmit) => request('/oauth/authorize', { method: 'POST', body: JSON.stringify(input) }, ''),

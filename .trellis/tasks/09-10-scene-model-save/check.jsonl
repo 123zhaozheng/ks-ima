@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/model-governance-contracts.md", "reason": "检查回退层是否破坏 assignment 权威/审计不变量"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端代码质量与禁用模式"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量与禁用模式"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "client 类型与 camelCase alias 检查"}

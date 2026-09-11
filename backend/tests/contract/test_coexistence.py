@@ -11,19 +11,20 @@ from pathlib import Path
 
 def test_caddy_terminal_matrix_routes_python_and_terminates_legacy() -> None:
     caddy = (Path(__file__).parents[3] / "Caddyfile").read_text()
-    # Python-owned prefixes are present on both listeners.
-    assert caddy.count("path /health/*") == 2
-    assert caddy.count("path /api/v1/system/*") == 2
-    assert caddy.count("@ima_mcp path /mcp /.well-known/oauth-protected-resource ") == 2
+    # The admin console merged into the single app, so one public listener
+    # (:8080) owns every Python prefix.
+    assert caddy.count("path /health/*") == 1
+    assert caddy.count("path /api/v1/system/*") == 1
+    assert caddy.count("@ima_mcp path /mcp /.well-known/oauth-protected-resource ") == 1
     assert (
         caddy.count(
             "@ima_kb path /api/v1/knowledge-bases /api/v1/knowledge-bases/* "
             "/api/v1/kb-share-links /api/v1/kb-share-links/* "
             "/api/v1/folders/* /api/v1/documents/*"
         )
-        == 2
+        == 1
     )
-    assert caddy.count("@ima_storage path /api/v1/folders/*/files/upload-ticket ") == 2
+    assert caddy.count("@ima_storage path /api/v1/folders/*/files/upload-ticket ") == 1
     assert "reverse_proxy {$PYTHON_API_URL}" in caddy
     # The retired private bridge space keeps answering a public 404.
     assert "@ima_internal_forbidden path /api/v1/internal/*" in caddy
@@ -33,14 +34,16 @@ def test_caddy_terminal_matrix_routes_python_and_terminates_legacy() -> None:
         "/api/search /api/search/* /api/v1/chat /api/v1/chat/* "
         "/api/connectors /api/connectors/*" in caddy
     )
-    assert caddy.count('respond "Gone" 410') == 2
+    assert caddy.count('respond "Gone" 410') == 1
     assert "@api path /api/*" in caddy
-    assert caddy.count('respond "Not Found" 404') == 4
+    assert caddy.count('respond "Not Found" 404') == 2
     # No legacy upstream remains: every proxy target is the Python API.
     assert caddy.count("reverse_proxy") == caddy.count("reverse_proxy {$PYTHON_API_URL}")
     compose = (Path(__file__).parents[3] / "docker-compose.example.yml").read_text()
     assert "IMA_TRUSTED_PROXIES: ${IMA_TRUSTED_PROXIES:-172.16.0.0/12}" in compose
-    for server in caddy.split(":808")[1:]:
+    servers = caddy.split(":808")[1:]
+    assert len(servers) == 1
+    for server in servers:
         assert server.index("@ima_mcp") < server.index("@api_gone")
         assert server.index("@ima_internal_forbidden") < server.index("@api path /api/*")
         assert server.index("@api_gone") < server.index("@api path /api/*")

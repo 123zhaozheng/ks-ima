@@ -1,49 +1,52 @@
 /*
- * Design tokens: Apple-style design language for the ima-style workbench
- * (research/apple-design-language.md). Light theme only.
+ * Design tokens: professional knowledge-workbench design language
+ * (clean / calm / precise — restrained UI, content first). Light theme only.
  * Chrome 109 policy: no CSS nesting, no color-mix()/oklch(),
  * no container queries, no unprefixed background-clip: text.
  */
 
 :root {
   /* Surfaces */
-  --tk-bg: #fbfbfd;              /* page ground */
-  --tk-surface: #f5f5f7;         /* rail, insets, header base, input fill */
-  --tk-surface-deep: #fafafc;    /* feature card fill on white */
+  --tk-bg: #f7f8fa;              /* page ground */
+  --tk-surface: #f1f3f5;         /* rail, header, insets (hover same family) */
+  --tk-surface-deep: #fafbfc;    /* subtle white surface (code fields) */
   --tk-surface-white: #ffffff;   /* cards, dialogs, inputs */
 
   /* Lines and text */
-  --tk-border: rgba(0, 0, 0, 0.08);
-  --tk-border-strong: #d2d2d7;
-  --tk-text: #1d1d1f;
-  --tk-text-secondary: #6e6e73;
-  --tk-text-tertiary: #86868b;
+  --tk-border-subtle: #eef0f2;   /* lightest separators (top bar rule) */
+  --tk-border: #e6e8ec;          /* hairline */
+  --tk-border-strong: #d0d4da;   /* emphasized borders, secondary button line */
+  --tk-text: #111318;
+  --tk-text-secondary: #5f6672;  /* descriptions */
+  --tk-text-tertiary: #8a919e;   /* metadata */
 
   /* Accent (used sparingly: CTAs, focus, active nav) */
-  --tk-accent: #0071e3;
-  --tk-accent-hover: #0077ed;
-  --tk-accent-active: #006edb;
-  --tk-accent-soft: rgba(0, 113, 227, 0.08);
-  --tk-link: #0066cc;
-  --tk-focus-ring: rgba(0, 113, 227, 0.25);
+  --tk-accent: #1677e8;
+  --tk-accent-hover: #2d85ea;
+  --tk-accent-active: #146dd5;
+  --tk-accent-soft: rgba(22, 119, 232, 0.08);          /* selected/active fills */
+  --tk-accent-soft-stronger: rgba(22, 119, 232, 0.12); /* selected borders */
+  --tk-link: #1269cf;
+  --tk-focus-ring: rgba(22, 119, 232, 0.25);
 
-  /* Status (HIG-derived, text-legible on light) */
-  --tk-danger: #d70015;
-  --tk-danger-fill: #ff3b30;
-  --tk-danger-soft: rgba(255, 59, 48, 0.08);
-  --tk-success: #248a3d;
-  --tk-success-fill: #34c759;
-  --tk-warning: #b25000;
-  --tk-warning-fill: #ff9500;
-  --tk-warning-soft: rgba(255, 149, 0, 0.1);
+  /* Status (text-legible on light; fill/soft follow the same hue) */
+  --tk-danger: #d92d20;
+  --tk-danger-fill: #f04438;
+  --tk-danger-soft: rgba(217, 45, 32, 0.08);
+  --tk-success: #168a45;
+  --tk-success-fill: #2eb45e;
+  --tk-warning: #b7791f;
+  --tk-warning-fill: #e8930c;
+  --tk-warning-soft: rgba(183, 121, 31, 0.1);
 
-  /* Shape */
-  --tk-radius-sm: 8px;
-  --tk-radius: 12px;
-  --tk-radius-lg: 18px;
-  --tk-radius-pill: 980px;
+  /* Shape — 6/8/12 only; big radii are banned.
+     Pill is reserved for suggestion chips and the composer send button. */
+  --tk-radius-sm: 6px;
+  --tk-radius: 8px;
+  --tk-radius-lg: 12px;
+  --tk-radius-pill: 999px;
 
-  /* Spacing scale (4/8pt plus roomier page-level steps) */
+  /* Spacing scale (strict 4/8 rhythm) */
   --tk-space-1: 4px;
   --tk-space-2: 8px;
   --tk-space-3: 12px;
@@ -55,36 +58,37 @@
   --tk-space-12: 48px;
   --tk-space-16: 64px;
 
-  /* Shadows — whisper-light, layered (popovers/dialogs only) */
+  /* Shadows — surfaces rely on borders; only floaters
+     (popover/dropdown/modal/toast) may cast these light shadows. */
   --tk-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.03);
-  --tk-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --tk-shadow-md: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
   --tk-shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.05), 0 16px 40px rgba(0, 0, 0, 0.08);
 
   /* Type */
   --tk-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", sans-serif;
-  --tk-font-size-xs: 12px;   /* caption, nav labels */
-  --tk-font-size-sm: 14px;   /* callout, labels, dense lists */
-  --tk-font-size-md: 17px;   /* body, HIG Body/Headline */
-  --tk-font-size-lg: 22px;   /* Title 1 */
-  --tk-font-size-xl: 28px;   /* large title (up to 34px) */
+  --tk-font-size-xs: 12px;   /* caption, metadata */
+  --tk-font-size-sm: 14px;   /* body, labels, list rows */
+  --tk-font-size-md: 15px;   /* section titles / body-strong */
+  --tk-font-size-lg: 17px;   /* toolbar/composer titles */
+  --tk-font-size-xl: 21px;   /* page title (via .tk-page-title) */
   --tk-weight-regular: 400;
+  --tk-weight-medium: 500;
   --tk-weight-semibold: 600;
-  --tk-lh-tight: 1.2;
-  --tk-lh-body: 1.47;
-  --tk-tracking-display: -0.022em; /* apply at >= 17px only */
+  --tk-lh-tight: 1.3;
+  --tk-lh-body: 1.5;
+  --tk-tracking-display: -0.011em; /* titles only (>= 15px) */
 
   /* Controls */
-  --tk-control-h: 40px;
-  --tk-input-h: 44px;
-  --tk-row-h: 48px;
+  --tk-control-h: 36px;
+  --tk-input-h: 38px;
 
   /* Motion */
   --tk-ease: cubic-bezier(0.4, 0, 0.2, 1);
   --tk-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --tk-dur: 200ms;
-  --tk-dur-slow: 300ms;
+  --tk-dur: 150ms;
+  --tk-dur-slow: 220ms;
 }
 
 body {
@@ -95,7 +99,7 @@ body {
 
 /*
  * Shared page scaffolding so every surface reads as one calm product.
- * The shell has no global top bar: each page owns a .tk-header.
+ * Page width is owned by each page prototype; .tk-page is a full-width base.
  */
 .tk-header {
   background-color: var(--tk-surface);
@@ -109,8 +113,8 @@ body {
   color: var(--tk-text);
 }
 
-/* Large-title pattern: semibold, tight tracking, left-aligned. */
-.tk-large-title {
+/* Page title pattern: 21px semibold, calm tracking, left-aligned. */
+.tk-page-title {
   font-size: var(--tk-font-size-xl);
   font-weight: var(--tk-weight-semibold);
   line-height: var(--tk-lh-tight);
@@ -119,10 +123,9 @@ body {
 }
 
 .tk-page {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: var(--tk-space-6) var(--tk-space-4);
   width: 100%;
+  min-width: 0;
+  padding: var(--tk-space-6) var(--tk-space-4);
   box-sizing: border-box;
 }
 
@@ -130,8 +133,7 @@ body {
 .tk-card.tk-card {
   background-color: var(--tk-surface-white);
   border: 1px solid var(--tk-border);
-  border-radius: var(--tk-radius);
-  box-shadow: var(--tk-shadow-sm);
+  border-radius: var(--tk-radius-lg);
 }
 
 .tk-card-title {
@@ -154,8 +156,7 @@ body {
 }
 
 /*
- * Empty states: icon + title + subtitle + one CTA, vertically centered
- * (Apple HIG first-run grammar).
+ * Empty states: icon + title + subtitle + one CTA, vertically centered.
  */
 .tk-empty {
   display: flex;
@@ -195,13 +196,41 @@ body {
   margin-top: var(--tk-space-6);
 }
 
-/* Primary pill CTA (the apple.com action button). */
+/*
+ * List row: 40px / 1fr / 40px grid for icon / content / overflow actions.
+ * The row-more control stays half-faded until the row is hovered.
+ */
+.tk-list-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  min-height: 60px;
+  padding: 10px 14px;
+  transition: background-color var(--tk-dur) var(--tk-ease);
+}
+
+.tk-list-row:hover {
+  background-color: var(--tk-bg);
+}
+
+.tk-list-row-more {
+  opacity: 0.5;
+  transition: opacity var(--tk-dur) var(--tk-ease);
+}
+
+.tk-list-row:hover .tk-list-row-more {
+  opacity: 1;
+}
+
+/*
+ * Primary CTA: accent fill, radius 8, height 38 — not a pill.
+ */
 .tk-cta.tk-cta {
-  border-radius: var(--tk-radius-pill);
-  min-height: var(--tk-control-h);
+  border-radius: var(--tk-radius);
+  min-height: 38px;
   padding: 0 var(--tk-space-5);
   font-size: var(--tk-font-size-sm);
-  font-weight: var(--tk-weight-semibold);
+  font-weight: var(--tk-weight-medium);
   background-color: var(--tk-accent);
   color: #ffffff;
   transition: background-color var(--tk-dur) var(--tk-ease);
@@ -215,13 +244,13 @@ body {
   background-color: var(--tk-accent-active);
 }
 
-/* Secondary pill: hairline border on white, hover = subtle fill. */
+/* Secondary CTA: hairline border on white, hover = subtle fill. */
 .tk-cta-secondary.tk-cta-secondary {
-  border-radius: var(--tk-radius-pill);
-  min-height: var(--tk-control-h);
+  border-radius: var(--tk-radius);
+  min-height: 38px;
   padding: 0 var(--tk-space-5);
   font-size: var(--tk-font-size-sm);
-  font-weight: var(--tk-weight-semibold);
+  font-weight: var(--tk-weight-medium);
   border: 1px solid var(--tk-border-strong);
   background-color: var(--tk-surface-white);
   color: var(--tk-text);
@@ -232,18 +261,103 @@ body {
   background-color: var(--tk-surface);
 }
 
+/*
+ * Button hierarchy — combine with q-btn (Quasar already provides
+ * disable/loading state handling; these classes only paint it):
+ *   <q-btn unelevated no-caps class="tk-btn-primary">主要操作</q-btn>
+ *   <q-btn unelevated no-caps class="tk-btn-secondary">次要操作</q-btn>
+ *   <q-btn flat no-caps class="tk-btn-ghost">次级/工具栏操作</q-btn>
+ *   <q-btn flat no-caps class="tk-btn-danger-ghost">危险操作</q-btn>
+ * Doubled selectors beat Quasar's built-in button backgrounds.
+ */
+.tk-btn-primary.tk-btn-primary {
+  min-height: 38px;
+  border-radius: var(--tk-radius);
+  padding: 0 var(--tk-space-4);
+  font-size: var(--tk-font-size-sm);
+  font-weight: var(--tk-weight-medium);
+  background-color: var(--tk-accent);
+  color: #ffffff;
+  transition: background-color var(--tk-dur) var(--tk-ease);
+}
+
+.tk-btn-primary.tk-btn-primary:hover {
+  background-color: var(--tk-accent-hover);
+}
+
+.tk-btn-primary.tk-btn-primary:active {
+  background-color: var(--tk-accent-active);
+}
+
+.tk-btn-secondary.tk-btn-secondary {
+  min-height: 38px;
+  border-radius: var(--tk-radius);
+  padding: 0 var(--tk-space-4);
+  font-size: var(--tk-font-size-sm);
+  font-weight: var(--tk-weight-medium);
+  border: 1px solid var(--tk-border-strong);
+  background-color: var(--tk-surface-white);
+  color: var(--tk-text);
+  transition: background-color var(--tk-dur) var(--tk-ease);
+}
+
+.tk-btn-secondary.tk-btn-secondary:hover {
+  background-color: var(--tk-surface);
+}
+
+.tk-btn-ghost.tk-btn-ghost {
+  min-height: 38px;
+  border-radius: var(--tk-radius);
+  padding: 0 var(--tk-space-4);
+  font-size: var(--tk-font-size-sm);
+  font-weight: var(--tk-weight-medium);
+  background-color: transparent;
+  color: var(--tk-text);
+  transition: background-color var(--tk-dur) var(--tk-ease);
+}
+
+.tk-btn-ghost.tk-btn-ghost:hover {
+  background-color: var(--tk-surface);
+}
+
+.tk-btn-danger-ghost.tk-btn-danger-ghost {
+  min-height: 38px;
+  border-radius: var(--tk-radius);
+  padding: 0 var(--tk-space-4);
+  font-size: var(--tk-font-size-sm);
+  font-weight: var(--tk-weight-medium);
+  background-color: transparent;
+  color: var(--tk-danger);
+  transition: background-color var(--tk-dur) var(--tk-ease);
+}
+
+.tk-btn-danger-ghost.tk-btn-danger-ghost:hover {
+  background-color: var(--tk-danger-soft);
+}
+
+/* Keyboard-visible focus for any interactive element. */
+.tk-focus-ring:focus-visible {
+  outline: 2px solid var(--tk-accent);
+  outline-offset: 2px;
+}
+
 /* Calm Quasar overrides wired to tokens. */
 .q-dialog .q-card {
-  border-radius: var(--tk-radius);
+  border-radius: var(--tk-radius-lg);
   box-shadow: var(--tk-shadow-lg);
 }
 
 .q-field--outlined .q-field__control {
-  border-radius: 10px;
+  border-radius: var(--tk-radius);
 }
 
 .q-field--outlined.q-field--highlighted .q-field__control {
   box-shadow: 0 0 0 3px var(--tk-focus-ring);
+}
+
+.q-btn:focus-visible {
+  outline: 2px solid var(--tk-accent);
+  outline-offset: 2px;
 }
 
 .q-item {

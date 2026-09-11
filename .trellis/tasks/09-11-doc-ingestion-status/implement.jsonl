@@ -1,0 +1,6 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/file-upload-ingestion-contracts.md", "reason": "上传/摄入状态契约——状态文案与轮询必须遵守，禁止假 ready"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件与 Quasar 使用约定"}
+{"file": ".trellis/spec/frontend/ux-design-language.md", "reason": "状态色/token 与视觉语言"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量关卡"}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "worker/env 启动基础契约"}

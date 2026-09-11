@@ -33,21 +33,18 @@
           <q-item-label
             v-if="item.kind === 'file'"
             caption
+            class="kb-file-status"
+            :style="{ color: statusOf(item).color }"
           >
-            {{ item.fileState === 'pending' ? '存储迁移待完成' : item.fileState }}
+            <q-icon
+              :name="statusOf(item).icon"
+              size="14px"
+            />
+            {{ statusOf(item).label }}
           </q-item-label>
         </q-item-section>
         <q-item-section
-          v-if="item.kind === 'file' && item.fileState === 'pending'"
-          side
-        >
-          <q-icon
-            name="sym_o_lock"
-            title="存储迁移完成前，文件操作不可用"
-          />
-        </q-item-section>
-        <q-item-section
-          v-else-if="item.kind !== 'folder' && !readonly"
+          v-if="item.kind !== 'folder' && !readonly"
           side
         >
           <q-btn
@@ -135,6 +132,7 @@ import { knowledgeClient } from 'src/api/knowledge-client'
 import { IMAApiError } from 'src/api/ima-client'
 import { useFolderContents, useKnowledgeMutations } from 'src/composables/use-knowledge'
 import { apiErrorMessage } from 'src/utils/api-error'
+import { fileStateView } from 'src/utils/ingestion-status'
 
 type ContentRow = components['schemas']['ContentRow']
 
@@ -160,6 +158,10 @@ watch(() => query.data.value?.nextCursor, value => {
 function isSelected(item: ContentRow) {
   if (item.kind === 'folder') return false
   return props.selectedId === item.id
+}
+
+function statusOf(item: ContentRow) {
+  return fileStateView(item.fileState)
 }
 
 async function loadMore() {
@@ -216,6 +218,12 @@ function confirmDelete(item: ContentRow) {
 
 .kb-row-active {
   background-color: var(--tk-accent-soft);
+}
+
+.kb-file-status {
+  display: flex;
+  align-items: center;
+  gap: var(--tk-space-1);
 }
 
 .kb-row-menu {

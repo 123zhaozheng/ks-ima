@@ -2,6 +2,8 @@
 """Standalone entry point that fixes Windows asyncio policy."""
 import asyncio
 import os
+import subprocess
+import sys
 from sys import platform
 
 if platform == "win32":
@@ -29,4 +31,22 @@ os.environ.setdefault("IMA_STORAGE_REGION", "us-east-1")
 from uvicorn import run
 
 if __name__ == "__main__":
-    run("ima.main:app", host="0.0.0.0", port=9016)
+    # The API never consumes ingestion jobs itself; a separate worker process
+    # does (same shape as production).  Start it alongside the API so local dev
+    # uploads actually get parsed/chunked/embedded, and always tear it down.
+    worker = subprocess.Popen([sys.executable, "-m", "ima.workers.main"])
+    try:
+        run("ima.main:app", host="0.0.0.0", port=9016)
+    finally:
+        if worker.poll() is None:
+            worker.terminate()
+            try:
+                worker.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                worker.kill()
+                worker.wait()
+        elif worker.returncode not in (0, -15, -9):
+            print(
+                f"ingestion worker exited unexpectedly (code {worker.returncode})",
+                file=sys.stderr,
+            )

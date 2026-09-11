@@ -142,21 +142,46 @@
         </template>
       </q-banner>
       <q-banner
-        v-if="document?.kind === 'file' && ingestion"
+        v-if="document?.kind === 'file' && document.fileState"
         rounded
         class="kb-banner-info"
       >
-        {{ ingestion.jobs.map(job => `${job.stage}: ${job.status}`).join(' · ') }}
+        <div
+          flex
+          items-center
+          gap-1
+          flex-wrap
+        >
+          <span
+            class="kb-ingestion-status"
+            :style="{ color: statusView.color }"
+          >
+            <q-icon
+              :name="statusView.icon"
+              size="16px"
+            />
+            {{ statusView.label }}{{ document.fileState === 'ready' ? '，可被检索' : '' }}
+          </span>
+          <template v-if="document.fileState !== 'ready' && ingestion">
+            <span
+              v-for="job in ingestion.jobs"
+              :key="job.stage"
+              :style="{ color: jobStatusColor(job.status) }"
+            >
+              {{ stageLabel(job.stage) }} · {{ jobStatusLabel(job.status) }}
+            </span>
+          </template>
+        </div>
         <template #action>
           <q-btn
-            v-if="ingestion.jobs.some(job => ['queued', 'running', 'retryable', 'cancel_requested'].includes(job.status))"
+            v-if="ingestion?.jobs.some(job => ['queued', 'running', 'retryable', 'cancel_requested'].includes(job.status))"
             flat
             dense
             label="取消"
             @click="cancelIngestion"
           />
           <q-btn
-            v-if="ingestion.jobs.some(job => ['failed', 'dead_letter', 'cancelled'].includes(job.status))"
+            v-if="ingestion?.jobs.some(job => ['failed', 'dead_letter', 'cancelled'].includes(job.status))"
             flat
             dense
             label="重试"
@@ -312,6 +337,7 @@ import { knowledgeClient } from 'src/api/knowledge-client'
 import { IMAApiError } from 'src/api/ima-client'
 import { useAskContextStore } from 'src/stores/ask-context'
 import { apiErrorMessage } from 'src/utils/api-error'
+import { fileStateView, jobStatusColor, jobStatusLabel, stageLabel } from 'src/utils/ingestion-status'
 import { renderMarkdown } from 'src/utils/markdown'
 
 const props = withDefaults(defineProps<{
@@ -335,6 +361,7 @@ const ingestion = computed(() => ingestionQuery.data.value)
 const versions = useKnowledgeVersions(() => props.documentId)
 const fileVersions = useFileVersions(() => props.documentId)
 const document = computed(() => query.data.value)
+const statusView = computed(() => fileStateView(document.value?.fileState))
 
 const title = ref('')
 const markdown = ref('')
@@ -537,6 +564,13 @@ function confirmDelete() {
 .kb-banner-info {
   background-color: var(--tk-surface);
   color: var(--tk-text-secondary);
+}
+
+.kb-ingestion-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tk-space-1);
+  font-weight: var(--tk-weight-semibold);
 }
 
 .doc-preview-iframe {

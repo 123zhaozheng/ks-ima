@@ -26,6 +26,8 @@ src/api/generated/schema.ts
 - File-version history renders only safe server fields: version, original filename, object state, and timestamp. Object keys, tickets, checksum internals, credentials, and raw errors are never rendered or persisted.
 - Download and preview URLs are fetched fresh after authorization and are not written to Pinia/localStorage. Preview is shown only when the server reports it available; unsupported binary preview remains unavailable while download may still be permitted.
 - Pointer, keyboard, and touch access exist for upload, replace, cancel, retry, download, preview, and history. Controls remain usable at mobile widths without overlap or horizontal page overflow.
+- Status presentation is derived from backend authority only (`src/utils/ingestion-status.ts`): `fileState` renders as 处理中 (`pending`), 已就绪 (`ready` — vectorized and searchable), or 处理失败 (`failed`); ingestion `stage` renders as 解析/切分/向量化 and `status` as Chinese labels. Unknown values fall back to the raw server string and never render as ready. Raw enums (`pending`/`ready`/`parse`/`embed`, …) must not reach the user.
+- `useFolderContents` polls every 2000ms while any returned file row is `fileState === 'pending'`, and stops otherwise; the detail ingestion query keeps its own active-job polling.
 
 ## Validation Matrix
 

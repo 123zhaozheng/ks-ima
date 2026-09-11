@@ -48,6 +48,9 @@ export function useFolderContents(folderId: () => string | null, options: () => 
     queryKey: computed(() => knowledgeKeys.contents(folderId()!, { kind: options().kind })),
     queryFn: ({ signal }) => knowledgeClient.contents(folderId()!, { kind: options().kind, signal }),
     enabled: computed(() => Boolean(folderId())),
+    // Uploads land as `fileState === 'pending'`; keep the list fresh until the
+    // worker flips every file row to `ready`/`failed` so 处理中 becomes 已就绪.
+    refetchInterval: query => (query.state.data?.items ?? []).some(item => item.kind === 'file' && item.fileState === 'pending') ? 2000 : false,
   })
 }
 

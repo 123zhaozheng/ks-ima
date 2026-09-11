@@ -5,7 +5,7 @@
     h-full
   >
     <q-linear-progress
-      v-if="query.isFetching.value"
+      v-if="query.isLoading.value"
       indeterminate
       color="primary"
     />

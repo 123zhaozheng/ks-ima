@@ -22,6 +22,42 @@ LEASE = timedelta(minutes=10)
 MAX_ATTEMPTS = 3
 
 
+async def mark_document_terminal(conn: Any, document_id: UUID | str) -> None:
+    """Reflect a failed/cancelled ingestion on the document without clobbering ready."""
+    await conn.execute(
+        text(
+            "UPDATE ima.documents SET file_state='failed',updated_at=:now WHERE id=:id AND file_state <> 'ready'"
+        ),
+        {"id": document_id, "now": datetime.now(UTC)},
+    )
+
+
+async def finalize_cancel_requested(conn: Any, job_id: UUID) -> bool:
+    """Cooperatively close a running job a user asked to cancel."""
+    row = (
+        (
+            await conn.execute(
+                text(
+                    "SELECT status='cancel_requested' AS requested,document_id FROM ima.ingestion_jobs WHERE id=:id"
+                ),
+                {"id": job_id},
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row and row["requested"]:
+        await conn.execute(
+            text(
+                "UPDATE ima.ingestion_jobs SET status='cancelled',lease_expires_at=NULL,updated_at=:now WHERE id=:id"
+            ),
+            {"id": job_id, "now": datetime.now(UTC)},
+        )
+        await mark_document_terminal(conn, row["document_id"])
+        return True
+    return False
+
+
 def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
     async def claim(conn: Any, document_id: UUID, version: int, generation: int, stage: str) -> Any:
         now = datetime.now(UTC)
@@ -59,18 +95,7 @@ def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
         )
 
     async def cancelled(conn: Any, job_id: UUID) -> bool:
-        value = await conn.scalar(
-            text("SELECT status='cancel_requested' FROM ima.ingestion_jobs WHERE id=:id"),
-            {"id": job_id},
-        )
-        if value:
-            await conn.execute(
-                text(
-                    "UPDATE ima.ingestion_jobs SET status='cancelled',lease_expires_at=NULL,updated_at=:now WHERE id=:id"
-                ),
-                {"id": job_id, "now": datetime.now(UTC)},
-            )
-        return bool(value)
+        return await finalize_cancel_requested(conn, job_id)
 
     async def failed(conn: Any, job: Any, code: str, *, retryable: bool) -> None:
         attempts = int(job["attempts"])
@@ -99,6 +124,7 @@ def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
                     "now": now,
                 },
             )
+            await mark_document_terminal(conn, job["document_id"])
 
     @app.task(
         name="ima.ingestion.parse", queue=settings.ingestion_queue, retry=0, pass_context=True
@@ -293,8 +319,14 @@ def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
                     .mappings()
                     .all()
                 )
-                if not kb_id or not model:
+                # Two distinct failures share one guard today; report them
+                # accurately so operators can tell a missing document from a KB
+                # that has no embedding model assigned.
+                if not kb_id:
                     await failed(conn, job, "DOCUMENT_NOT_FOUND", retryable=False)
+                    return
+                if not model:
+                    await failed(conn, job, "NO_ASSIGNMENT", retryable=False)
                     return
             try:
                 vectors = await ModelGovernanceService(engine, settings).managed_embeddings(

@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { defineComponent } from 'vue'
-import { fileStateView, jobStatusColor, jobStatusLabel, stageLabel } from 'src/utils/ingestion-status'
+import { fileStateView, jobStatusColor, jobStatusLabel, stageLabel, terminalStatusView } from 'src/utils/ingestion-status'
 
 const state = vi.hoisted(() => ({
   items: [] as Array<Record<string, unknown>>,
@@ -48,6 +48,15 @@ describe('ingestion status mapping', () => {
     expect(fileStateView('archived')).toMatchObject({ tone: 'unknown', label: 'archived' })
     expect(fileStateView(null)).toMatchObject({ tone: 'unknown', label: '' })
     expect(fileStateView(undefined)).toMatchObject({ tone: 'unknown', label: '' })
+  })
+
+  test('distinguishes a cancelled terminal document from a failure', () => {
+    expect(terminalStatusView('failed', ['cancelled', 'cancelled']))
+      .toMatchObject({ tone: 'failed', label: '已取消' })
+    expect(terminalStatusView('failed', ['dead_letter'])).toBeUndefined()
+    expect(terminalStatusView('failed', ['cancelled', 'failed'])).toBeUndefined()
+    expect(terminalStatusView('ready', ['cancelled'])).toBeUndefined()
+    expect(terminalStatusView('pending', [])).toBeUndefined()
   })
 
   test('maps stages and job statuses, falling back to raw values', () => {

@@ -15,7 +15,7 @@ from ima.infrastructure.db.engine import create_engine
 from ima.infrastructure.observability.logging import configure_logging
 from ima.infrastructure.tasks.app import create_task_app
 from ima.infrastructure.tasks.diagnostic import register_tasks
-from ima.infrastructure.tasks.ingestion import register_ingestion_tasks
+from ima.infrastructure.tasks.ingestion import mark_document_terminal, register_ingestion_tasks
 from ima.infrastructure.tasks.model_health import register_model_health_task
 
 
@@ -33,48 +33,81 @@ async def heartbeat(engine: object, interval: int, worker_name: str) -> None:
         await asyncio.sleep(interval)
 
 
+async def reconcile_once(
+    engine: AsyncEngine, ingestion_tasks: dict[str, Any], now: datetime
+) -> None:
+    """One reconciliation pass: redeliver due work and reap orphaned cancels."""
+    async with engine.connect() as connection:
+        rows = (
+            (
+                await connection.execute(
+                    text(
+                        """SELECT document_id,version,generation,stage FROM ima.ingestion_jobs
+                        WHERE (status IN ('queued','retryable')
+                               AND (retry_at IS NULL OR retry_at <= :now))
+                           OR (status='running' AND lease_expires_at < :now)"""
+                    ),
+                    {"now": now},
+                )
+            )
+            .mappings()
+            .all()
+        )
+        cleanup_rows = (
+            (
+                await connection.execute(
+                    text(
+                        """SELECT id FROM ima.storage_cleanup_jobs
+                        WHERE status IN ('queued','retryable') AND next_eligible_at <= :now"""
+                    ),
+                    {"now": now},
+                )
+            )
+            .mappings()
+            .all()
+        )
+        cancel_rows = (
+            (
+                await connection.execute(
+                    text(
+                        """SELECT id,document_id FROM ima.ingestion_jobs
+                        WHERE status='cancel_requested'
+                          AND (lease_expires_at IS NULL OR lease_expires_at < :now)"""
+                    ),
+                    {"now": now},
+                )
+            )
+            .mappings()
+            .all()
+        )
+    # An orphaned cancel request has no worker left to finalize it: close the
+    # job and the document here instead of deferring a task.
+    if cancel_rows:
+        async with engine.begin() as connection:
+            for row in cancel_rows:
+                await connection.execute(
+                    text(
+                        "UPDATE ima.ingestion_jobs SET status='cancelled',lease_expires_at=NULL,"
+                        "updated_at=:now WHERE id=:id AND status='cancel_requested'"
+                    ),
+                    {"id": row["id"], "now": now},
+                )
+                await mark_document_terminal(connection, row["document_id"])
+    for row in rows:
+        await ingestion_tasks[row["stage"]].defer_async(
+            document_id=str(row["document_id"]),
+            version=int(row["version"]),
+            generation=int(row["generation"]),
+        )
+    for row in cleanup_rows:
+        await ingestion_tasks["cleanup"].defer_async(cleanup_id=str(row["id"]))
+
+
 async def reconcile_ingestion(
     engine: AsyncEngine, ingestion_tasks: dict[str, Any], interval: int = 15
 ) -> None:
     while True:
-        now = datetime.now(UTC)
-        async with engine.connect() as connection:
-            rows = (
-                (
-                    await connection.execute(
-                        text(
-                            """SELECT document_id,version,generation,stage FROM ima.ingestion_jobs
-                            WHERE (status IN ('queued','retryable')
-                                   AND (retry_at IS NULL OR retry_at <= :now))
-                               OR (status='running' AND lease_expires_at < :now)"""
-                        ),
-                        {"now": now},
-                    )
-                )
-                .mappings()
-                .all()
-            )
-            cleanup_rows = (
-                (
-                    await connection.execute(
-                        text(
-                            """SELECT id FROM ima.storage_cleanup_jobs
-                            WHERE status IN ('queued','retryable') AND next_eligible_at <= :now"""
-                        ),
-                        {"now": now},
-                    )
-                )
-                .mappings()
-                .all()
-            )
-        for row in rows:
-            await ingestion_tasks[row["stage"]].defer_async(
-                document_id=str(row["document_id"]),
-                version=int(row["version"]),
-                generation=int(row["generation"]),
-            )
-        for row in cleanup_rows:
-            await ingestion_tasks["cleanup"].defer_async(cleanup_id=str(row["id"]))
+        await reconcile_once(engine, ingestion_tasks, datetime.now(UTC))
         await asyncio.sleep(interval)
 
 

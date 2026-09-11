@@ -1,0 +1,6 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/object-storage-ingestion-contracts.md", "reason": "摄入/对象存储契约——取消与终态语义必须遵守"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "迁移/查询与状态约束规范"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "KnowledgeError code/HTTP 映射"}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "worker/队列基础契约"}
+{"file": ".trellis/spec/frontend/file-upload-ingestion-contracts.md", "reason": "前端摄入状态呈现契约"}

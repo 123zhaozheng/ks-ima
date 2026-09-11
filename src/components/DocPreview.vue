@@ -154,13 +154,13 @@
         >
           <span
             class="kb-ingestion-status"
-            :style="{ color: statusView.color }"
+            :style="{ color: bannerView.color }"
           >
             <q-icon
-              :name="statusView.icon"
+              :name="bannerView.icon"
               size="16px"
             />
-            {{ statusView.label }}{{ document.fileState === 'ready' ? '，可被检索' : '' }}
+            {{ bannerView.label }}{{ document.fileState === 'ready' ? '，可被检索' : '' }}
           </span>
           <template v-if="document.fileState !== 'ready' && ingestion">
             <span
@@ -337,7 +337,7 @@ import { knowledgeClient } from 'src/api/knowledge-client'
 import { IMAApiError } from 'src/api/ima-client'
 import { useAskContextStore } from 'src/stores/ask-context'
 import { apiErrorMessage } from 'src/utils/api-error'
-import { fileStateView, jobStatusColor, jobStatusLabel, stageLabel } from 'src/utils/ingestion-status'
+import { fileStateView, jobStatusColor, jobStatusLabel, stageLabel, terminalStatusView } from 'src/utils/ingestion-status'
 import { renderMarkdown } from 'src/utils/markdown'
 
 const props = withDefaults(defineProps<{
@@ -362,6 +362,10 @@ const versions = useKnowledgeVersions(() => props.documentId)
 const fileVersions = useFileVersions(() => props.documentId)
 const document = computed(() => query.data.value)
 const statusView = computed(() => fileStateView(document.value?.fileState))
+const bannerView = computed(() => terminalStatusView(
+  document.value?.fileState,
+  (ingestion.value?.jobs ?? []).map(job => job.status),
+) ?? statusView.value)
 
 const title = ref('')
 const markdown = ref('')

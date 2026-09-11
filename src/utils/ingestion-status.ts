@@ -34,6 +34,26 @@ export function fileStateView(state?: string | null): DocStatusView {
   }
 }
 
+/**
+ * Terminal banner wording for a failed document: a pure cancellation reads
+ * differently from an actual parse/embed failure.  Returns undefined when the
+ * default `fileStateView` already says the right thing.
+ */
+export function terminalStatusView(
+  state: string | null | undefined,
+  statuses: readonly string[],
+): DocStatusView | undefined {
+  if (state !== 'failed') return undefined
+  const failed = statuses.some(status => status === 'failed' || status === 'dead_letter')
+  if (failed || !statuses.some(status => status === 'cancelled')) return undefined
+  return {
+    tone: 'failed',
+    label: '已取消',
+    icon: 'sym_o_cancel',
+    color: 'var(--tk-text-tertiary)',
+  }
+}
+
 const STAGE_LABELS: Record<string, string> = {
   parse: '解析',
   chunk: '切分',

@@ -341,29 +341,44 @@ class StorageService:
             if not stages:
                 raise KnowledgeError(409, "INGESTION_NOT_RETRYABLE", "Ingestion is not retryable")
             generation = max(int(stage["generation"]) for stage in stages)
+            # Restart from the earliest terminal stage: when parse already
+            # succeeded, re-deferring it is a no-op and would leave the failed
+            # chunk/embed stages blocked forever.  Downstream stages are reset
+            # to blocked so the restarted stage re-opens them; an already
+            # succeeded stage must never be downgraded.
+            order = ("parse", "chunk", "embed")
+            terminal = {str(stage["stage"]) for stage in stages}
+            restart = next(stage for stage in order if stage in terminal)
             await conn.execute(
                 text(
-                    "UPDATE ima.ingestion_jobs SET status='queued',attempts=0,retry_at=NULL,error_code=NULL,updated_at=:now WHERE document_id=:id AND version=:version AND generation=:generation AND stage='parse' AND status IN ('failed','dead_letter','cancelled')"
+                    "UPDATE ima.ingestion_jobs SET status='queued',attempts=0,retry_at=NULL,error_code=NULL,updated_at=:now WHERE document_id=:id AND version=:version AND generation=:generation AND stage=:stage AND status IN ('failed','dead_letter','cancelled')"
                 ),
                 {
                     "id": document_id,
                     "version": row["version"],
                     "generation": generation,
+                    "stage": restart,
                     "now": now(),
                 },
             )
+            for stage in order[order.index(restart) + 1 :]:
+                await conn.execute(
+                    text(
+                        "UPDATE ima.ingestion_jobs SET status='blocked',attempts=0,retry_at=NULL,error_code=NULL,updated_at=:now WHERE document_id=:id AND version=:version AND generation=:generation AND stage=:stage AND status IN ('blocked','failed','dead_letter','cancelled')"
+                    ),
+                    {
+                        "id": document_id,
+                        "version": row["version"],
+                        "generation": generation,
+                        "stage": stage,
+                        "now": now(),
+                    },
+                )
             await conn.execute(
-                text(
-                    "UPDATE ima.ingestion_jobs SET status='blocked',attempts=0,retry_at=NULL,error_code=NULL,updated_at=:now WHERE document_id=:id AND version=:version AND generation=:generation AND stage IN ('chunk','embed')"
-                ),
-                {
-                    "id": document_id,
-                    "version": row["version"],
-                    "generation": generation,
-                    "now": now(),
-                },
+                text("UPDATE ima.documents SET file_state='pending',updated_at=:now WHERE id=:id"),
+                {"id": document_id, "now": now()},
             )
-        await self.jobs.defer_ingestion_stage(document_id, row["version"], generation, "parse")
+        await self.jobs.defer_ingestion_stage(document_id, row["version"], generation, restart)
         return await self.status(actor, document_id)
 
     async def cancel(self, actor: str, document_id: UUID) -> dict[str, Any]:
@@ -371,13 +386,30 @@ class StorageService:
             row = await self._file_row(conn, document_id, None, lock=True)
             folder = await self._folder(conn, str(row["folder_id"]))
             await self._authorize(conn, actor, folder, KbAction.EDIT)
-            updated = await conn.scalar(
+            ts = now()
+            # Queued/blocked stages have no worker to observe a cooperative
+            # request, so they are finalized here; a running stage is asked to
+            # stop at its next checkpoint.
+            terminal = await conn.scalar(
                 text(
-                    "UPDATE ima.ingestion_jobs SET status='cancel_requested',updated_at=:now WHERE document_id=:id AND version=:version AND status IN ('queued','running','retryable') RETURNING 1"
+                    "UPDATE ima.ingestion_jobs SET status='cancelled',lease_expires_at=NULL,updated_at=:now WHERE document_id=:id AND version=:version AND status IN ('queued','retryable','blocked') RETURNING 1"
                 ),
-                {"id": document_id, "version": row["version"], "now": now()},
+                {"id": document_id, "version": row["version"], "now": ts},
             )
-            if not updated:
+            requested = await conn.scalar(
+                text(
+                    "UPDATE ima.ingestion_jobs SET status='cancel_requested',updated_at=:now WHERE document_id=:id AND version=:version AND status='running' RETURNING 1"
+                ),
+                {"id": document_id, "version": row["version"], "now": ts},
+            )
+            if terminal:
+                await conn.execute(
+                    text(
+                        "UPDATE ima.documents SET file_state='failed',updated_at=:now WHERE id=:id AND file_state <> 'ready'"
+                    ),
+                    {"id": document_id, "now": ts},
+                )
+            if not terminal and not requested:
                 raise KnowledgeError(409, "INGESTION_NOT_CANCELLABLE", "Ingestion is not running")
         return await self.status(actor, document_id)
 

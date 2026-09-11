@@ -105,6 +105,18 @@ describe('DocPreview ingestion banner', () => {
     expect(hasButton(wrapper, '取消')).toBe(false)
   })
 
+  test('reports a cancelled ingestion as 已取消 while offering 重试', () => {
+    state.document = fileDocument('failed')
+    state.jobs = [job('parse', 'cancelled'), job('chunk', 'cancelled'), job('embed', 'cancelled')]
+    const wrapper = mountPreview()
+    const text = wrapper.text()
+
+    expect(text).toContain('已取消')
+    expect(text).not.toContain('处理失败')
+    expect(hasButton(wrapper, '重试')).toBe(true)
+    expect(hasButton(wrapper, '取消')).toBe(false)
+  })
+
   test('reports a ready document as searchable without listing jobs', () => {
     state.document = fileDocument('ready')
     state.jobs = [job('embed', 'succeeded')]

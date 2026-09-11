@@ -31,6 +31,8 @@ ima.storage_cleanup_jobs
 - Supported parse formats are text, Markdown, JSON, PDF text, DOCX, and XLSX. Legacy XLS, PPTX, OCR/scanned PDF, image, audio, and video parsing are unsupported until a bounded adapter is specified and tested.
 - Parser limits cover object bytes, extracted text, PDF pages, ZIP entry count, uncompressed bytes, and decompression ratio. Unsupported/malformed/limit cases produce stable safe codes, never arbitrary binary decoding or raw parser errors.
 - Parse, chunk, embed, and cleanup rows are persisted and idempotent. Dependent stages start blocked and are unblocked only after predecessor success. Worker reconciliation re-delivers queued/retryable rows, expired leases, and due cleanup rows after restart.
+- Cancellation reaches a terminal state without a running worker: `queued`/`retryable`/`blocked` stages are set `cancelled` immediately, a `running` stage is set `cancel_requested` and finalized by that task at its next checkpoint, and reconciliation finalizes an orphan `cancel_requested` whose lease is absent or expired. Cancelling with no cancellable stage is a 409 `INGESTION_NOT_CANCELLABLE`.
+- A document's `file_state` reflects ingestion terminal state: any terminal `failed`/`dead_letter`/`cancelled` stage sets `file_state='failed'` (cancellation reuses the `failed` terminal value), a successful embed sets `ready`, `ready` is never overwritten by a later terminal write, and retry resets the document to `pending`. Retry restarts from the earliest terminal stage (`parse`, else `chunk`, else `embed`) and reopens only downstream stages; an already succeeded upstream stage is never downgraded, so a failure after parse does not dead-end.
 - Embeddings execute through the exact Python `Workflow.EMBEDDING` assignment. Persist only finite vectors with the expected dimension/model metadata. Parsed text remains available when embedding fails; target denial never invokes any provider fallback.
 - Object cleanup is deferred and retryable. It must not delete bytes referenced by an active file version, ingestion job, rollback-retained legacy source, derived artifact, chunk, or later citation owner.
 - Byte/status/history operations authorize against the containing knowledge-base membership before serialization and hide inactive/unauthorized documents as nonexistent (folders and documents are `active`-only; there is no trash lifecycle). Object keys, presigned URLs, credentials, raw bytes, extracted hidden content, and raw exceptions never enter logs/audit/Problem Details.
@@ -43,6 +45,9 @@ ima.storage_cleanup_jobs
 | Wrong/expired ticket, checksum, size, MIME, or missing object | Typed failure; no published version |
 | Replacement conflict or failed PUT | Current file version/history unchanged |
 | Worker restart, retry time, or expired lease | Reconciler eventually redelivers exactly one idempotent stage |
+| Cancel queued/blocked stage, or orphaned cancel with no active lease | Job reaches `cancelled` without a live worker; document reaches `failed` |
+| Terminal parse/chunk/embed failure or cancellation | Document `file_state='failed'`; `ready` is never downgraded |
+| Retry after a terminal ingestion | Earliest terminal stage requeued, downstream reopened, document `file_state='pending'` |
 | Parse malformed/oversized/archive bomb/unsupported | Bounded safe terminal state; no raw exception/content leak |
 | Missing/broken embedding assignment or wrong vector dimension | Parsed text preserved; embedding unavailable/failed; no fake ready |
 | Unauthorized or non-member file byte/status/history request | Safe 404 |

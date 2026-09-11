@@ -90,6 +90,16 @@ new insert. Task registration, defer, Worker queue filter, Worker name,
 heartbeat write, and readiness lookup use the same validated settings. The
 Compose integration gate uses a distinct queue/name while a normal Worker runs.
 
+The task connector is built once in `create_task_app` and needs two things:
+`PsycopgConnector(kwargs=...)` must be a **mapping** (Procrastinate spreads it
+into psycopg's connect call, so omitting it crashes the Worker with
+`argument after ** must be a mapping, not NoneType`), and it sets
+`-c search_path=<IMA_TASK_SCHEMA>` so the queue resolves its tables. Because the
+migration creates the `ima_jobs` schema in the **main** database, leave
+`IMA_TASK_DATABASE_URL` unset unless a dedicated task database also carries that
+schema; pointing it at a maintenance database (`postgres`) fails with
+`procrastinate_*_v1 does not exist`.
+
 ## 4. Validation & Error Matrix
 
 | Condition | Required result |

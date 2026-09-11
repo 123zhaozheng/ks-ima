@@ -11,7 +11,10 @@ if platform == "win32":
 
 # Set database URLs with correct port and credentials
 os.environ.setdefault("IMA_DATABASE_URL", "postgresql+asyncpg://user:password@localhost:5430/app")
-os.environ.setdefault("IMA_TASK_DATABASE_URL", "postgresql+asyncpg://user:password@localhost:5430/postgres")
+# Leave IMA_TASK_DATABASE_URL unset: the task app then reuses the main database,
+# which is where the migration puts the `ima_jobs` Procrastinate schema. Pointing
+# it at the `postgres` maintenance database breaks the worker with
+# "procrastinate_*_v1 does not exist".
 
 # The admin console is now part of the single front app (dev port 9015), so the
 # backend must accept that origin for CSRF-checked mutations. Without this the

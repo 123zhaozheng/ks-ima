@@ -31,6 +31,28 @@
 - 预览空态（未选文档）保持提示但用 PaneEmptyState。
 - 全部业务逻辑（上传/替换/保存/删除/版本历史/取消/重试）与 testid 不动。
 
+## 管理知识库弹窗精修（2026-09-11 用户反馈补充）
+
+范围：`KbManageDialog.vue`、`KbMembersPanel.vue`、`KbShareLinksPanel.vue`。
+
+- 文案精简：
+  - 重命名区：section 标题「重命名知识库」→「名称」；q-input 去掉 label
+    「知识库名称」（输入框内容即当前名称，自解释）。
+  - 分享链接区：删除「拿到分享链接的人都可以加入该知识库。」整行说明；
+    「有效期（天）」label 与「留空表示不过期。」hint 合并为 placeholder
+    「有效期（天），留空不过期」；去掉 hint 后 input 不再撑高创建行。
+  - 危险区：删除底部 caption（「删除前需要先归档该知识库。」/「只有已归
+    档的知识库才能删除。」）——约束已由「未归档时不显示删除按钮」表达，
+    删除确认对话框内已有说明。
+  - 空态短文案（「暂无成员」「还没有分享链接」）保留。
+- 对齐：rename 行 input 与「重命名」按钮等高（36px）垂直居中；分享创建行
+  （role toggle + 有效期 input + 创建按钮）垂直居中、控件等高；section
+  间距沿用现有 `gap: var(--tk-space-5)`。
+- 不动：全部 testid（`kb-manage-dialog`、`kb-rename-input`、`kb-rename-save`、
+  `share-role-toggle`、`share-link-create`、`share-link-new`、`share-link-url`、
+  `share-link-copy`、`share-link-revoke`、`kb-member-menu`、`kb-leave`、
+  `kb-archive`、`kb-restore`、`kb-delete`）、全部业务逻辑与 isOwner 门控。
+
 ## Acceptance Criteria
 
 - [ ] 同一错误不再同时出现局部态 + Toast（无法预览场景验证）。
@@ -38,3 +60,6 @@
 - [ ] `bun run lint` + `bun run test:unit`（含 DocPreviewHeader.vitest）通过；
       e2e `knowledge-tree.pw.ts` 若本地可跑则通过。
 - [ ] 1366/1920 下三栏不挤压、无横向滚动；<1000px preview 为 Drawer。
+- [ ] 管理弹窗无句子级说明文字（分享说明/有效期 hint/危险区 caption 已移除
+      或并入控件）；rename 行与分享创建行控件等高、垂直居中。
+- [ ] 管理弹窗全部既有 testid 保留；重命名/成员/分享链接/归档/删除流程可用。

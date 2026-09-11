@@ -24,7 +24,12 @@ do NOT hardcode palette colors in components; reference tokens.
 | `--tk-border` | `rgba(0,0,0,0.08)` | Hairline borders |
 | `--tk-border-strong` | `rgba(0,0,0,0.15)` | Emphasized borders (blockquotes) |
 | `--tk-text` / `-secondary` / `-tertiary` | `rgba(0,0,0,0.85/0.6/0.4)` | Text ramp |
-| `--tk-accent` | `#0077fa` | Single accent (Quasar brand `primary`) |
+| `--tk-accent` | `#1677e8` | Single accent (Quasar brand `primary`) |
+
+> **Convention**: `quasar.config.ts` 的 `framework.config.brand.primary` 必须始终
+> 等于 `--tk-accent`（当前 `#1677e8`）。Quasar 组件（toggle/badge/tab active 等）
+> 读 brand.primary，tk-btn 体系读 `--tk-accent`；两处不一致会出现「两种蓝」。
+> 改 accent 色时两处一起改。
 | `--tk-accent-hover/active/soft` | `#3395fb` / `#005fd6` / `rgba(0,119,250,0.08)` | Accent states/tints |
 | `--tk-danger` / `-soft` | `#f93920` / `rgba(249,57,32,0.08)` | Error surfaces |
 | `--tk-success` / `--tk-warning` | `#4cbf50` / `#ff8800` | Status colors |
@@ -73,7 +78,7 @@ Only admin roles see the rail entry; non-admins who deep-link are redirected to
 | `/settings` | `SettingsLayout.vue` | single settings page (profile, security, sessions); the old `/account*` pages are gone |
 | `/join/:token` | `JoinKnowledgeBase.vue` | knowledge base share-link join |
 | `/oauth/consent` | `OAuthConsentPage.vue` | scope-only MCP consent |
-| `/admin/*` | `src/admin/**` (lazy) | admin console section — `meta.requiresAdmin`; own `MainLayout` + drawer |
+| `/admin/*` | `src/admin/**` (lazy) | admin console section — `meta.requiresAdmin`; rendered inside AppShell via `AdminShell.vue`（188px 二级导航栏 + `SystemStatusIndicator` teleport 到 TopBar actions） |
 | auth routes, catchAll | unchanged / `NotFoundPage.vue` | restyled with tokens |
 
 The legacy admin pages (Overview/Tags/Models), `/trash`, and the

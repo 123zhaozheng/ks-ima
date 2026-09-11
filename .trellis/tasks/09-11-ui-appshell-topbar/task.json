@@ -3,7 +3,7 @@
   "name": "ui-appshell-topbar",
   "title": "P2 统一 AppShell 与 56px TopBar",
   "description": "56px 统一 TopBar（border-bottom、左 hamburger+页面标题、右 page actions）；rail 打磨（active 浅 primary 背景、hover、icon 19-20px、tooltip 400-600ms）；保持全部 rail testid 与 admin 门控不变。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

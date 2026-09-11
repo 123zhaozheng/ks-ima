@@ -25,7 +25,8 @@
     "09-11-ui-ask-home",
     "09-11-ui-history-list",
     "09-11-ui-connectors-settings",
-    "09-11-ui-settings-account"
+    "09-11-ui-settings-account",
+    "09-11-ui-admin-console"
   ],
   "parent": null,
   "relatedFiles": [],

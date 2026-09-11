@@ -85,3 +85,25 @@ Do not point foundation migrations at the wrong schema, bypass explicit
 migration steps, or assume that a successful Alembic log means bootstrap SQL
 committed. Verify schema, version, extension, and task marker state on a clean
 PostgreSQL instance.
+
+### Common Mistake: Stale dev API process serving a migrated database
+
+**Symptom**: After pulling backend changes, API endpoints (e.g. `POST
+/knowledge-bases/{id}/ask`) return 500 `INTERNAL_ERROR` while the database
+itself is healthy.
+
+**Cause**: The long-running local API process still executes the old code,
+but the database has already been migrated forward. When a migration drops or
+renames a table the old code reads (real case 2026-09-11: `20260910_0013`
+dropped `ima.kb_profile_assignments` while the running server predated commit
+`f3fba45`), every code path touching it raises an unhandled
+`UndefinedTableError`.
+
+**Fix**: Restart the local API (`python backend/run_server.py`). Verify with
+`Get-Process <pid> | Select StartTime` vs `git log -1 --format=%ci --
+backend/src`: process older than the latest backend commit means stale code.
+
+**Prevention**: After applying or pulling migrations that drop/rename schema
+objects, restart all local backend processes (API + worker) before testing.
+When triaging a 500, compare the server process start time against the latest
+backend commit before digging into application code.

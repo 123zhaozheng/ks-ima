@@ -101,18 +101,6 @@ body {
  * Shared page scaffolding so every surface reads as one calm product.
  * Page width is owned by each page prototype; .tk-page is a full-width base.
  */
-.tk-header {
-  background-color: var(--tk-surface);
-  color: var(--tk-text);
-}
-
-.tk-header .q-toolbar__title {
-  font-size: 17px;
-  font-weight: var(--tk-weight-semibold);
-  letter-spacing: var(--tk-tracking-display);
-  color: var(--tk-text);
-}
-
 /* Page title pattern: 21px semibold, calm tracking, left-aligned. */
 .tk-page-title {
   font-size: var(--tk-font-size-xl);

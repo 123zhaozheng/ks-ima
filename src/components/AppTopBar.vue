@@ -68,6 +68,7 @@ const fallbackTitle = computed(() => {
   gap: var(--tk-space-2);
   height: 56px;
   padding: 0 var(--tk-space-3);
+  border-bottom: 1px solid var(--tk-border-subtle);
 }
 
 .tk-topbar-title {

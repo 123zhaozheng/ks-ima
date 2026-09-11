@@ -2,7 +2,7 @@ import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export const useUiStateStore = defineStore('ui-state', () => {
-  const mainDrawerWidth = 240
+  const mainDrawerWidth = 76
   const mainDrawerBreakpoint = 1200
   const mainDrawerOpen = ref(false)
   function toggleMainDrawer() {

@@ -11,58 +11,31 @@
       <q-item
         v-if="userId"
         clickable
-        py-1
+        class="rail-item rail-switcher"
         data-testid="kb-switcher"
       >
-        <template v-if="kbStore.current">
-          <q-item-section
-            avatar
-            pr-3
-            ml--1
-          >
-            <a-avatar :avatar="kbAvatar(kbStore.current)" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>
-              {{ kbStore.current.name }}
-            </q-item-label>
-          </q-item-section>
-        </template>
-        <template v-else-if="kbStore.kbsStatus !== 'success'">
-          <q-item-section
-            avatar
-            pr-3
-            ml--1
-          >
-            <q-skeleton
-              type="QAvatar"
-              size="27px"
-            />
-          </q-item-section>
-          <q-item-section>
-            <q-skeleton
-              type="text"
-              width="96px"
-            />
-          </q-item-section>
-        </template>
-        <template v-else>
-          <q-item-section
-            avatar
-            pr-3
-            ml--1
-          >
-            <a-avatar :avatar="kbAvatar(null)" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label class="text-secondary">
-              未选择知识库
-            </q-item-label>
-          </q-item-section>
-        </template>
-        <q-item-section side>
-          <q-icon name="sym_o_keyboard_arrow_down" />
+        <q-item-section class="rail-item-icon">
+          <a-avatar
+            v-if="kbStore.current"
+            :avatar="kbAvatar(kbStore.current)"
+          />
+          <q-skeleton
+            v-else-if="kbStore.kbsStatus !== 'success'"
+            type="QAvatar"
+            size="27px"
+          />
+          <a-avatar
+            v-else
+            :avatar="kbAvatar(null)"
+          />
         </q-item-section>
+        <q-tooltip
+          anchor="center right"
+          self="center left"
+          :offset="[10, 0]"
+        >
+          {{ kbStore.current?.name ?? '未选择知识库' }}
+        </q-tooltip>
         <q-menu>
           <kb-menu-list />
         </q-menu>
@@ -70,18 +43,21 @@
       <q-item
         v-else
         to="/auth/sign-in"
+        class="rail-item"
       >
-        <q-item-section
-          avatar
-          min-w-0
+        <q-item-section class="rail-item-icon">
+          <q-icon
+            name="sym_o_login"
+            size="22px"
+          />
+        </q-item-section>
+        <q-tooltip
+          anchor="center right"
+          self="center left"
+          :offset="[10, 0]"
         >
-          <q-icon name="sym_o_login" />
-        </q-item-section>
-        <q-item-section>
-          <q-item-label>
-            登录/注册
-          </q-item-label>
-        </q-item-section>
+          登录/注册
+        </q-tooltip>
       </q-item>
       <q-separator spaced />
       <template v-if="userId">
@@ -92,97 +68,139 @@
           <q-item
             to="/"
             exact
-            item-rd
-            min-h="40px"
+            class="rail-item"
             data-testid="rail-nav-ask"
           >
-            <q-item-section avatar>
-              <q-icon name="sym_o_chat" />
+            <q-item-section class="rail-item-icon">
+              <q-icon
+                name="sym_o_chat"
+                size="22px"
+              />
             </q-item-section>
-            <q-item-section>
+            <q-tooltip
+              anchor="center right"
+              self="center left"
+              :offset="[10, 0]"
+            >
               提问
-            </q-item-section>
+            </q-tooltip>
           </q-item>
           <q-item
             to="/kb"
-            item-rd
-            min-h="40px"
+            class="rail-item"
             data-testid="rail-nav-kb"
           >
-            <q-item-section avatar>
-              <q-icon name="sym_o_folder" />
+            <q-item-section class="rail-item-icon">
+              <q-icon
+                name="sym_o_folder"
+                size="22px"
+              />
             </q-item-section>
-            <q-item-section>
+            <q-tooltip
+              anchor="center right"
+              self="center left"
+              :offset="[10, 0]"
+            >
               知识库
-            </q-item-section>
+            </q-tooltip>
           </q-item>
           <q-item
             to="/history"
-            item-rd
-            min-h="40px"
+            class="rail-item"
             data-testid="rail-nav-history"
           >
-            <q-item-section avatar>
-              <q-icon name="sym_o_history" />
+            <q-item-section class="rail-item-icon">
+              <q-icon
+                name="sym_o_history"
+                size="22px"
+              />
             </q-item-section>
-            <q-item-section>
+            <q-tooltip
+              anchor="center right"
+              self="center left"
+              :offset="[10, 0]"
+            >
               历史
-            </q-item-section>
+            </q-tooltip>
           </q-item>
           <q-item
             to="/connectors"
-            item-rd
-            min-h="40px"
+            class="rail-item"
             data-testid="rail-nav-connectors"
           >
-            <q-item-section avatar>
-              <q-icon name="sym_o_hub" />
+            <q-item-section class="rail-item-icon">
+              <q-icon
+                name="sym_o_hub"
+                size="22px"
+              />
             </q-item-section>
-            <q-item-section>
+            <q-tooltip
+              anchor="center right"
+              self="center left"
+              :offset="[10, 0]"
+            >
               连接器
-            </q-item-section>
+            </q-tooltip>
           </q-item>
         </q-list>
         <q-list p-2>
           <q-item
             to="/settings"
-            item-rd
-            min-h="40px"
+            class="rail-item"
             data-testid="rail-nav-settings"
           >
-            <q-item-section avatar>
-              <q-icon name="sym_o_settings" />
+            <q-item-section class="rail-item-icon">
+              <q-icon
+                name="sym_o_settings"
+                size="22px"
+              />
             </q-item-section>
-            <q-item-section>
+            <q-tooltip
+              anchor="center right"
+              self="center left"
+              :offset="[10, 0]"
+            >
               设置
-            </q-item-section>
+            </q-tooltip>
           </q-item>
           <q-item
             v-if="canSeeAdminConsole"
             to="/admin"
-            item-rd
-            min-h="40px"
+            class="rail-item"
+            data-testid="rail-nav-admin"
           >
-            <q-item-section avatar>
-              <q-icon name="sym_o_manage_accounts" />
+            <q-item-section class="rail-item-icon">
+              <q-icon
+                name="sym_o_manage_accounts"
+                size="22px"
+              />
             </q-item-section>
-            <q-item-section>
+            <q-tooltip
+              anchor="center right"
+              self="center left"
+              :offset="[10, 0]"
+            >
               管理控制台
-            </q-item-section>
+            </q-tooltip>
           </q-item>
           <q-item
             clickable
-            item-rd
-            min-h="40px"
-            hover:text-err
+            class="rail-item hover:text-err"
             @click="signOut"
           >
-            <q-item-section avatar>
-              <q-icon name="sym_o_logout" />
+            <q-item-section class="rail-item-icon">
+              <q-icon
+                name="sym_o_logout"
+                size="22px"
+              />
             </q-item-section>
-            <q-item-section>
+            <q-tooltip
+              anchor="center right"
+              self="center left"
+              :offset="[10, 0]"
+            >
               退出登录
-            </q-item-section>
+            </q-tooltip>
           </q-item>
         </q-list>
       </template>
@@ -265,5 +283,24 @@ function signOut() {
 .app-rail {
   background-color: var(--tk-surface);
   border-right: 1px solid var(--tk-border);
+}
+
+/* Compact icon-forward rail: each row centers a single icon and reveals its
+   Chinese label through a tooltip on hover. */
+.rail-item {
+  min-height: 44px;
+  padding: 0 var(--tk-space-1);
+  border-radius: var(--tk-radius);
+  justify-content: center;
+}
+
+.rail-item-icon {
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.rail-switcher {
+  min-height: 52px;
 }
 </style>

@@ -19,6 +19,7 @@
         round
         icon="sym_o_close"
         title="关闭"
+        aria-label="关闭"
         data-testid="doc-close-button"
         @click="$emit('close')"
       />
@@ -34,10 +35,26 @@
       />
       <q-space />
       <q-btn
+        v-if="!readonly"
         flat
         dense
+        round
+        color="primary"
+        icon="sym_o_save"
+        title="保存"
+        aria-label="保存"
+        data-testid="doc-save-button"
+        :loading="saving"
+        :disable="!document || !dirty"
+        @click="save"
+      />
+      <q-btn
+        flat
+        dense
+        round
         icon="sym_o_chat"
-        label="询问这篇文档"
+        title="询问"
+        aria-label="询问"
         :disable="!document"
         data-testid="doc-ask-button"
         @click="askAboutDocument"
@@ -45,29 +62,89 @@
       <q-btn
         flat
         dense
-        icon="sym_o_history"
-        title="历史"
+        round
+        icon="sym_o_download"
+        title="下载"
+        aria-label="下载"
+        data-testid="doc-download-button"
         :disable="!document"
-        @click="showHistory = true"
+        @click="download"
       />
       <q-btn
-        v-if="document?.kind === 'note' && !readonly"
         flat
         dense
-        :icon="mode === 'edit' ? 'sym_o_visibility' : 'sym_o_edit'"
-        :label="mode === 'edit' ? '预览' : '编辑'"
-        @click="toggleMode"
-      />
-      <q-btn
-        v-if="document?.kind === 'file' && !readonly"
-        flat
-        dense
-        icon="sym_o_upload_file"
-        label="替换"
-        :loading="replacing"
-        :disable="!document || query.isError.value"
-        @click="replacementInput?.click()"
-      />
+        round
+        icon="sym_o_more_vert"
+        title="更多"
+        aria-label="更多"
+        data-testid="doc-more-button"
+      >
+        <q-menu
+          anchor="bottom right"
+          self="top right"
+        >
+          <q-list min-w="160px">
+            <q-item
+              v-if="document?.kind === 'file' && !readonly"
+              clickable
+              :disable="!document || query.isError.value || replacing"
+              @click="replacementInput?.click()"
+            >
+              <q-item-section avatar>
+                <q-icon name="sym_o_upload_file" />
+              </q-item-section>
+              <q-item-section>替换</q-item-section>
+            </q-item>
+            <q-item
+              v-if="document?.kind === 'note' && !readonly"
+              clickable
+              :disable="!document"
+              @click="toggleMode"
+            >
+              <q-item-section avatar>
+                <q-icon :name="mode === 'edit' ? 'sym_o_visibility' : 'sym_o_edit'" />
+              </q-item-section>
+              <q-item-section>
+                {{ mode === 'edit' ? '预览' : '编辑' }}
+              </q-item-section>
+            </q-item>
+            <q-item
+              clickable
+              :disable="!document"
+              @click="showHistory = true"
+            >
+              <q-item-section avatar>
+                <q-icon name="sym_o_history" />
+              </q-item-section>
+              <q-item-section>历史</q-item-section>
+            </q-item>
+            <q-item
+              v-if="document?.kind === 'file'"
+              clickable
+              :disable="!document"
+              @click="loadPreviewUrl"
+            >
+              <q-item-section avatar>
+                <q-icon name="sym_o_refresh" />
+              </q-item-section>
+              <q-item-section>预览</q-item-section>
+            </q-item>
+            <q-item
+              v-if="!readonly"
+              clickable
+              class="text-negative"
+              :disable="!document"
+              data-testid="doc-delete-button"
+              @click="confirmDelete"
+            >
+              <q-item-section avatar>
+                <q-icon name="sym_o_delete" />
+              </q-item-section>
+              <q-item-section>删除</q-item-section>
+            </q-item>
+          </q-list>
+        </q-menu>
+      </q-btn>
       <input
         ref="replacementInput"
         type="file"
@@ -75,44 +152,6 @@
         hidden
         @change="replaceFile"
       >
-      <q-btn
-        flat
-        dense
-        icon="sym_o_download"
-        title="下载"
-        :disable="!document"
-        @click="download"
-      />
-      <q-btn
-        v-if="document?.kind === 'file'"
-        flat
-        dense
-        icon="sym_o_refresh"
-        title="预览"
-        :disable="!document"
-        @click="loadPreviewUrl"
-      />
-      <q-btn
-        v-if="!readonly"
-        flat
-        dense
-        round
-        icon="sym_o_delete"
-        title="删除"
-        :disable="!document"
-        data-testid="doc-delete-button"
-        @click="confirmDelete"
-      />
-      <q-btn
-        v-if="!readonly"
-        color="primary"
-        dense
-        icon="sym_o_save"
-        label="保存"
-        :loading="saving"
-        :disable="!document || !dirty"
-        @click="save"
-      />
     </div>
     <div
       px-3

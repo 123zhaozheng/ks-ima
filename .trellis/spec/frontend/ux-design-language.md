@@ -42,10 +42,12 @@ do NOT hardcode palette colors in components; reference tokens.
 
 ## 2. Information architecture — left rail + morphing main pane
 
-`src/layouts/AppShell.vue` owns the shell: a persistent left rail (Quasar
-drawer, 240px, breakpoint 1200px, overlay below) with durable nouns. No nested
-drawers, no global top bar — each page owns its own header (`q-header` +
-`.tk-header` styling) with a menu button that toggles the rail on small widths.
+`src/layouts/AppShell.vue` owns the shell: a persistent **compact icon rail**
+(Quasar drawer, 76px, breakpoint 1200px, overlay below) with durable nouns.
+No nested drawers, no global top bar — each page owns its own header
+(`q-header` + `.tk-header` styling) with a menu button that toggles the rail on
+small widths. Rail rows are icon-only with Chinese hover tooltips; see §9 for
+the compact-rail and icon-first action conventions.
 
 Rail order: **knowledge base switcher** (`kb-switcher`, top — `KbMenuList`
 popover: switch between memberships, create, join via share link) → **Ask
@@ -144,8 +146,10 @@ folder** action (`kb-new-folder`). Pane 2 **list**: `KnowledgeList` rows
 **Upload** (`kb-upload`). Pane 3 **preview** (`kb-preview-pane`):
 `DocPreview` — markdown render/edit for notes (editor + live render
 side-by-side), iframe preview for files, version history, ingestion banners;
-top-right **"Ask about this document"** (`doc-ask-button`) pre-scopes
-the home composer through the ask-context store. Selection lives in the URL
+top-right actions are **icon-only** (`doc-save-button`, `doc-ask-button`,
+`doc-download-button`) plus a `⋯` overflow menu (`doc-more-button`) — the
+`doc-ask-button` pre-scopes the home composer through the ask-context store.
+Selection lives in the URL
 (`?folderId=`, `?doc=`) so deep links and refresh survive; `/kb` with no
 query means the knowledge base root. New notes open straight in editor mode.
 Tags and trash UIs are deleted — delete is a direct hard delete gated by
@@ -187,7 +191,7 @@ them when touching these surfaces and never rename without updating
 `tests/e2e/`:
 
 - Rail: `kb-switcher`, `rail-nav-ask`, `rail-nav-kb`, `rail-nav-history`,
-  `rail-nav-connectors`, `rail-nav-settings`.
+  `rail-nav-connectors`, `rail-nav-settings`, `rail-nav-admin`.
 - Knowledge base switcher/menu: `kb-add`, `kb-switch-item`, `kb-empty`,
   `kb-create-entry`, `kb-join-entry`, `kb-create-bottom`, `kb-join-bottom`,
   `kb-name-input`, `kb-create-button`.
@@ -200,8 +204,10 @@ them when touching these surfaces and never rename without updating
 - Knowledge: `kb-onboarding`, `kb-create`, `kb-join`, `kb-manage`,
   `kb-manage-dialog`, `kb-tree-pane`, `kb-new-folder`, `kb-new-note`,
   `kb-upload`, `kb-preview-pane`, `kb-preview-reopen`, `doc-ask-button`,
-  `doc-close-button`, `folder-name-input`, `folder-create-button`,
-  `note-title-input`, `note-create-button`, `upload-dropzone`, `folder-picker`.
+  `doc-close-button`, `doc-save-button`, `doc-download-button`,
+  `doc-more-button`, `doc-delete-button`, `folder-name-input`,
+  `folder-create-button`, `note-title-input`, `note-create-button`,
+  `upload-dropzone`, `folder-picker`.
 - History: `history-list`, `history-item`, `history-item-menu`.
 - Save answer: `save-as-note-dialog`, `save-as-note-title`,
   `save-as-note-confirm`.
@@ -226,3 +232,42 @@ API. Keep desktop `chromium` + `mobile-chromium` projects green.
 All new UI strings go through `t('English key')` (i18n-pro, English keys).
 zh-CN and zh-TW locale files must stay at parity (0 missing) for every touched
 key; check with the i18n tooling before handoff. No global legacy sweep.
+
+---
+
+## 9. Compact rail and icon-first actions
+
+Two related conventions keep the workbench narrow and calm. Apply them to any
+new shell surface instead of re-introducing wide, text-heavy rows.
+
+### Compact rail (`AppShell.vue`)
+
+The left rail is an **icon-forward compact rail**: `mainDrawerWidth` is 76px
+(not 240px), and every row is a single centered icon whose Chinese label only
+appears in a `q-tooltip` on hover. Keep the durable nouns and their exact
+`data-testid`s (`kb-switcher`, `rail-nav-ask`, `rail-nav-kb`,
+`rail-nav-history`, `rail-nav-connectors`, `rail-nav-settings`,
+`rail-nav-admin`), the knowledge-base switcher avatar + popover, the
+role-gated admin entry, and sign-out. Wide layouts show the rail persistently;
+below `mainDrawerBreakpoint` it stays an overlay drawer (behavior unchanged).
+Sizing, spacing, and radii come from `--tk-*` tokens, never hardcoded palette
+values, and quoted/loading/idle states must not change the compact geometry.
+
+### Icon-first actions + overflow menu
+
+Toolbars that previously mixed "icon + Chinese label" buttons with icon-only
+buttons must converge on a single grammar:
+
+- **All toolbar actions are icon-only** (`flat dense round`), with the Chinese
+  label exposed as `title` (plus `aria-label` for accessibility) and a matching
+  `q-tooltip`; never render a visible text label on the button.
+- **High-frequency actions are pinned; low-frequency or destructive actions
+  move into a trailing `⋯` (`sym_o_more_vert`) `q-menu`.** In the document
+  preview header the pinned order is **保存 → 询问 → 下载**, and the `⋯` menu
+  holds 替换 / 编辑-预览切换 / 历史 / 预览 / 删除 (delete keeps its negative
+  styling and its `doc-delete-button` testid). The reference header layout is
+  `[关闭][标题 ……] …… [保存][询问][下载][⋯]`.
+- **Preserve behavior and accessibility**: disable/loading/permission
+  conditions (`readonly`, `kind`, dirty/version state) and every existing
+  `data-testid` travel with the action, no matter which surface (pinned button
+  vs. overflow item) it now lives on. Add a testid to any newly pinned action.

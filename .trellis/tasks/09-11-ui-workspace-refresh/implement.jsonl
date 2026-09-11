@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/ux-design-language.md", "reason": "现有设计语言唯一来源：token 表、IA、testid 契约、Chrome 109 策略、compact rail 约定——本任务要改写它的 token/布局章节并严守其 testid 与兼容性契约"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件编写规范，新增 primitives 必须遵守"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "lint/test/build 验证门"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "新组件/util 文件放置位置"}
+{"file": ".trellis/tasks/09-11-ui-workspace-refresh/design.md", "reason": "父任务技术设计：token 映射表、primitives 清单、每页方案、TopBar 决策与回退"}

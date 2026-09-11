@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/09-11-ui-workspace-refresh/prd.md", "reason": "父任务硬性不变量（testid/Chrome109/文案/业务不动）与全局验收标准"}
+{"file": ".trellis/tasks/09-11-ui-workspace-refresh/design.md", "reason": "技术设计：token 映射表、primitives、每页方案"}
+{"file": ".trellis/spec/frontend/ux-design-language.md", "reason": "testid 契约（§6）、Chrome 109 策略（§5）、compact rail 约定（§9）"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件编写规范"}

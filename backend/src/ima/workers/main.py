@@ -10,6 +10,8 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from ima.application.model_governance import ModelGovernanceService
+from ima.application.search import SearchService
 from ima.config import get_settings
 from ima.infrastructure.db.engine import create_engine
 from ima.infrastructure.observability.logging import configure_logging
@@ -34,7 +36,10 @@ async def heartbeat(engine: object, interval: int, worker_name: str) -> None:
 
 
 async def reconcile_once(
-    engine: AsyncEngine, ingestion_tasks: dict[str, Any], now: datetime
+    engine: AsyncEngine,
+    ingestion_tasks: dict[str, Any],
+    now: datetime,
+    search: SearchService | None = None,
 ) -> None:
     """One reconciliation pass: redeliver due work and reap orphaned cancels."""
     async with engine.connect() as connection:
@@ -101,13 +106,21 @@ async def reconcile_once(
         )
     for row in cleanup_rows:
         await ingestion_tasks["cleanup"].defer_async(cleanup_id=str(row["id"]))
+    # Heal knowledge bases whose ready chunks lack an exact active vector
+    # index so grounded ask never blocks on a stale REINDEX_REQUIRED.
+    if search is not None and "index" in ingestion_tasks:
+        for kb_id in await search.kbs_missing_vector_index():
+            await ingestion_tasks["index"].defer_async(kb_id=kb_id)
 
 
 async def reconcile_ingestion(
-    engine: AsyncEngine, ingestion_tasks: dict[str, Any], interval: int = 15
+    engine: AsyncEngine,
+    ingestion_tasks: dict[str, Any],
+    search: SearchService | None = None,
+    interval: int = 15,
 ) -> None:
     while True:
-        await reconcile_once(engine, ingestion_tasks, datetime.now(UTC))
+        await reconcile_once(engine, ingestion_tasks, datetime.now(UTC), search)
         await asyncio.sleep(interval)
 
 
@@ -119,13 +132,15 @@ async def run() -> None:
     register_model_health_task(task_app, settings)
     ingestion_tasks = register_ingestion_tasks(task_app, settings)
     engine = create_engine(settings)
+    search = SearchService(engine, ModelGovernanceService(engine, settings))
     async with task_app.open_async():
         heartbeat_task = asyncio.create_task(
             heartbeat(engine, settings.worker_heartbeat_seconds, settings.worker_name),
             name="ima-worker-heartbeat",
         )
         reconcile_task = asyncio.create_task(
-            reconcile_ingestion(engine, ingestion_tasks), name="ima-ingestion-reconciliation"
+            reconcile_ingestion(engine, ingestion_tasks, search),
+            name="ima-ingestion-reconciliation",
         )
         try:
             await task_app.run_worker_async(

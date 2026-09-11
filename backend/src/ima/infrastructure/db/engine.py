@@ -15,8 +15,12 @@ from ima.config import Settings
 
 
 def create_engine(settings: Settings) -> AsyncEngine:
+    url = settings.database_url.get_secret_value()
+    # Ensure we use asyncpg driver
+    if not url.startswith("postgresql+asyncpg"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://")
     return create_async_engine(
-        settings.database_url.get_secret_value(),
+        url,
         pool_pre_ping=True,
         pool_size=5,
         max_overflow=10,

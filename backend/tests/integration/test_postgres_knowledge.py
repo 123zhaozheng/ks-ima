@@ -166,7 +166,7 @@ def test_knowledge_migration_is_fresh_and_repeatable() -> None:
     with psycopg.connect(SYNC_URL) as connection:
         assert (
             connection.execute("SELECT version_num FROM ima.alembic_version").fetchone()[0]
-            == "20260910_0012"
+            == "20260910_0013"
         )
         for table in (
             "documents",

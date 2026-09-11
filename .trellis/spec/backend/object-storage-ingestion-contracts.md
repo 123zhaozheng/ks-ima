@@ -2,7 +2,7 @@
 
 ## Scope / Trigger
 
-Apply this contract to Python S3-compatible configuration/client code, file-version object bindings, upload/download/preview APIs, parser/chunk/embedding/cleanup tasks, worker reconciliation, legacy blob migration, and any permanent-delete dependency involving file bytes or derived artifacts.
+Apply this contract to Python S3-compatible configuration/client code, file-version object bindings, upload/download/preview APIs, parser/chunk/embedding/cleanup tasks, automatic retrieval-index upkeep after embedding, worker reconciliation, legacy blob migration, and any permanent-delete dependency involving file bytes or derived artifacts.
 
 ## Signatures
 
@@ -33,8 +33,9 @@ ima.storage_cleanup_jobs
 - Parse, chunk, embed, and cleanup rows are persisted and idempotent. Dependent stages start blocked and are unblocked only after predecessor success. Worker reconciliation re-delivers queued/retryable rows, expired leases, and due cleanup rows after restart.
 - Cancellation reaches a terminal state without a running worker: `queued`/`retryable`/`blocked` stages are set `cancelled` immediately, a `running` stage is set `cancel_requested` and finalized by that task at its next checkpoint, and reconciliation finalizes an orphan `cancel_requested` whose lease is absent or expired. Cancelling with no cancellable stage is a 409 `INGESTION_NOT_CANCELLABLE`.
 - A document's `file_state` reflects ingestion terminal state: any terminal `failed`/`dead_letter`/`cancelled` stage sets `file_state='failed'` (cancellation reuses the `failed` terminal value), a successful embed sets `ready`, `ready` is never overwritten by a later terminal write, and retry resets the document to `pending`. Retry restarts from the earliest terminal stage (`parse`, else `chunk`, else `embed`) and reopens only downstream stages; an already succeeded upstream stage is never downgraded, so a failure after parse does not dead-end.
-- Embeddings execute through the exact Python `Workflow.EMBEDDING` assignment. Persist only finite vectors with the expected dimension/model metadata. Parsed text remains available when embedding fails; target denial never invokes any provider fallback.
-- Ingestion and retrieval share one model resolver: the embed stage resolves its target through the same assignment-first, scene-default-fallback path used for retrieval, never by querying assignments directly. No assignment and no scene default yields `NO_ASSIGNMENT`; a resolved but unusable target (`UNAVAILABLE`) fails the stage without a fake success.
+- Embeddings execute through the exact scene-default Python `Workflow.EMBEDDING` model. Persist only finite vectors with the expected dimension/model metadata. Parsed text remains available when embedding fails; target denial never invokes any provider fallback.
+- After the embed stage makes a document `ready`, it enqueues an idempotent retrieval-index build for its knowledge base using the scene-default embedding model. Reconciliation also heals a knowledge base that has ready exact-model chunks but no active index. A knowledge base with no scene-default embedding model or no exact-model ready chunks is skipped, never error-looped.
+- Ingestion and retrieval share one model resolver: the embed stage resolves its target from the scene-default resolver used for retrieval. No scene default yields `NO_ASSIGNMENT`; a configured but unusable target (`UNAVAILABLE`) fails the stage without a fake success.
 - Object cleanup is deferred and retryable. It must not delete bytes referenced by an active file version, ingestion job, rollback-retained legacy source, derived artifact, chunk, or later citation owner.
 - Byte/status/history operations authorize against the containing knowledge-base membership before serialization and hide inactive/unauthorized documents as nonexistent (folders and documents are `active`-only; there is no trash lifecycle). Object keys, presigned URLs, credentials, raw bytes, extracted hidden content, and raw exceptions never enter logs/audit/Problem Details.
 - Legacy migration copies only completed metadata mappings with stable fingerprints. It bounded-streams/verifies the source, performs provider-side copy to an opaque target key, verifies the target, checkpoints repeatably, and never deletes or reverse-writes legacy objects.
@@ -50,7 +51,8 @@ ima.storage_cleanup_jobs
 | Terminal parse/chunk/embed failure or cancellation | Document `file_state='failed'`; `ready` is never downgraded |
 | Retry after a terminal ingestion | Earliest terminal stage requeued, downstream reopened, document `file_state='pending'` |
 | Parse malformed/oversized/archive bomb/unsupported | Bounded safe terminal state; no raw exception/content leak |
-| Missing/broken embedding assignment or wrong vector dimension | Parsed text preserved; embedding unavailable/failed; no fake ready |
+| Missing/broken embedding scene default or wrong vector dimension | Parsed text preserved; embedding unavailable/failed; no fake ready |
+| Successful embed with exact-model ready chunks | Exact active vector index built automatically; grounded ask needs no manual step |
 | Unauthorized or non-member file byte/status/history request | Safe 404 |
 | Cleanup with any dependency | Retain object and return/defer dependency state |
 | Changed/missing legacy blob | Review/failed checkpoint; no guessed copy |
@@ -61,9 +63,9 @@ ima.storage_cleanup_jobs
 1. Ruff format/check, strict mypy, full pytest, and deterministic OpenAPI export.
 2. Fresh isolated PostgreSQL image with both `vector` and `zhparser`; `IMA_REQUIRE_POSTGRES=1` must collect and pass the exact current PostgreSQL test count with zero skips.
 3. Real private MinIO/S3-compatible upload ticket PUT, checksum HEAD, GET, delete, and legacy provider-side copy verification in isolated buckets with cleanup.
-4. Worker tests for blocked stage ordering, idempotency, retry/dead-letter, cancellation, expired lease reconciliation, restart behavior, and cleanup dependencies.
+4. Worker tests for blocked stage ordering, idempotency, retry/dead-letter, cancellation, expired lease reconciliation, restart behavior, cleanup dependencies, and automatic/self-healing retrieval-index builds.
 5. Parser fixtures for every supported and rejected format plus malformed, compressed, page/text/size limit cases.
-6. Model-governance tests for exact embedding assignment, finite/dimension validation, terminal target denial, and `REINDEX_REQUIRED` dependencies.
+6. Model-governance tests for exact scene-default embedding resolution, finite/dimension validation, terminal target denial, and `REINDEX_REQUIRED` dependencies.
 7. Caddy/OpenAPI/coexistence tests prove exact Python routes and retained legacy ownership until explicit cutover.
 
 ## Wrong vs Correct

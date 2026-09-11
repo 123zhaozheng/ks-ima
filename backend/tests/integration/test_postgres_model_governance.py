@@ -107,7 +107,6 @@ def cleanup_scene_fixtures(
     workflows = (workflow,) if isinstance(workflow, str) else tuple(workflow or ())
     with psycopg.connect(SYNC_URL) as connection:
         if kb_id:
-            connection.execute("DELETE FROM ima.kb_profile_assignments WHERE kb_id=%s", (kb_id,))
             connection.execute("DELETE FROM ima.knowledge_bases WHERE id=%s", (kb_id,))
         for workflow in workflows:
             connection.execute("DELETE FROM ima.scene_defaults WHERE workflow=%s", (workflow,))
@@ -142,7 +141,7 @@ def test_model_governance_migration_is_fresh_and_repeatable() -> None:
     with psycopg.connect(SYNC_URL) as connection:
         assert (
             connection.execute("SELECT version_num FROM ima.alembic_version").fetchone()[0]
-            == "20260910_0012"
+            == "20260910_0013"
         )
         for table in (
             "model_gateway_secrets",
@@ -150,12 +149,18 @@ def test_model_governance_migration_is_fresh_and_repeatable() -> None:
             "governed_models",
             "capability_profiles",
             "capability_profile_versions",
-            "kb_profile_assignments",
             "model_dependency_index",
             "legacy_model_governance_migration",
             "scene_defaults",
         ):
             assert connection.execute("SELECT to_regclass(%s)", (f"ima.{table}",)).fetchone()[0]
+        # Scene-only resolution: the assignment table is gone for good.
+        assert (
+            connection.execute(
+                "SELECT to_regclass('ima.kb_profile_assignments')"
+            ).fetchone()[0]
+            is None
+        )
 
 
 @pytest.mark.postgres
@@ -234,11 +239,11 @@ def test_published_profile_version_cannot_be_rewritten() -> None:
 
 @pytest.mark.postgres
 @pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
-def test_assignment_and_dependency_rows_have_restrictive_foreign_keys() -> None:
+def test_dependency_rows_have_restrictive_foreign_keys() -> None:
     migrate()
     assert SYNC_URL
     kb_id = f"pg-kb-{uuid4().hex[:20]}"
-    profile_id, model_id, gateway_id = uuid4(), uuid4(), uuid4()
+    model_id, gateway_id = uuid4(), uuid4()
     with psycopg.connect(SYNC_URL) as connection:
         connection.execute(
             "INSERT INTO ima.knowledge_bases(id,name,is_active,created_at,updated_at) VALUES (%s,'PG Model Knowledge Base',true,now(),now())",
@@ -253,21 +258,6 @@ def test_assignment_and_dependency_rows_have_restrictive_foreign_keys() -> None:
             (model_id, gateway_id),
         )
         connection.execute(
-            "INSERT INTO ima.capability_profiles(id,workflow,business_alias,description,current_version,created_at,updated_at) VALUES (%s,'title_generation','PG Assignment','profile',1,now(),now())",
-            (profile_id,),
-        )
-        connection.execute(
-            "INSERT INTO ima.capability_profile_versions(profile_id,version,state,config,config_digest,created_at,updated_at) VALUES (%s,1,'published',%s::jsonb,'digest',now(),now())",
-            (
-                profile_id,
-                json.dumps({"chatModelId": str(model_id), "workflow": "title_generation"}),
-            ),
-        )
-        connection.execute(
-            "INSERT INTO ima.kb_profile_assignments(kb_id,workflow,profile_id,profile_version,assigned_at) VALUES (%s,'title_generation',%s,1,now())",
-            (kb_id, profile_id),
-        )
-        connection.execute(
             "INSERT INTO ima.model_dependency_index(id,dependency_kind,kb_id,source_id,model_id,dimension,created_at,updated_at) VALUES (%s,'target_index',%s,'idx-1',%s,1536,now(),now())",
             (uuid4(), kb_id, model_id),
         )
@@ -276,10 +266,6 @@ def test_assignment_and_dependency_rows_have_restrictive_foreign_keys() -> None:
             connection.execute("DELETE FROM ima.governed_models WHERE id=%s", (model_id,))
         connection.rollback()
         connection.execute("DELETE FROM ima.knowledge_bases WHERE id=%s", (kb_id,))
-        connection.execute(
-            "DELETE FROM ima.capability_profile_versions WHERE profile_id=%s", (profile_id,)
-        )
-        connection.execute("DELETE FROM ima.capability_profiles WHERE id=%s", (profile_id,))
         connection.execute("DELETE FROM ima.governed_models WHERE id=%s", (model_id,))
         connection.execute("DELETE FROM ima.model_gateways WHERE id=%s", (gateway_id,))
         connection.commit()
@@ -476,41 +462,36 @@ async def test_execution_falls_back_to_scene_default_without_assignment() -> Non
 
 @pytest.mark.postgres
 @pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
-async def test_existing_assignment_beats_scene_default_and_never_falls_back() -> None:
+async def test_configured_scene_default_with_missing_model_never_falls_back() -> None:
     migrate()
     kb_id = f"pg-kb-{uuid4().hex[:20]}"
     broken_profile = uuid4()
-    scene_gateway_id, scene_model = seed_healthy_model("chat")
-    assigned_gateway_id, assigned_model = seed_healthy_model("chat")
+    gateway_id, healthy_model = seed_healthy_model("chat")
     seed_scene_actor("scene-actor-4")
     service, engine = scene_service()
     try:
         assert SYNC_URL
+        # A configured scene default whose typed config references a missing
+        # model must stay UNAVAILABLE, never collapse into NO_ASSIGNMENT.
         with psycopg.connect(SYNC_URL) as connection:
             connection.execute(
                 "INSERT INTO ima.knowledge_bases(id,name,is_active,created_at,updated_at) VALUES (%s,'PG Scene KB',true,now(),now())",
                 (kb_id,),
             )
-            connection.commit()
-        await service.set_scene_default("scene-actor-4", Workflow.TITLE_GENERATION, scene_model)
-
-        # A broken profile config (missing model reference) must stay UNAVAILABLE
-        # even though a healthy scene default exists: assignment is authoritative.
-        with psycopg.connect(SYNC_URL) as connection:
             connection.execute(
-                "INSERT INTO ima.capability_profiles(id,workflow,business_alias,description,current_version,created_at,updated_at) VALUES (%s,'title_generation','PG Assigned','profile',1,now(),now())",
+                "INSERT INTO ima.capability_profiles(id,workflow,business_alias,description,current_version,created_at,updated_at) VALUES (%s,'title_generation','PG Assigned Broken','profile',1,now(),now())",
                 (broken_profile,),
             )
             connection.execute(
-                "INSERT INTO ima.capability_profile_versions(profile_id,version,state,config,config_digest,created_at,updated_at) VALUES (%s,1,'published',%s::jsonb,'digest',now(),now())",
+                "INSERT INTO ima.capability_profile_versions(profile_id,version,state,config,config_digest,published_at,created_at,updated_at) VALUES (%s,1,'published',%s::jsonb,'digest',now(),now(),now())",
                 (
                     broken_profile,
                     json.dumps({"chatModelId": str(uuid4()), "workflow": "title_generation"}),
                 ),
             )
             connection.execute(
-                "INSERT INTO ima.kb_profile_assignments(kb_id,workflow,profile_id,profile_version,assigned_at) VALUES (%s,'title_generation',%s,1,now())",
-                (kb_id, broken_profile),
+                "INSERT INTO ima.scene_defaults(workflow,profile_id,updated_at,updated_by) VALUES ('title_generation',%s,now(),%s) ON CONFLICT(workflow) DO UPDATE SET profile_id=EXCLUDED.profile_id,updated_at=EXCLUDED.updated_at,updated_by=EXCLUDED.updated_by",
+                (broken_profile, "scene-actor-4"),
             )
             connection.commit()
         target = await service._execution_target(
@@ -521,62 +502,31 @@ async def test_existing_assignment_beats_scene_default_and_never_falls_back() ->
         assert target.get("source") is None
         assert target["reason"] == "UNAVAILABLE"
 
-        # Pointing the assignment at a healthy profile wins over the scene
-        # default without ever exposing the fallback marker.
-        healthy_profile = uuid4()
-        with psycopg.connect(SYNC_URL) as connection:
-            connection.execute(
-                "INSERT INTO ima.capability_profiles(id,workflow,business_alias,description,current_version,created_at,updated_at) VALUES (%s,'title_generation','PG Assigned Healthy','profile',1,now(),now())",
-                (healthy_profile,),
-            )
-            connection.execute(
-                "INSERT INTO ima.capability_profile_versions(profile_id,version,state,config,config_digest,published_at,created_at,updated_at) VALUES (%s,1,'published',%s::jsonb,'digest',now(),now(),now())",
-                (
-                    healthy_profile,
-                    json.dumps(
-                        {
-                            "chatModelId": str(assigned_model),
-                            "systemPrompt": "Ground",
-                            "contextLimit": 1000,
-                            "outputLimit": 100,
-                            "workflow": "title_generation",
-                        }
-                    ),
-                ),
-            )
-            connection.execute(
-                "UPDATE ima.kb_profile_assignments SET profile_id=%s, profile_version=1 WHERE kb_id=%s AND workflow='title_generation'",
-                (healthy_profile, kb_id),
-            )
-            connection.commit()
-        target = await service._execution_target(
-            kb_id, Workflow.TITLE_GENERATION, "chat", decrypt_secret=False
-        )
-        assert target is not None
-        assert target["profile_id"] == healthy_profile
-        assert target.get("source") is None
-        assert target["reason"] is None
-
-        # Removing the assignment restores the managed scene-default fallback.
-        with psycopg.connect(SYNC_URL) as connection:
-            connection.execute(
-                "DELETE FROM ima.kb_profile_assignments WHERE kb_id=%s AND workflow='title_generation'",
-                (kb_id,),
-            )
-            connection.commit()
+        # Repointing the scene default at a healthy model restores execution.
+        await service.set_scene_default("scene-actor-4", Workflow.TITLE_GENERATION, healthy_model)
         target = await service._execution_target(
             kb_id, Workflow.TITLE_GENERATION, "chat", decrypt_secret=False
         )
         assert target is not None
         assert target["source"] == "scene_default"
-        assert target["model_id"] == scene_model
+        assert target["reason"] is None
+        assert target["model_id"] == healthy_model
+
+        # Clearing the scene default returns a genuine NO_ASSIGNMENT.
+        await service.set_scene_default("scene-actor-4", Workflow.TITLE_GENERATION, None)
+        assert (
+            await service._execution_target(
+                kb_id, Workflow.TITLE_GENERATION, "chat", decrypt_secret=False
+            )
+            is None
+        )
     finally:
         await engine.dispose()
         cleanup_scene_fixtures(
             kb_id=kb_id,
             workflow="title_generation",
-            extra_profile_ids=(broken_profile, healthy_profile),
-            gateway_ids=(scene_gateway_id, assigned_gateway_id),
+            extra_profile_ids=(broken_profile,),
+            gateway_ids=(gateway_id,),
             actor_ids=("scene-actor-4",),
         )
 

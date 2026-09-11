@@ -11,9 +11,6 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ima.api.v1.auth import Current, check_csrf, check_recent_auth
 from ima.api.v1.model_governance_contracts import (
-    Assignment,
-    AssignmentList,
-    AssignmentRequest,
     CapabilityProfile,
     GatewayCreateRequest,
     GatewayPatchRequest,
@@ -446,43 +443,6 @@ async def update_scene_default(
     return await service(request).set_scene_default(actor.id, Workflow(workflow), payload.model_id)
 
 
-@router.put(
-    "/knowledge-bases/{kb_id}/profile-assignments/{workflow}",
-    response_model=Assignment,
-    operation_id="assignKnowledgeBaseCapabilityProfile",
-)
-async def assign_profile(
-    kb_id: str, workflow: str, payload: AssignmentRequest, request: Request, current: Current
-) -> dict[str, Any]:
-    _, actor = await require(request, current, mutate=True)
-    if payload.workflow != workflow:
-        raise HTTPException(400, "Workflow path and request do not match")
-    return await service(request).assign_profile(
-        actor.id,
-        kb_id,
-        Workflow(workflow),
-        payload.profile_id,
-        payload.profile_version,
-        payload.expected_version,
-    )
-
-
-@router.delete(
-    "/knowledge-bases/{kb_id}/profile-assignments/{workflow}",
-    status_code=204,
-    operation_id="removeKnowledgeBaseCapabilityProfile",
-)
-async def remove_assignment(
-    kb_id: str,
-    workflow: str,
-    request: Request,
-    current: Current,
-    expected_version: int | None = None,
-) -> None:
-    _, actor = await require(request, current, mutate=True)
-    await service(request).remove_assignment(actor.id, kb_id, Workflow(workflow), expected_version)
-
-
 @router.get(
     "/model-governance/impact",
     response_model=ImpactResponse,
@@ -494,31 +454,6 @@ async def impact(model_id: UUID, request: Request, current: Current) -> dict[str
     # report whose response contains only safe IDs/counts.
     await require(request, current, mutate=False)
     return await service(request).impact(model_id)
-
-
-@router.get(
-    "/knowledge-bases/{kb_id}/profile-assignments",
-    response_model=AssignmentList,
-    operation_id="listKnowledgeBaseCapabilityAssignments",
-)
-async def assignments(kb_id: str, request: Request, current: Current) -> dict[str, Any]:
-    await require(request, current, mutate=False)
-    async with service(request).engine.connect() as conn:
-        from sqlalchemy import text
-
-        rows = (
-            (
-                await conn.execute(
-                    text(
-                        "SELECT * FROM ima.kb_profile_assignments WHERE kb_id=:kb ORDER BY workflow"
-                    ),
-                    {"kb": kb_id},
-                )
-            )
-            .mappings()
-            .all()
-        )
-    return {"items": [dict(row) for row in rows]}
 
 
 @kb_router.get(

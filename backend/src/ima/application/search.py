@@ -76,34 +76,10 @@ class SearchService:
         self.engine, self.models = engine, models
 
     async def _profile(self, conn: AsyncConnection, kb_id: str) -> GroundedAskConfig:
-        row = (
-            (
-                await conn.execute(
-                    text("""SELECT v.config FROM ima.kb_profile_assignments a
-                    JOIN ima.capability_profile_versions v ON v.profile_id=a.profile_id AND v.version=a.profile_version
-                    JOIN ima.capability_profiles p ON p.id=a.profile_id
-                    WHERE a.kb_id=:kb AND a.workflow='grounded_ask'
-                      AND p.lifecycle='active' AND v.state='published'"""),
-                    {"kb": kb_id},
-                )
-            )
-            .mappings()
-            .first()
-        )
-        if not row:
-            # An assignment row that misses its profile/version join keeps the
-            # historical denial; only a truly unassigned KB falls back to the
-            # platform scene defaults.
-            assigned = await conn.scalar(
-                text(
-                    "SELECT 1 FROM ima.kb_profile_assignments WHERE kb_id=:kb AND workflow='grounded_ask'"
-                ),
-                {"kb": kb_id},
-            )
-            if assigned:
-                raise SearchError(409, "NO_ASSIGNMENT", "No grounded Ask profile is assigned")
-            return await self._scene_profile()
-        return cast(GroundedAskConfig, parse_profile_config(row["config"], Workflow.GROUNDED_ASK))
+        # Scene-only resolution: the knowledge base parameter is retained for
+        # callers and audit context, but the platform scene defaults are the
+        # sole source for every workflow's model.
+        return await self._scene_profile()
 
     async def _scene_profile(self) -> GroundedAskConfig:
         """Compose a grounded profile from the platform scene defaults."""
@@ -171,31 +147,130 @@ class SearchService:
             raise SearchError(409, "REINDEX_REQUIRED", "An exact active vector index is required")
         return dict(row)
 
+    async def _embedding_model(self, conn: AsyncConnection) -> dict[str, Any] | None:
+        """Resolve the scene-default embedding model used to build vector indexes."""
+        row = (
+            (
+                await conn.execute(
+                    text("""SELECT m.id,m.version,m.embedding_dimension FROM ima.scene_defaults d
+                    JOIN ima.capability_profiles p ON p.id=d.profile_id
+                    JOIN ima.capability_profile_versions v ON v.profile_id=p.id AND v.version=p.current_version AND v.state='published'
+                    JOIN ima.governed_models m ON m.id=CAST(v.config->>'embeddingModelId' AS uuid)
+                    WHERE d.workflow='embedding' AND p.lifecycle='active'
+                      AND m.capability='embedding' AND m.enabled AND m.validated""")
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if not row or not row["embedding_dimension"]:
+            return None
+        return dict(row)
+
     async def build_vector_index(self, actor: str, kb_id: str) -> dict[str, object]:
-        """Build and atomically activate an exact-model HNSW index after source verification."""
+        """Build and atomically activate an exact-model HNSW index after owner checks."""
         async with self.engine.begin() as conn:
             user_id = await effective_user_id(conn, actor)
             membership = await kb_membership(conn, user_id, kb_id) if user_id else None
             if not membership or membership[0] != KbRole.OWNER.value:
                 raise SearchError(404, "KB_NOT_FOUND", "Knowledge base not found")
-            config = await self._profile(conn, kb_id)
-            if not config.embedding_model_id:
-                raise SearchError(
-                    409, "REINDEX_REQUIRED", "The grounded profile has no embedding assignment"
+            model = await self._embedding_model(conn)
+        if not model:
+            raise SearchError(409, "REINDEX_REQUIRED", "Embedding model is not ready")
+        return await self._build_index_core(kb_id, model)
+
+    async def maintain_vector_index(self, kb_id: str) -> dict[str, object] | None:
+        """Authorization-free, idempotent index maintenance for ingestion/reconcile.
+
+        Returns the activated (or already active) exact-model index, or ``None``
+        when the KB has no scene-default embedding model or no exact-model ready
+        chunks to index.
+        """
+        async with self.engine.connect() as conn:
+            model = await self._embedding_model(conn)
+            if not model:
+                return None
+            existing = await conn.scalar(
+                text("""SELECT id FROM ima.chunk_search_indexes
+                WHERE kb_id=:kb AND model_id=:model AND model_version=:version
+                  AND embedding_dimension=:dimension AND status='active'"""),
+                {
+                    "kb": kb_id,
+                    "model": model["id"],
+                    "version": model["version"],
+                    "dimension": model["embedding_dimension"],
+                },
+            )
+            if existing:
+                return {
+                    "id": existing,
+                    "modelId": model["id"],
+                    "modelVersion": model["version"],
+                    "dimension": model["embedding_dimension"],
+                    "status": "active",
+                }
+            ready = int(
+                await conn.scalar(
+                    text("""SELECT count(*) FROM ima.document_chunks c JOIN ima.documents d ON d.id=c.document_id
+                    WHERE c.kb_id=:kb AND d.kb_id=:kb AND d.lifecycle='active' AND c.embedding_status='ready'
+                      AND c.model_id=:model AND c.model_version=:version AND c.embedding_dimension=:dimension"""),
+                    {
+                        "kb": kb_id,
+                        "model": model["id"],
+                        "version": model["version"],
+                        "dimension": model["embedding_dimension"],
+                    },
                 )
-            model = (
+                or 0
+            )
+        if not ready:
+            return None
+        try:
+            return await self._build_index_core(kb_id, model)
+        except SearchError as exc:
+            if exc.code == "INDEX_BUILD_IN_PROGRESS":
+                return None
+            raise
+
+    async def kbs_missing_vector_index(self) -> list[str]:
+        """Knowledge bases whose exact-model ready chunks lack an active index.
+
+        Only KBs whose persisted embeddings already match the current
+        scene-default embedding model are returned, so a stale scene-default
+        switch surfaces as ``REINDEX_REQUIRED`` rather than an unbuildable loop.
+        """
+        async with self.engine.connect() as conn:
+            rows = (
                 (
                     await conn.execute(
-                        text("""SELECT id,version,embedding_dimension FROM ima.governed_models
-                        WHERE id=CAST(:id AS uuid) AND capability='embedding' AND enabled AND validated"""),
-                        {"id": config.embedding_model_id},
+                        text("""SELECT DISTINCT c.kb_id FROM ima.document_chunks c
+                        JOIN ima.documents d ON d.id=c.document_id AND d.kb_id=c.kb_id AND d.lifecycle='active'
+                        JOIN ima.scene_defaults sd ON sd.workflow='embedding'
+                        JOIN ima.capability_profiles p ON p.id=sd.profile_id AND p.lifecycle='active'
+                        JOIN ima.capability_profile_versions v ON v.profile_id=p.id AND v.version=p.current_version AND v.state='published'
+                        JOIN ima.governed_models m ON m.id=CAST(v.config->>'embeddingModelId' AS uuid)
+                        WHERE m.capability='embedding' AND m.enabled AND m.validated
+                          AND c.embedding_status='ready'
+                          AND c.model_id=m.id AND c.model_version=m.version AND c.embedding_dimension=m.embedding_dimension
+                          AND NOT EXISTS (
+                            SELECT 1 FROM ima.chunk_search_indexes i
+                            WHERE i.kb_id=c.kb_id AND i.model_id=m.id AND i.model_version=m.version
+                              AND i.embedding_dimension=m.embedding_dimension AND i.status='active')""")
                     )
                 )
-                .mappings()
-                .first()
+                .scalars()
+                .all()
             )
-            if not model or not model["embedding_dimension"]:
-                raise SearchError(409, "REINDEX_REQUIRED", "Embedding model is not ready")
+        return [str(kb_id) for kb_id in rows]
+
+    async def _build_index_core(self, kb_id: str, model: dict[str, Any]) -> dict[str, object]:
+        """Build and activate an exact-model HNSW index for a database-validated model.
+
+        Shared by the owner-authorized HTTP route and the authorization-free
+        ingestion/reconciliation path; all values come from persisted model
+        metadata, never request data.
+        """
+        async with self.engine.begin() as conn:
             count = int(
                 await conn.scalar(
                     text("""SELECT count(*) FROM ima.document_chunks c JOIN ima.documents d ON d.id=c.document_id

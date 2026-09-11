@@ -2,12 +2,14 @@
 
 ## Scope / Trigger
 
-Apply this contract to Python gateway/model/profile/assignment APIs, encrypted
-model credentials, outbound probes and execution, durable health jobs, and
-knowledge base workflow assignments. Python owns every model connection and
-executes every governed workflow (grounded Ask, title generation,
-summarization, embedding, reranking) itself; the retired private bridge and
-legacy rollback adapter have no replacement routes.
+Apply this contract to Python gateway/model/profile/scene-default APIs,
+encrypted model credentials, outbound probes and execution, durable health
+jobs, and knowledge base workflow capabilities. Python owns every model
+connection and executes every governed workflow (grounded Ask, title
+generation, summarization, embedding, reranking) itself; the retired private
+bridge and legacy rollback adapter have no replacement routes. Knowledge-base
+profile assignments were removed: every workflow resolves exclusively from the
+platform scene defaults.
 
 ## Signatures
 
@@ -17,8 +19,8 @@ POST /api/v1/admin/model-gateways/{id}/discover|health|rotate-secret|enable|disa
 GET/POST/PATCH/DELETE /api/v1/admin/governed-models/*
 POST /api/v1/admin/governed-models/{id}/validate|enable|disable
 GET/POST/PATCH/DELETE /api/v1/admin/capability-profiles/*
-GET /api/v1/admin/knowledge-bases/{id}/profile-assignments
-PUT/DELETE /api/v1/admin/knowledge-bases/{id}/profile-assignments/{workflow}
+GET /api/v1/admin/scene-defaults
+PUT /api/v1/admin/scene-defaults/{workflow}
 GET /api/v1/knowledge-bases/{id}/capabilities
 ima rotate-model-secrets plan|apply|verify|report
 ```
@@ -50,19 +52,21 @@ secret to the browser.
   are absent from DTOs, logs, audit metadata, and generated artifacts.
 - Workflows are exactly `grounded_ask`, `title_generation`, `summarization`,
   `embedding`, and `reranking`. Typed Pydantic configs are canonicalized;
-  published profile versions are immutable and assignments store exact versions.
-  Model capability and embedding dimension must match before publish/assignment.
-  Embedding vectors and rerank scores must contain only finite numbers.
-- Availability is derived at resolve time from assignment, profile, model,
-  gateway, health, and dependency state. Disabling/revoking any dependency is
-  effective on the next call. Embedding changes with target or legacy index
-  dependencies return `409 REINDEX_REQUIRED`; no fake reindex success exists.
-- Denial is terminal. Only the verified absence of a `kb_profile_assignments`
-  row produces `NO_ASSIGNMENT` (409, no model call). An existing assignment
-  whose profile, model, gateway, or health join is missing/invalid produces
-  `UNAVAILABLE`; a failed execution join must never collapse into
-  `NO_ASSIGNMENT` and must never fall back to an ungoverned call. Governed
-  chat streams yield chunks progressively and close the client on
+  published profile versions are immutable and scene defaults point at the
+  current published version. Model capability and embedding dimension must
+  match before publish/scene-default save. Embedding vectors and rerank scores
+  must contain only finite numbers.
+- Availability is derived at resolve time from the scene default, profile,
+  model, gateway, health, and dependency state. Disabling/revoking any
+  dependency is effective on the next call. Embedding changes with target or
+  legacy index dependencies return `409 REINDEX_REQUIRED`; no fake reindex
+  success exists.
+- Denial is terminal. Only the verified absence of a `scene_defaults` pointer
+  for the workflow produces `NO_ASSIGNMENT` (409, no model call). A configured
+  scene default whose profile, model, gateway, or health join is
+  missing/invalid produces `UNAVAILABLE`; a failed execution join must never
+  collapse into `NO_ASSIGNMENT` and must never fall back to an ungoverned call.
+  Governed chat streams yield chunks progressively and close the client on
   cancellation; tool calls, reasoning, usage, warnings, file results, and
   bounded multi-step loops remain persisted by the existing chat flow.
 - Governance GET reports, including embedding impact, require read capability
@@ -80,21 +84,22 @@ secret to the browser.
 | Public/mixed DNS, redirect, proxy, oversized/invalid upstream | Stable denied code; no target fallback |
 | NaN or positive/negative infinity vector/rerank value | Stable invalid-response code; no persistence |
 | Timeout or malformed upstream response | Fail closed with stable code; no target material |
-| Existing assignment with a missing model/profile/gateway join | `UNAVAILABLE`; never `NO_ASSIGNMENT` or fallback |
+| Configured scene default with a missing model/profile/gateway join | `UNAVAILABLE`; never `NO_ASSIGNMENT` or fallback |
 | Unhealthy/disabled gateway or model | Immediate unavailable safe projection and execution failure |
 | Stale optimistic version | 409 with no partial mutation |
 | Published profile rewrite | PostgreSQL trigger rejects it |
-| Wrong model capability or embedding dimension | Validation/publish/assignment rejection |
+| Wrong model capability or embedding dimension | Validation/publish/scene-default rejection |
 | Embedding dependency/dimension conflict | 409 `REINDEX_REQUIRED`; no fake job |
 | Secret key version missing or AAD/fingerprint mismatch | Fail closed; rotation verify reports safe record ID only |
 | Stream cancellation or body limit | Upstream response closes and bounded error is returned |
 
 ## Good / Base / Bad Cases
 
-- Good: Python resolves an exact assigned version and executes it through the
-  per-gateway guarded client, returning only model output/stream to callers.
-- Base: a knowledge base without a target assignment receives a terminal
-  `NO_ASSIGNMENT`; target unavailability never falls back.
+- Good: Python resolves the workflow's exact scene-default profile version and
+  executes it through the per-gateway guarded client, returning only model
+  output/stream to callers.
+- Base: a knowledge base whose workflow has no scene default receives a
+  terminal `NO_ASSIGNMENT`; target unavailability never falls back.
 - Bad: any caller receives a gateway secret, follows a redirect, uses an
   environment proxy, buffers an entire SSE response, or calls an upstream URL
   outside the guarded client.
@@ -110,14 +115,15 @@ secret to the browser.
 2. Fake-upstream tests execute discovery/chat/embedding/rerank through guarded
    httpx and cover DNS, rebinding, redirects, timeout, JSON/SSE limits, TLS/CA,
    `trust_env=False`, malformed/NaN/auth responses, and no public fallback.
-3. PostgreSQL tests cover fresh/repeat migration, composite FKs, immutable
-   versions, exact assignments, true concurrent version/disable changes,
-   health rate limiting, dependencies, roles, and `REINDEX_REQUIRED`.
-4. Assignment tests cover per-knowledge-base workflow fixtures, malformed or
-   missing joins (`UNAVAILABLE`), absent rows (`NO_ASSIGNMENT`), encrypted
+3. PostgreSQL tests cover fresh/repeat migration (including the dropped
+   assignment table), composite FKs, immutable versions, scene-default
+   resolution, true concurrent version/disable changes, health rate limiting,
+   dependencies, roles, and `REINDEX_REQUIRED`.
+4. Scene-default resolution tests cover every workflow fixture, malformed or
+   missing joins (`UNAVAILABLE`), absent pointers (`NO_ASSIGNMENT`), encrypted
    secrets, and redacted reports.
-5. ASGI tests cover terminal denial, exact no-assignment behavior, an existing
-   assignment with a broken dependency join, streamed/tool responses, and
+5. ASGI tests cover terminal denial, exact no-assignment behavior, a configured
+   scene default with a broken dependency join, streamed/tool responses, and
    secret non-disclosure. Full Playwright and generated OpenAPI drift are
    required.
 

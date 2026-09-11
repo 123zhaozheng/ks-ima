@@ -503,41 +503,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/knowledge-bases/{kb_id}/profile-assignments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Assignments */
-        get: operations["listKnowledgeBaseCapabilityAssignments"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/knowledge-bases/{kb_id}/profile-assignments/{workflow}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Assign Profile */
-        put: operations["assignKnowledgeBaseCapabilityProfile"];
-        post?: never;
-        /** Remove Assignment */
-        delete: operations["removeKnowledgeBaseCapabilityProfile"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/admin/knowledge-bases/{kb_id}/restore": {
         parameters: {
             query?: never;
@@ -2059,59 +2024,6 @@ export interface components {
             conversationId?: string | null;
             /** Question */
             question: string;
-        };
-        /** Assignment */
-        Assignment: {
-            /**
-             * Assignedat
-             * Format: date-time
-             */
-            assignedAt: string;
-            /**
-             * Availability
-             * @enum {string}
-             */
-            availability: "available" | "degraded" | "unavailable";
-            /** Availabilityreason */
-            availabilityReason?: string | null;
-            /** Kbid */
-            kbId: string;
-            /**
-             * Profileid
-             * Format: uuid
-             */
-            profileId: string;
-            /** Profileversion */
-            profileVersion: number;
-            /** Version */
-            version: number;
-            /**
-             * Workflow
-             * @enum {string}
-             */
-            workflow: "grounded_ask" | "title_generation" | "summarization" | "embedding" | "reranking";
-        };
-        /** AssignmentList */
-        AssignmentList: {
-            /** Items */
-            items: components["schemas"]["Assignment"][];
-        };
-        /** AssignmentRequest */
-        AssignmentRequest: {
-            /** Expectedversion */
-            expectedVersion?: number | null;
-            /**
-             * Profileid
-             * Format: uuid
-             */
-            profileId: string;
-            /** Profileversion */
-            profileVersion: number;
-            /**
-             * Workflow
-             * @enum {string}
-             */
-            workflow: "grounded_ask" | "title_generation" | "summarization" | "embedding" | "reranking";
         };
         /** AuditEvent */
         AuditEvent: {
@@ -4891,105 +4803,6 @@ export interface operations {
                         [key: string]: boolean;
                     };
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    listKnowledgeBaseCapabilityAssignments: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                kb_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssignmentList"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    assignKnowledgeBaseCapabilityProfile: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                kb_id: string;
-                workflow: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AssignmentRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Assignment"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    removeKnowledgeBaseCapabilityProfile: {
-        parameters: {
-            query?: {
-                expected_version?: number | null;
-            };
-            header?: never;
-            path: {
-                kb_id: string;
-                workflow: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {

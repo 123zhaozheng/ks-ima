@@ -219,28 +219,6 @@ class ProfileDiff(IdentityModel):
     changed_fields: tuple[str, ...] = Field(alias="changedFields")
 
 
-class AssignmentRequest(IdentityModel):
-    workflow: Workflow
-    profile_id: UUID = Field(alias="profileId")
-    profile_version: int = Field(alias="profileVersion", ge=1)
-    expected_version: int | None = Field(default=None, alias="expectedVersion", ge=1)
-
-
-class Assignment(IdentityModel):
-    kb_id: str = Field(alias="kbId")
-    workflow: Workflow
-    profile_id: UUID = Field(alias="profileId")
-    profile_version: int = Field(alias="profileVersion")
-    version: int
-    availability: AvailabilityState
-    availability_reason: str | None = Field(default=None, alias="availabilityReason")
-    assigned_at: datetime = Field(alias="assignedAt")
-
-
-class AssignmentList(IdentityModel):
-    items: tuple[Assignment, ...]
-
-
 class KbCapability(IdentityModel):
     workflow: Workflow
     alias: str

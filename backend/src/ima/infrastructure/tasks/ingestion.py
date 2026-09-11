@@ -385,6 +385,9 @@ def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
                     ),
                     {"id": identifier, "now": datetime.now(UTC)},
                 )
+            # Freshly embedded chunks must get an exact-model retrieval index or
+            # grounded ask would demand a manual REINDEX_REQUIRED step.
+            await index.defer_async(kb_id=str(kb_id))
         finally:
             await engine.dispose()
 
@@ -454,4 +457,26 @@ def register_ingestion_tasks(app: App, settings: Settings) -> dict[str, Any]:
         finally:
             await engine.dispose()
 
-    return {"parse": parse, "chunk": chunk, "embed": embed, "cleanup": cleanup}
+    @app.task(
+        name="ima.ingestion.index", queue=settings.ingestion_queue, retry=0, pass_context=True
+    )
+    async def index(context: object, kb_id: str) -> None:
+        """Build/refresh the KB's exact scene-default embedding index (idempotent)."""
+        # Imported lazily: the search application module depends on the task
+        # service, so a module-level import would close an import cycle.
+        from ima.application.search import SearchService
+
+        engine = create_engine(settings)
+        try:
+            service = SearchService(engine, ModelGovernanceService(engine, settings))
+            await service.maintain_vector_index(kb_id)
+        finally:
+            await engine.dispose()
+
+    return {
+        "parse": parse,
+        "chunk": chunk,
+        "embed": embed,
+        "cleanup": cleanup,
+        "index": index,
+    }

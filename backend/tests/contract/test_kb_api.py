@@ -133,12 +133,9 @@ def test_model_governance_kb_endpoints_are_registered(schema: dict) -> None:
         paths["/api/v1/knowledge-bases/{kb_id}/capabilities"]["get"]["operationId"]
         == "listKnowledgeBaseModelCapabilities"
     )
-    assignments = "/api/v1/admin/knowledge-bases/{kb_id}/profile-assignments"
-    assert "get" in paths[assignments]
-    workflow = f"{assignments}/{{workflow}}"
-    assert set(paths[workflow]) == {"put", "delete"}
-    assert paths[workflow]["put"]["operationId"] == "assignKnowledgeBaseCapabilityProfile"
-    assert paths[workflow]["delete"]["operationId"] == "removeKnowledgeBaseCapabilityProfile"
+    # Knowledge-base profile assignments were removed: models resolve from the
+    # platform scene defaults only.
+    assert not any("profile-assignments" in path for path in paths)
 
 
 def test_retired_workspace_endpoints_are_absent(schema: dict) -> None:

@@ -544,7 +544,7 @@ def test_auditor_gateway_projection_keeps_health_but_hides_infrastructure() -> N
 
 
 @pytest.mark.asyncio
-async def test_existing_assignment_with_missing_model_is_denied_not_unassigned() -> None:
+async def test_configured_scene_default_with_missing_model_is_denied_not_unassigned() -> None:
     class Result:
         def __init__(self, row: dict[str, object] | None) -> None:
             self.row = row

@@ -1,4 +1,4 @@
-"""Embedding target resolution for ingestion: assignment first, scene default fallback.
+"""Embedding target resolution for ingestion: the scene default is the only source.
 
 The ingestion ``embed`` stage must resolve its embedding model through the same
 governed resolver retrieval uses.  These tests exercise
@@ -93,36 +93,6 @@ def seed_scene_default(model_id: UUID) -> UUID:
     return profile_id
 
 
-def seed_assignment(kb_id: str, model_id: UUID) -> UUID:
-    """Seed a KB embedding assignment via a dedicated published profile."""
-    profile_id = uuid4()
-    config = {
-        "workflow": "embedding",
-        "embeddingModelId": str(model_id),
-        "dimension": EMBEDDING_DIMENSION,
-    }
-    assert SYNC_URL
-    with psycopg.connect(SYNC_URL) as connection:
-        connection.execute(
-            "INSERT INTO ima.knowledge_bases(id,name,is_active,created_at,updated_at) VALUES (%s,'PG Embed KB',true,now(),now())",
-            (kb_id,),
-        )
-        connection.execute(
-            "INSERT INTO ima.capability_profiles(id,workflow,business_alias,description,current_version,created_at,updated_at) VALUES (%s,'embedding',%s,'test assignment',1,now(),now())",
-            (profile_id, f"pg-embed-assigned-{profile_id.hex[:8]}"),
-        )
-        connection.execute(
-            "INSERT INTO ima.capability_profile_versions(profile_id,version,state,config,config_digest,published_at,created_at,updated_at) VALUES (%s,1,'published',%s::jsonb,'digest',now(),now(),now())",
-            (profile_id, json.dumps(config)),
-        )
-        connection.execute(
-            "INSERT INTO ima.kb_profile_assignments(kb_id,workflow,profile_id,profile_version,assigned_at) VALUES (%s,'embedding',%s,1,now())",
-            (kb_id, profile_id),
-        )
-        connection.commit()
-    return profile_id
-
-
 def snapshot_scene_default(workflow: str) -> tuple[Any, Any, Any] | None:
     """Capture the shared row so a test can restore an operator's configuration."""
     assert SYNC_URL
@@ -165,14 +135,10 @@ def cleanup(
     with psycopg.connect(SYNC_URL) as connection:
         for profile_id in profile_ids:
             connection.execute(
-                "DELETE FROM ima.kb_profile_assignments WHERE profile_id=%s", (profile_id,)
-            )
-            connection.execute(
                 "DELETE FROM ima.capability_profile_versions WHERE profile_id=%s", (profile_id,)
             )
             connection.execute("DELETE FROM ima.capability_profiles WHERE id=%s", (profile_id,))
         for kb_id in kb_ids:
-            connection.execute("DELETE FROM ima.kb_profile_assignments WHERE kb_id=%s", (kb_id,))
             connection.execute("DELETE FROM ima.knowledge_bases WHERE id=%s", (kb_id,))
         for gateway_id in gateway_ids:
             connection.execute("DELETE FROM ima.governed_models WHERE gateway_id=%s", (gateway_id,))
@@ -190,7 +156,7 @@ pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL 
 
 
 @pytest.mark.postgres
-async def test_embedding_target_falls_back_to_scene_default_with_version_and_dimension() -> None:
+async def test_embedding_target_resolves_scene_default_with_version_and_dimension() -> None:
     migrate()
     kb_id = f"pg-embed-{uuid4().hex[:16]}"
     gateway_id, model_id = seed_embedding_model()
@@ -212,35 +178,7 @@ async def test_embedding_target_falls_back_to_scene_default_with_version_and_dim
 
 
 @pytest.mark.postgres
-async def test_embedding_target_prefers_an_existing_kb_assignment_over_scene_default() -> None:
-    migrate()
-    kb_id = f"pg-embed-{uuid4().hex[:16]}"
-    scene_gateway, scene_model = seed_embedding_model()
-    assigned_gateway, assigned_model = seed_embedding_model()
-    snapshot = snapshot_scene_default("embedding")
-    scene_profile = seed_scene_default(scene_model)
-    assigned_profile = seed_assignment(kb_id, assigned_model)
-    models, engine = service()
-    try:
-        target = await models.embedding_target(kb_id)
-        assert target is not None
-        assert target["model_id"] == assigned_model
-        assert target["model_version"] == 1
-        assert target["embedding_dimension"] == EMBEDDING_DIMENSION
-        assert target.get("source") is None
-        assert target["reason"] is None
-    finally:
-        await engine.dispose()
-        restore_scene_default("embedding", snapshot, scene_profile)
-        cleanup(
-            kb_ids=(kb_id,),
-            profile_ids=(scene_profile, assigned_profile),
-            gateway_ids=(scene_gateway, assigned_gateway),
-        )
-
-
-@pytest.mark.postgres
-async def test_embedding_target_is_none_without_assignment_or_scene_default() -> None:
+async def test_embedding_target_is_none_without_scene_default() -> None:
     migrate()
     kb_id = f"pg-embed-{uuid4().hex[:16]}"
     snapshot = snapshot_scene_default("embedding")

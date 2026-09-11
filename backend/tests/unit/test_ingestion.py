@@ -114,8 +114,8 @@ def test_parser_rejects_invalid_json() -> None:
 
 
 def test_embed_stage_resolves_through_the_shared_embedding_target() -> None:
-    # Ingestion must not query kb_profile_assignments directly: that bypassed
-    # the scene-default fallback retrieval already honours.
+    # Ingestion must not query the assignment table directly: resolution comes
+    # from the scene-default embedding target retrieval already honours.
     source = (
         Path(__file__).parents[2] / "src" / "ima" / "infrastructure" / "tasks" / "ingestion.py"
     ).read_text()

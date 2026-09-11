@@ -204,8 +204,6 @@ const AUDIT_ACTIONS: Record<string, { label: string, group: ActionGroup }> = {
   'model.profile.restored': { label: '恢复场景配置', group: '模型' },
   'model.profile.deleted': { label: '删除场景配置', group: '模型' },
   'model.profile.cloned': { label: '克隆场景配置', group: '模型' },
-  'model.assignment.updated': { label: '更新知识库分配', group: '模型' },
-  'model.assignment.removed': { label: '移除知识库分配', group: '模型' },
   'model.execution.denied': { label: '模型调用被拒绝', group: '模型' },
   // MCP
   'mcp.service_principal.created': { label: '创建 MCP 服务主体', group: 'MCP' },
@@ -278,7 +276,6 @@ const TARGET_TYPES: Record<string, string> = {
   model_gateway: '服务商',
   governed_model: '模型',
   capability_profile: '场景配置',
-  kb_profile_assignment: '知识库分配',
   session: '会话',
   platform_settings: '平台设置',
   oauth_client: 'OAuth 客户端',

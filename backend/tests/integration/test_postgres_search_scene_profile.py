@@ -1,13 +1,17 @@
-"""Grounded-Ask profile resolution: scene-default fallback and assignment priority."""
+"""Grounded-Ask profile resolution and automatic retrieval-index maintenance.
+
+Scene-only resolution: every workflow's model comes from the platform scene
+defaults, and ingestion/reconciliation keeps exact-model vector indexes current.
+"""
 
 # This file intentionally uses real PostgreSQL rows for the ask-profile path.
 # ruff: noqa: E501
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -20,6 +24,7 @@ from ima.application.model_governance import ModelGovernanceService
 from ima.application.search import SearchError, SearchService
 from ima.config import Settings
 from ima.domain.model_governance import Workflow
+from ima.workers.main import reconcile_once
 
 DATABASE_URL = os.environ.get("IMA_TEST_DATABASE_URL")
 SYNC_URL = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://") if DATABASE_URL else None
@@ -94,7 +99,6 @@ def cleanup(
     assert SYNC_URL
     with psycopg.connect(SYNC_URL) as connection:
         if kb_id:
-            connection.execute("DELETE FROM ima.kb_profile_assignments WHERE kb_id=%s", (kb_id,))
             connection.execute("DELETE FROM ima.knowledge_bases WHERE id=%s", (kb_id,))
         for workflow in workflows:
             connection.execute("DELETE FROM ima.scene_defaults WHERE workflow=%s", (workflow,))
@@ -122,7 +126,7 @@ def cleanup(
 
 @pytest.mark.postgres
 @pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
-async def test_ask_profile_composes_scene_defaults_when_unassigned() -> None:
+async def test_ask_profile_composes_scene_defaults() -> None:
     migrate()
     kb_id = f"pg-kb-{uuid4().hex[:20]}"
     chat_gateway, chat_model = seed_healthy_model("chat")
@@ -169,11 +173,9 @@ async def test_ask_profile_composes_scene_defaults_when_unassigned() -> None:
 
 @pytest.mark.postgres
 @pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
-async def test_ask_profile_denies_without_scene_default_or_broken_assignment() -> None:
+async def test_ask_profile_denies_without_scene_default() -> None:
     migrate()
     kb_id = f"pg-kb-{uuid4().hex[:20]}"
-    broken_profile = uuid4()
-    scene_gateway, scene_model = seed_healthy_model("chat")
     seed_scene_actor("scene-ask-actor-2")
     # Shared dev database: ensure no grounded_ask scene default pre-exists.
     cleanup(workflows=("grounded_ask",))
@@ -183,96 +185,142 @@ async def test_ask_profile_denies_without_scene_default_or_broken_assignment() -
             with pytest.raises(SearchError) as denied:
                 await search._profile(conn, kb_id)
             assert (denied.value.status_code, denied.value.code) == (409, "NO_ASSIGNMENT")
-
-        # A grounded_ask scene default alone does not override an existing
-        # assignment row whose profile join misses: the denial is preserved.
-        await models.set_scene_default("scene-ask-actor-2", Workflow.GROUNDED_ASK, scene_model)
-        assert SYNC_URL
-        with psycopg.connect(SYNC_URL) as connection:
-            connection.execute(
-                "INSERT INTO ima.knowledge_bases(id,name,is_active,created_at,updated_at) VALUES (%s,'PG Ask KB',true,now(),now())",
-                (kb_id,),
-            )
-            # The assignment's only version is a draft, so the published join
-            # misses while the assignment row itself still exists.
-            connection.execute(
-                "INSERT INTO ima.capability_profiles(id,workflow,business_alias,description,current_version,created_at,updated_at) VALUES (%s,'grounded_ask','PG Ask Broken','profile',1,now(),now())",
-                (broken_profile,),
-            )
-            connection.execute(
-                "INSERT INTO ima.capability_profile_versions(profile_id,version,state,config,config_digest,created_at,updated_at) VALUES (%s,1,'draft',%s::jsonb,'digest',now(),now())",
-                (broken_profile, json.dumps({"workflow": "grounded_ask"})),
-            )
-            connection.execute(
-                "INSERT INTO ima.kb_profile_assignments(kb_id,workflow,profile_id,profile_version,assigned_at) VALUES (%s,'grounded_ask',%s,1,now())",
-                (kb_id, broken_profile),
-            )
-            connection.commit()
-        async with engine.connect() as conn:
-            with pytest.raises(SearchError) as denied:
-                await search._profile(conn, kb_id)
-            assert (denied.value.status_code, denied.value.code) == (409, "NO_ASSIGNMENT")
     finally:
         await engine.dispose()
-        cleanup(
-            kb_id=kb_id,
-            workflows=("grounded_ask",),
-            extra_profile_ids=(broken_profile,),
-            gateway_ids=(scene_gateway,),
-            actor_ids=("scene-ask-actor-2",),
+        cleanup(workflows=("grounded_ask",), actor_ids=("scene-ask-actor-2",))
+
+
+class _IndexDeferSpy:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def defer_async(self, *, kb_id: str) -> None:
+        self.calls.append(kb_id)
+
+
+def seed_ready_chunk(kb_id: str, document_id: Any, model_id: Any, dimension: int) -> None:
+    """Seed one isolated file document with a single ready exact-model chunk."""
+    checksum, digest = "a" * 64, "b" * 64
+    vector = "[" + ",".join(["0.1"] * dimension) + "]"
+    assert SYNC_URL
+    with psycopg.connect(SYNC_URL) as connection:
+        connection.execute(
+            "INSERT INTO ima.knowledge_bases(id,name,is_active,created_at,updated_at) VALUES (%s,'PG Index KB',true,now(),now())",
+            (kb_id,),
         )
+        connection.execute(
+            "INSERT INTO ima.folders(id,kb_id,parent_id,name,normalized_name,order_key,lifecycle,version,is_root,created_at,updated_at) VALUES (%s,%s,NULL,'Root','root',0,'active',1,true,now(),now())",
+            (kb_id, kb_id),
+        )
+        connection.execute(
+            "INSERT INTO ima.documents(id,kb_id,folder_id,kind,title,normalized_title,current_version,file_state,created_at,updated_at) VALUES (%s,%s,%s,'file','Doc','Doc',1,'ready',now(),now())",
+            (document_id, kb_id, kb_id),
+        )
+        connection.execute(
+            "INSERT INTO ima.document_file_versions(document_id,version,kb_id,object_state,object_key,checksum,size_bytes,mime_type,original_filename,created_at) VALUES (%s,1,%s,'verified',%s,%s,11,'text/plain','doc.txt',now())",
+            (document_id, kb_id, f"it/{kb_id}/{document_id}", checksum),
+        )
+        connection.execute(
+            "INSERT INTO ima.document_derived_text(document_id,version,generation,parser_name,parser_version,source_checksum,text_digest,text_content,status,created_at) VALUES (%s,1,1,'test','1',%s,%s,'hello world','ready',now())",
+            (document_id, checksum, digest),
+        )
+        connection.execute(
+            "INSERT INTO ima.document_chunks(kb_id,document_id,version,generation,ordinal,text_content,content_digest,embedding_status,model_id,model_version,embedding_dimension,embedding,created_at,updated_at) VALUES (%s,%s,1,1,0,'hello world',%s,'ready',%s,1,%s,CAST(%s AS vector),now(),now())",
+            (kb_id, document_id, digest, model_id, dimension, vector),
+        )
+        connection.commit()
+
+
+def cleanup_index_fixtures(
+    kb_id: str, *, workflows: tuple[str, ...] = (), gateway_ids: tuple[Any, ...] = ()
+) -> None:
+    assert SYNC_URL
+    with psycopg.connect(SYNC_URL) as connection:
+        connection.execute("DELETE FROM ima.chunk_search_indexes WHERE kb_id=%s", (kb_id,))
+        connection.execute("DELETE FROM ima.document_chunks WHERE kb_id=%s", (kb_id,))
+        connection.execute(
+            "DELETE FROM ima.document_derived_text WHERE document_id IN (SELECT id FROM ima.documents WHERE kb_id=%s)",
+            (kb_id,),
+        )
+        connection.execute("DELETE FROM ima.document_file_versions WHERE kb_id=%s", (kb_id,))
+        connection.execute("DELETE FROM ima.documents WHERE kb_id=%s", (kb_id,))
+        connection.execute("DELETE FROM ima.folders WHERE kb_id=%s", (kb_id,))
+        for workflow in workflows:
+            connection.execute("DELETE FROM ima.scene_defaults WHERE workflow=%s", (workflow,))
+            connection.execute(
+                "DELETE FROM ima.capability_profile_versions WHERE profile_id IN (SELECT id FROM ima.capability_profiles WHERE workflow=%s AND business_alias='场景默认')",
+                (workflow,),
+            )
+            connection.execute(
+                "DELETE FROM ima.capability_profiles WHERE workflow=%s AND business_alias='场景默认'",
+                (workflow,),
+            )
+        connection.execute("DELETE FROM ima.knowledge_bases WHERE id=%s", (kb_id,))
+        for gateway_id in gateway_ids:
+            connection.execute("DELETE FROM ima.governed_models WHERE gateway_id=%s", (gateway_id,))
+            connection.execute("DELETE FROM ima.model_gateways WHERE id=%s", (gateway_id,))
+        connection.commit()
 
 
 @pytest.mark.postgres
 @pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
-async def test_ask_profile_assignment_beats_scene_defaults() -> None:
+async def test_maintain_vector_index_builds_exact_scene_default_index() -> None:
     migrate()
-    kb_id = f"pg-kb-{uuid4().hex[:20]}"
-    assigned_profile = uuid4()
-    scene_gateway, scene_model = seed_healthy_model("chat")
-    assigned_gateway, assigned_model = seed_healthy_model("chat")
-    seed_scene_actor("scene-ask-actor-3")
+    kb_id, document_id = f"pg-kb-{uuid4().hex[:20]}", uuid4()
+    chat_gateway, chat_model = seed_healthy_model("chat")
+    embed_gateway, embed_model = seed_healthy_model("embedding")
+    seed_scene_actor("scene-index-actor-1")
     models, search, engine = scene_services()
     try:
-        await models.set_scene_default("scene-ask-actor-3", Workflow.GROUNDED_ASK, scene_model)
-        assert SYNC_URL
-        assigned_config = json.dumps(
-            {
-                "chatModelId": str(assigned_model),
-                "systemPrompt": "Assigned ground",
-                "contextLimit": 1000,
-                "outputLimit": 100,
-                "workflow": "grounded_ask",
-            }
-        )
-        with psycopg.connect(SYNC_URL) as connection:
-            connection.execute(
-                "INSERT INTO ima.knowledge_bases(id,name,is_active,created_at,updated_at) VALUES (%s,'PG Ask KB',true,now(),now())",
-                (kb_id,),
-            )
-            connection.execute(
-                "INSERT INTO ima.capability_profiles(id,workflow,business_alias,description,current_version,created_at,updated_at) VALUES (%s,'grounded_ask','PG Ask Assigned','profile',1,now(),now())",
-                (assigned_profile,),
-            )
-            connection.execute(
-                "INSERT INTO ima.capability_profile_versions(profile_id,version,state,config,config_digest,published_at,created_at,updated_at) VALUES (%s,1,'published',%s::jsonb,'digest',now(),now(),now())",
-                (assigned_profile, assigned_config),
-            )
-            connection.execute(
-                "INSERT INTO ima.kb_profile_assignments(kb_id,workflow,profile_id,profile_version,assigned_at) VALUES (%s,'grounded_ask',%s,1,now())",
-                (kb_id, assigned_profile),
-            )
-            connection.commit()
+        await models.set_scene_default("scene-index-actor-1", Workflow.GROUNDED_ASK, chat_model)
+        await models.set_scene_default("scene-index-actor-1", Workflow.EMBEDDING, embed_model)
+        seed_ready_chunk(kb_id, document_id, embed_model, 1536)
         async with engine.connect() as conn:
             config = await search._profile(conn, kb_id)
-            assert config.chat_model_id == str(assigned_model)
-            assert config.system_prompt == "Assigned ground"
+            with pytest.raises(SearchError) as missing:
+                await search._vector_target(conn, kb_id, config)
+            assert missing.value.code == "REINDEX_REQUIRED"
+        assert kb_id in await search.kbs_missing_vector_index()
+
+        built = await search.maintain_vector_index(kb_id)
+        assert built is not None and built["status"] == "active"
+        assert built["modelId"] == embed_model
+        async with engine.connect() as conn:
+            config = await search._profile(conn, kb_id)
+            target = await search._vector_target(conn, kb_id, config)
+            assert target["model_id"] == embed_model
+        assert kb_id not in await search.kbs_missing_vector_index()
     finally:
         await engine.dispose()
-        cleanup(
-            kb_id=kb_id,
-            workflows=("grounded_ask",),
-            extra_profile_ids=(assigned_profile,),
-            gateway_ids=(scene_gateway, assigned_gateway),
-            actor_ids=("scene-ask-actor-3",),
+        cleanup_index_fixtures(
+            kb_id,
+            workflows=("grounded_ask", "embedding"),
+            gateway_ids=(chat_gateway, embed_gateway),
         )
+        cleanup(actor_ids=("scene-index-actor-1",))
+
+
+@pytest.mark.postgres
+@pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
+async def test_reconcile_heals_ready_chunks_without_an_active_index() -> None:
+    migrate()
+    kb_id, document_id = f"pg-kb-{uuid4().hex[:20]}", uuid4()
+    gateway_id, model_id = seed_healthy_model("embedding")
+    seed_scene_actor("scene-index-actor-2")
+    models, search, engine = scene_services()
+    try:
+        await models.set_scene_default("scene-index-actor-2", Workflow.EMBEDDING, model_id)
+        seed_ready_chunk(kb_id, document_id, model_id, 1536)
+        spies = {"index": _IndexDeferSpy()}
+        await reconcile_once(engine, spies, datetime.now(UTC), search)
+        assert spies["index"].calls == [kb_id]
+
+        # Once the index exists, reconciliation stops re-deferring the build.
+        await search.maintain_vector_index(kb_id)
+        second = {"index": _IndexDeferSpy()}
+        await reconcile_once(engine, second, datetime.now(UTC), search)
+        assert second["index"].calls == []
+    finally:
+        await engine.dispose()
+        cleanup_index_fixtures(kb_id, workflows=("embedding",), gateway_ids=(gateway_id,))
+        cleanup(actor_ids=("scene-index-actor-2",))

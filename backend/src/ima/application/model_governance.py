@@ -9,7 +9,7 @@ import hashlib
 import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import text
@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from ima.config import Settings
 from ima.domain.model_governance import (
-    EmbeddingConfig,
     ModelCapability,
     ModelGatewayInput,
     Workflow,
@@ -1296,13 +1295,8 @@ class ModelGovernanceService:
 
     async def delete_profile(self, actor_id: str, profile_id: UUID) -> None:
         async with self.engine.begin() as conn:
-            if await conn.scalar(
-                text("SELECT 1 FROM ima.kb_profile_assignments WHERE profile_id=:id LIMIT 1"),
-                {"id": profile_id},
-            ):
-                raise ModelGovernanceError(
-                    409, "DEPENDENCY_CONFLICT", "Profile has knowledge base assignments"
-                )
+            # Scene-default pointers keep their RESTRICT foreign key, so a
+            # profile that still backs a workflow cannot be deleted.
             row = await conn.scalar(
                 text("SELECT lifecycle FROM ima.capability_profiles WHERE id=:id FOR UPDATE"),
                 {"id": profile_id},
@@ -1554,157 +1548,6 @@ class ModelGovernanceService:
                 metadata={"capabilities": len(results)},
             )
         return results
-
-    async def assign_profile(
-        self,
-        actor_id: str,
-        kb_id: str,
-        workflow: Workflow,
-        profile_id: UUID,
-        profile_version: int,
-        expected_version: int | None = None,
-    ) -> dict[str, Any]:
-        async with self.engine.begin() as conn:
-            profile = (
-                (
-                    await conn.execute(
-                        text(
-                            "SELECT p.*,v.state,v.config FROM ima.capability_profiles p JOIN ima.capability_profile_versions v ON v.profile_id=p.id AND v.version=:version WHERE p.id=:id AND p.workflow=:workflow FOR SHARE"
-                        ),
-                        {"id": profile_id, "version": profile_version, "workflow": workflow.value},
-                    )
-                )
-                .mappings()
-                .first()
-            )
-            if not profile or profile["state"] != "published" or profile["lifecycle"] != "active":
-                raise ModelGovernanceError(
-                    409, "PROFILE_UNAVAILABLE", "Only active published profiles can be assigned"
-                )
-            if not await conn.scalar(
-                text("SELECT 1 FROM ima.knowledge_bases WHERE id=:id AND is_active"),
-                {"id": kb_id},
-            ):
-                raise ModelGovernanceError(404, "KB_NOT_FOUND", "Knowledge base not found")
-            current = (
-                (
-                    await conn.execute(
-                        text(
-                            "SELECT * FROM ima.kb_profile_assignments WHERE kb_id=:kb AND workflow=:workflow FOR UPDATE"
-                        ),
-                        {"kb": kb_id, "workflow": workflow.value},
-                    )
-                )
-                .mappings()
-                .first()
-            )
-            if current and expected_version is not None and current["version"] != expected_version:
-                raise ModelGovernanceError(
-                    409, "VERSION_CONFLICT", "Assignment was changed by another administrator"
-                )
-            cfg = parse_profile_config(profile["config"], workflow)
-            if workflow == Workflow.EMBEDDING:
-                dimension = cast(EmbeddingConfig, cfg).dimension
-                affected = (
-                    await conn.scalar(
-                        text(
-                            "SELECT count(*) FROM ima.model_dependency_index WHERE active AND model_id IS NOT NULL AND dependency_kind IN ('target_index','legacy_index') AND kb_id=:kb"
-                        ),
-                        {"kb": kb_id},
-                    )
-                    or 0
-                )
-                if affected:
-                    old_dim = await conn.scalar(
-                        text(
-                            "SELECT dimension FROM ima.model_dependency_index WHERE kb_id=:kb AND active ORDER BY updated_at DESC LIMIT 1"
-                        ),
-                        {"kb": kb_id},
-                    )
-                    if old_dim != dimension:
-                        raise ModelGovernanceError(
-                            409,
-                            "REINDEX_REQUIRED",
-                            "Embedding assignment requires a completed reindex",
-                        )
-            now = utcnow()
-            version = int(current["version"]) + 1 if current else 1
-            await conn.execute(
-                text(
-                    """INSERT INTO ima.kb_profile_assignments(kb_id,workflow,profile_id,profile_version,version,availability,availability_reason,assigned_by,assigned_at) VALUES (:kb,:workflow,:profile,:profile_version,:version,'available',NULL,:actor,:now) ON CONFLICT(kb_id,workflow) DO UPDATE SET profile_id=EXCLUDED.profile_id,profile_version=EXCLUDED.profile_version,version=EXCLUDED.version,availability=EXCLUDED.availability,availability_reason=NULL,assigned_by=EXCLUDED.assigned_by,assigned_at=EXCLUDED.assigned_at"""
-                ),
-                {
-                    "kb": kb_id,
-                    "workflow": workflow.value,
-                    "profile": profile_id,
-                    "profile_version": profile_version,
-                    "version": version,
-                    "actor": actor_id,
-                    "now": now,
-                },
-            )
-            await self._audit(
-                conn,
-                actor_id,
-                "model.assignment.updated",
-                target_type="knowledge_base",
-                target_id=kb_id,
-                metadata={"workflow": workflow.value, "profileVersion": profile_version},
-            )
-            result = (
-                (
-                    await conn.execute(
-                        text(
-                            "SELECT * FROM ima.kb_profile_assignments WHERE kb_id=:kb AND workflow=:workflow"
-                        ),
-                        {"kb": kb_id, "workflow": workflow.value},
-                    )
-                )
-                .mappings()
-                .one()
-            )
-        return dict(result)
-
-    async def remove_assignment(
-        self,
-        actor_id: str,
-        kb_id: str,
-        workflow: Workflow,
-        expected_version: int | None = None,
-    ) -> None:
-        async with self.engine.begin() as conn:
-            current = (
-                (
-                    await conn.execute(
-                        text(
-                            "SELECT * FROM ima.kb_profile_assignments WHERE kb_id=:kb AND workflow=:workflow FOR UPDATE"
-                        ),
-                        {"kb": kb_id, "workflow": workflow.value},
-                    )
-                )
-                .mappings()
-                .first()
-            )
-            if not current:
-                raise ModelGovernanceError(404, "ASSIGNMENT_NOT_FOUND", "Assignment not found")
-            if expected_version is not None and current["version"] != expected_version:
-                raise ModelGovernanceError(
-                    409, "VERSION_CONFLICT", "Assignment was changed by another administrator"
-                )
-            await conn.execute(
-                text(
-                    "DELETE FROM ima.kb_profile_assignments WHERE kb_id=:kb AND workflow=:workflow"
-                ),
-                {"kb": kb_id, "workflow": workflow.value},
-            )
-            await self._audit(
-                conn,
-                actor_id,
-                "model.assignment.removed",
-                target_type="knowledge_base",
-                target_id=kb_id,
-                metadata={"workflow": workflow.value},
-            )
 
     @staticmethod
     def _scene_default_slot(operation: str) -> str:
@@ -1980,41 +1823,33 @@ class ModelGovernanceService:
                 (
                     await conn.execute(
                         text(
-                            """SELECT a.workflow,p.business_alias,p.description,p.current_version,a.profile_version,a.availability,a.availability_reason,p.lifecycle,v.state FROM ima.kb_profile_assignments a JOIN ima.capability_profiles p ON p.id=a.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=a.profile_id AND v.version=a.profile_version WHERE a.kb_id=:kb ORDER BY a.workflow"""
-                        ),
-                        {"kb": kb_id},
+                            """SELECT d.workflow,p.business_alias,p.description,p.current_version,p.lifecycle,v.state FROM ima.scene_defaults d JOIN ima.capability_profiles p ON p.id=d.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=p.id AND v.version=p.current_version WHERE d.workflow IN ('grounded_ask','title_generation','summarization','embedding','reranking') ORDER BY d.workflow"""
+                        )
                     )
                 )
                 .mappings()
                 .all()
             )
         capabilities: list[dict[str, Any]] = []
-        operation_for_workflow = {
-            Workflow.GROUNDED_ASK: "chat",
-            Workflow.TITLE_GENERATION: "chat",
-            Workflow.SUMMARIZATION: "chat",
-            Workflow.EMBEDDING: "embedding",
-            Workflow.RERANKING: "rerank",
-        }
         for row in rows:
             workflow = Workflow(row["workflow"])
             target = None
             if row["lifecycle"] == "active" and row["state"] == "published":
                 target = await self._execution_target(
-                    kb_id, workflow, operation_for_workflow[workflow], decrypt_secret=False
+                    kb_id, workflow, WORKFLOW_OPERATION[workflow], decrypt_secret=False
                 )
             if not target or target.get("reason"):
                 status = "unavailable"
-                reason = (target or {}).get("reason") or row["availability_reason"] or "UNAVAILABLE"
+                reason = (target or {}).get("reason") or "UNAVAILABLE"
             else:
                 status = "degraded" if target.get("health_state") == "degraded" else "available"
-                reason = row["availability_reason"]
+                reason = None
             capabilities.append(
                 {
                     "workflow": workflow.value,
                     "alias": row["business_alias"],
                     "description": row["description"],
-                    "version": row["profile_version"],
+                    "version": int(row["current_version"]),
                     "status": status,
                     "reason": reason,
                 }
@@ -2029,14 +1864,7 @@ class ModelGovernanceService:
         *,
         decrypt_secret: bool = True,
     ) -> dict[str, Any] | None:
-        expected = {
-            Workflow.GROUNDED_ASK: "chat",
-            Workflow.TITLE_GENERATION: "chat",
-            Workflow.SUMMARIZATION: "chat",
-            Workflow.EMBEDDING: "embedding",
-            Workflow.RERANKING: "rerank",
-        }[workflow]
-        if operation != expected:
+        if operation != WORKFLOW_OPERATION[workflow]:
             async with self.engine.begin() as conn:
                 await self._audit(
                     conn,
@@ -2056,79 +1884,56 @@ class ModelGovernanceService:
                 (
                     await conn.execute(
                         text(
-                            """SELECT a.*,p.workflow,p.lifecycle,v.state,v.config,g.id gateway_id,g.normalized_base_url,g.insecure_private,g.enabled gateway_enabled,g.secret_id,g.custom_ca_ref,g.allowed_hosts,g.allowed_cidrs,g.max_response_bytes,g.connect_timeout_ms,g.read_timeout_ms,g.write_timeout_ms,g.pool_timeout_ms,m.id model_id,m.version model_version,m.remote_name,m.capability,m.enabled model_enabled,m.validated,m.embedding_dimension,COALESCE(h.state,'unknown') health_state FROM ima.kb_profile_assignments a JOIN ima.capability_profiles p ON p.id=a.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=a.profile_id AND v.version=a.profile_version JOIN ima.governed_models m ON m.id=CAST(CASE WHEN :operation='chat' THEN v.config->>'chatModelId' WHEN :operation='embedding' THEN v.config->>'embeddingModelId' WHEN :operation='rerank' THEN v.config->>'rerankModelId' END AS uuid) JOIN ima.model_gateways g ON g.id=m.gateway_id LEFT JOIN ima.model_gateway_health h ON h.gateway_id=g.id AND h.capability=m.capability WHERE a.kb_id=:kb AND a.workflow=:workflow"""
+                            """SELECT p.id profile_id,p.current_version profile_version,p.workflow,p.lifecycle,v.state,v.config,g.id gateway_id,g.normalized_base_url,g.insecure_private,g.enabled gateway_enabled,g.secret_id,g.custom_ca_ref,g.allowed_hosts,g.allowed_cidrs,g.max_response_bytes,g.connect_timeout_ms,g.read_timeout_ms,g.write_timeout_ms,g.pool_timeout_ms,m.id model_id,m.version model_version,m.remote_name,m.capability,m.enabled model_enabled,m.validated,m.embedding_dimension,COALESCE(h.state,'unknown') health_state FROM ima.scene_defaults d JOIN ima.capability_profiles p ON p.id=d.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=p.id AND v.version=p.current_version AND v.state='published' JOIN ima.governed_models m ON m.id=CAST(CASE WHEN :operation='chat' THEN v.config->>'chatModelId' WHEN :operation='embedding' THEN v.config->>'embeddingModelId' WHEN :operation='rerank' THEN v.config->>'rerankModelId' END AS uuid) JOIN ima.model_gateways g ON g.id=m.gateway_id LEFT JOIN ima.model_gateway_health h ON h.gateway_id=g.id AND h.capability=m.capability WHERE d.workflow=:workflow"""
                         ),
-                        {
-                            "kb": kb_id,
-                            "workflow": workflow.value,
-                            "operation": operation,
-                        },
+                        {"workflow": workflow.value, "operation": operation},
                     )
                 )
                 .mappings()
                 .first()
             )
-        source: str | None = None
         if not raw_row:
-            # A target assignment is authoritative even when its typed config
-            # references a missing model (or a partially migrated row).  The
-            # inner joins above intentionally prevent execution, but must not
-            # turn that case into NO_ASSIGNMENT, which would hide the denial.
+            # A configured scene default whose profile/model/gateway/health join
+            # misses stays UNAVAILABLE so a broken target can never collapse into
+            # NO_ASSIGNMENT. Only a truly unconfigured workflow returns None.
             async with self.engine.connect() as conn:
-                assignment = (
+                configured = (
                     (
                         await conn.execute(
                             text(
-                                "SELECT profile_id,profile_version FROM ima.kb_profile_assignments WHERE kb_id=:kb AND workflow=:workflow"
+                                """SELECT p.id profile_id,p.current_version profile_version FROM ima.scene_defaults d JOIN ima.capability_profiles p ON p.id=d.profile_id WHERE d.workflow=:workflow"""
                             ),
-                            {"kb": kb_id, "workflow": workflow.value},
+                            {"workflow": workflow.value},
                         )
                     )
                     .mappings()
                     .first()
                 )
-            if assignment:
+            if configured:
                 return {
-                    "profile_id": assignment["profile_id"],
-                    "profile_version": assignment["profile_version"],
+                    "profile_id": configured["profile_id"],
+                    "profile_version": configured["profile_version"],
                     "reason": "UNAVAILABLE",
                 }
-            # No assignment row exists at all: the workflow's scene default
-            # (if configured) is the managed fallback, resolved through the
-            # same profile/version/model/gateway/health joins.
-            async with self.engine.connect() as conn:
-                raw_row = (
-                    (
-                        await conn.execute(
-                            text(
-                                """SELECT p.id profile_id,p.current_version profile_version,p.workflow,p.lifecycle,v.state,v.config,g.id gateway_id,g.normalized_base_url,g.insecure_private,g.enabled gateway_enabled,g.secret_id,g.custom_ca_ref,g.allowed_hosts,g.allowed_cidrs,g.max_response_bytes,g.connect_timeout_ms,g.read_timeout_ms,g.write_timeout_ms,g.pool_timeout_ms,m.id model_id,m.version model_version,m.remote_name,m.capability,m.enabled model_enabled,m.validated,m.embedding_dimension,COALESCE(h.state,'unknown') health_state FROM ima.scene_defaults d JOIN ima.capability_profiles p ON p.id=d.profile_id JOIN ima.capability_profile_versions v ON v.profile_id=p.id AND v.version=p.current_version AND v.state='published' JOIN ima.governed_models m ON m.id=CAST(CASE WHEN :operation='chat' THEN v.config->>'chatModelId' WHEN :operation='embedding' THEN v.config->>'embeddingModelId' WHEN :operation='rerank' THEN v.config->>'rerankModelId' END AS uuid) JOIN ima.model_gateways g ON g.id=m.gateway_id LEFT JOIN ima.model_gateway_health h ON h.gateway_id=g.id AND h.capability=m.capability WHERE d.workflow=:workflow"""
-                            ),
-                            {"workflow": workflow.value, "operation": operation},
-                        )
-                    )
-                    .mappings()
-                    .first()
+            async with self.engine.begin() as conn:
+                await self._audit(
+                    conn,
+                    None,
+                    "model.execution.denied",
+                    target_type="knowledge_base",
+                    target_id=kb_id,
+                    result="failed",
+                    reason="NO_ASSIGNMENT",
+                    metadata={"workflow": workflow.value, "operation": operation},
                 )
-            if not raw_row:
-                async with self.engine.begin() as conn:
-                    await self._audit(
-                        conn,
-                        None,
-                        "model.execution.denied",
-                        target_type="knowledge_base",
-                        target_id=kb_id,
-                        result="failed",
-                        reason="NO_ASSIGNMENT",
-                        metadata={"workflow": workflow.value, "operation": operation},
-                    )
-                return None
-            source = "scene_default"
+            return None
         row = dict(raw_row)
-        if source:
-            row["source"] = source
-        denial_metadata: dict[str, object] = {"workflow": workflow.value, "operation": operation}
-        if source:
-            denial_metadata["source"] = source
+        row["source"] = "scene_default"
+        denial_metadata: dict[str, object] = {
+            "workflow": workflow.value,
+            "operation": operation,
+            "source": "scene_default",
+        }
         if (
             row["lifecycle"] != "active"
             or row["state"] != "published"
@@ -2320,6 +2125,13 @@ class ModelGovernanceService:
         return await self._decrypt_secret(row["gateway_id"], row.get("secret_id"))
 
     async def impact(self, model_id: UUID) -> dict[str, Any]:
+        """Report knowledge bases whose ready embeddings would need reindexing.
+
+        Scene-only resolution means every knowledge base shares the workflow's
+        scene default. A knowledge base is affected when its persisted ready
+        chunks were embedded by a different model or dimension than the queried
+        model, so switching the scene default would force a reindex.
+        """
         async with self.engine.connect() as conn:
             model = (
                 (
@@ -2337,7 +2149,7 @@ class ModelGovernanceService:
                 (
                     await conn.execute(
                         text(
-                            """SELECT a.kb_id,a.workflow,a.profile_version,m.id current_model_id,m.embedding_dimension current_dimension,count(d.id) affected_indexes,coalesce(array_agg(d.source_id) FILTER (WHERE d.source_id IS NOT NULL),'{}') affected_source_ids FROM ima.kb_profile_assignments a JOIN ima.capability_profile_versions v ON v.profile_id=a.profile_id AND v.version=a.profile_version LEFT JOIN ima.governed_models m ON m.id=CAST(v.config->>'embeddingModelId' AS uuid) LEFT JOIN ima.model_dependency_index d ON d.kb_id=a.kb_id AND d.active AND d.dependency_kind IN ('target_index','legacy_index') WHERE a.workflow='embedding' GROUP BY a.kb_id,a.workflow,a.profile_version,m.id,m.embedding_dimension"""
+                            """SELECT c.kb_id,c.model_id AS current_model_id,c.embedding_dimension AS current_dimension,count(*) AS affected_indexes,COALESCE(array_agg(DISTINCT i.id) FILTER (WHERE i.id IS NOT NULL),'{}') AS affected_source_ids FROM ima.document_chunks c JOIN ima.documents d ON d.id=c.document_id AND d.kb_id=c.kb_id LEFT JOIN ima.chunk_search_indexes i ON i.kb_id=c.kb_id AND i.status='active' AND i.model_id=c.model_id AND i.model_version=c.model_version AND i.embedding_dimension=c.embedding_dimension WHERE c.embedding_status='ready' AND d.lifecycle='active' GROUP BY c.kb_id,c.model_id,c.embedding_dimension"""
                         )
                     )
                 )
@@ -2353,7 +2165,7 @@ class ModelGovernanceService:
                 affected.append(
                     {
                         "kbId": row["kb_id"],
-                        "workflow": row["workflow"],
+                        "workflow": Workflow.EMBEDDING.value,
                         "currentModelId": row["current_model_id"],
                         "currentDimension": row["current_dimension"],
                         "affectedIndexes": int(row["affected_indexes"]),

@@ -1,5 +1,7 @@
 <template>
   <q-layout view="lHr Lpr lFf">
+    <app-top-bar />
+    <state-header />
     <q-drawer
       v-model="uiStateStore.mainDrawerOpen"
       show-if-above
@@ -33,6 +35,7 @@
           anchor="center right"
           self="center left"
           :offset="[10, 0]"
+          :delay="500"
         >
           {{ kbStore.current?.name ?? '未选择知识库' }}
         </q-tooltip>
@@ -48,13 +51,14 @@
         <q-item-section class="rail-item-icon">
           <q-icon
             name="sym_o_login"
-            size="22px"
+            size="20px"
           />
         </q-item-section>
         <q-tooltip
           anchor="center right"
           self="center left"
           :offset="[10, 0]"
+          :delay="500"
         >
           登录/注册
         </q-tooltip>
@@ -74,13 +78,14 @@
             <q-item-section class="rail-item-icon">
               <q-icon
                 name="sym_o_chat"
-                size="22px"
+                size="20px"
               />
             </q-item-section>
             <q-tooltip
               anchor="center right"
               self="center left"
               :offset="[10, 0]"
+              :delay="500"
             >
               提问
             </q-tooltip>
@@ -93,13 +98,14 @@
             <q-item-section class="rail-item-icon">
               <q-icon
                 name="sym_o_folder"
-                size="22px"
+                size="20px"
               />
             </q-item-section>
             <q-tooltip
               anchor="center right"
               self="center left"
               :offset="[10, 0]"
+              :delay="500"
             >
               知识库
             </q-tooltip>
@@ -112,13 +118,14 @@
             <q-item-section class="rail-item-icon">
               <q-icon
                 name="sym_o_history"
-                size="22px"
+                size="20px"
               />
             </q-item-section>
             <q-tooltip
               anchor="center right"
               self="center left"
               :offset="[10, 0]"
+              :delay="500"
             >
               历史
             </q-tooltip>
@@ -131,13 +138,14 @@
             <q-item-section class="rail-item-icon">
               <q-icon
                 name="sym_o_hub"
-                size="22px"
+                size="20px"
               />
             </q-item-section>
             <q-tooltip
               anchor="center right"
               self="center left"
               :offset="[10, 0]"
+              :delay="500"
             >
               连接器
             </q-tooltip>
@@ -152,13 +160,14 @@
             <q-item-section class="rail-item-icon">
               <q-icon
                 name="sym_o_settings"
-                size="22px"
+                size="20px"
               />
             </q-item-section>
             <q-tooltip
               anchor="center right"
               self="center left"
               :offset="[10, 0]"
+              :delay="500"
             >
               设置
             </q-tooltip>
@@ -172,13 +181,14 @@
             <q-item-section class="rail-item-icon">
               <q-icon
                 name="sym_o_manage_accounts"
-                size="22px"
+                size="20px"
               />
             </q-item-section>
             <q-tooltip
               anchor="center right"
               self="center left"
               :offset="[10, 0]"
+              :delay="500"
             >
               管理控制台
             </q-tooltip>
@@ -191,13 +201,14 @@
             <q-item-section class="rail-item-icon">
               <q-icon
                 name="sym_o_logout"
-                size="22px"
+                size="20px"
               />
             </q-item-section>
             <q-tooltip
               anchor="center right"
               self="center left"
               :offset="[10, 0]"
+              :delay="500"
             >
               退出登录
             </q-tooltip>
@@ -224,8 +235,10 @@ import { useUiStateStore } from 'src/stores/ui-state'
 import { identityClient, session } from 'src/utils/identity-client'
 import { kbAvatar } from 'src/utils/defaults'
 import AAvatar from 'src/components/AAvatar.vue'
+import AppTopBar from 'src/components/AppTopBar.vue'
 import KbManageDialog from 'src/components/KbManageDialog.vue'
 import KbMenuList from 'src/components/KbMenuList.vue'
+import StateHeader from 'src/components/StateHeader.vue'
 import { groundedKey, useGroundedKnowledge } from 'src/composables/use-grounded-knowledge'
 import { waitingWorker } from 'app/src-pwa/register-service-worker'
 
@@ -281,17 +294,32 @@ function signOut() {
 
 <style scoped>
 .app-rail {
-  background-color: var(--tk-surface);
+  background-color: var(--tk-surface-white);
   border-right: 1px solid var(--tk-border);
 }
 
 /* Compact icon-forward rail: each row centers a single icon and reveals its
-   Chinese label through a tooltip on hover. */
+   Chinese label through a tooltip on hover. The 10px radius is the shell
+   exception to the 6/8/12 token scale (parent PRD: rail items 9-10px). */
 .rail-item {
-  min-height: 44px;
+  min-height: 40px;
   padding: 0 var(--tk-space-1);
-  border-radius: var(--tk-radius);
+  border-radius: 10px;
   justify-content: center;
+}
+
+.rail-item:hover {
+  background-color: var(--tk-surface);
+}
+
+/* Active nav rows keep a calm primary tint with a primary icon; declared
+   after the hover rule so the active fill wins when both apply. */
+.rail-item.q-router-link--active {
+  background-color: var(--tk-accent-soft);
+}
+
+.rail-item.q-router-link--active .q-icon {
+  color: var(--tk-accent);
 }
 
 .rail-item-icon {

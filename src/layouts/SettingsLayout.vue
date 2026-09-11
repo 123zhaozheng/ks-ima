@@ -1,16 +1,4 @@
 <template>
-  <q-header class="tk-header">
-    <q-toolbar>
-      <q-btn
-        flat
-        dense
-        round
-        icon="sym_o_menu"
-        @click="uiStateStore.toggleMainDrawer"
-      />
-      <q-toolbar-title>个人设置</q-toolbar-title>
-    </q-toolbar>
-  </q-header>
   <q-page-container>
     <q-page class="tk-page settings-page">
       <template v-if="user">
@@ -66,12 +54,10 @@ import CommonItem from 'src/components/CommonItem.vue'
 import SettingsList from 'src/components/SettingsList.vue'
 import SettingsSecurity from 'src/components/SettingsSecurity.vue'
 import { useRequireLogin } from 'src/composables/require-login'
-import { useUiStateStore } from 'src/stores/ui-state'
 import { identityClient, session } from 'src/utils/identity-client'
 
 useRequireLogin()
 
-const uiStateStore = useUiStateStore()
 const $q = useQuasar()
 
 const pending = computed(() => session.value.isPending)

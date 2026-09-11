@@ -1,17 +1,4 @@
 <template>
-  <q-header class="ask-home-header">
-    <q-toolbar>
-      <q-btn
-        flat
-        dense
-        round
-        icon="sym_o_menu"
-        data-testid="ask-home-menu"
-        @click="uiStateStore.toggleMainDrawer"
-      />
-      <q-toolbar-title>提问</q-toolbar-title>
-    </q-toolbar>
-  </q-header>
   <q-page-container>
     <q-page class="ask-home-page">
       <!-- Knowledge bases still loading: calm spinner instead of a flashing empty state. -->
@@ -155,7 +142,6 @@ import AskComposer from 'src/components/AskComposer.vue'
 import { groundedKey, useGroundedKnowledge } from 'src/composables/use-grounded-knowledge'
 import { useRequireLogin } from 'src/composables/require-login'
 import { useKbStore } from 'src/stores/knowledge-base'
-import { useUiStateStore } from 'src/stores/ui-state'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { identityClient } from 'src/utils/identity-client'
 
@@ -165,7 +151,6 @@ const router = useRouter()
 const $q = useQuasar()
 const queryClient = useQueryClient()
 const kbStore = useKbStore()
-const uiStateStore = useUiStateStore()
 // Shared instance from AppShell: the stream keeps running after we route to
 // /ask/:conversationId below.
 const grounded = inject(groundedKey) ?? useGroundedKnowledge(() => kbStore.id)
@@ -249,13 +234,8 @@ async function onSubmit(question: string) {
 </script>
 
 <style scoped>
-.ask-home-header {
-  background-color: var(--tk-surface);
-  color: var(--tk-text);
-}
-
 .ask-home-page {
-  min-height: calc(100vh - 50px);
+  min-height: calc(100vh - 56px);
   display: flex;
   flex-direction: column;
   align-items: center;

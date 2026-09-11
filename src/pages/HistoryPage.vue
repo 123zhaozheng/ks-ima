@@ -1,16 +1,4 @@
 <template>
-  <q-header class="history-header">
-    <q-toolbar>
-      <q-btn
-        flat
-        dense
-        round
-        icon="sym_o_menu"
-        @click="uiStateStore.toggleMainDrawer"
-      />
-      <q-toolbar-title>历史</q-toolbar-title>
-    </q-toolbar>
-  </q-header>
   <q-page-container>
     <q-page
       v-if="conversations.isError.value"
@@ -187,7 +175,6 @@ import { groundedClient } from 'src/api/grounded-client'
 import { groundedKey, useGroundedKnowledge } from 'src/composables/use-grounded-knowledge'
 import { useRequireLogin } from 'src/composables/require-login'
 import { useKbStore } from 'src/stores/knowledge-base'
-import { useUiStateStore } from 'src/stores/ui-state'
 import { apiErrorMessage } from 'src/utils/api-error'
 
 type Conversation = components['schemas']['ConversationResponse']
@@ -198,7 +185,6 @@ const router = useRouter()
 const $q = useQuasar()
 const queryClient = useQueryClient()
 const kbStore = useKbStore()
-const uiStateStore = useUiStateStore()
 
 // User-level history: one list across every knowledge base the user belongs
 // to; each row carries the knowledge base it lives in.
@@ -258,11 +244,6 @@ function remove(conversation: Conversation) {
 </script>
 
 <style scoped>
-.history-header {
-  background-color: var(--tk-surface);
-  color: var(--tk-text);
-}
-
 .history-list {
   max-width: 860px;
   margin: 0 auto;

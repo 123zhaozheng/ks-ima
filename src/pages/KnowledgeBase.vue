@@ -1,42 +1,36 @@
 <template>
-  <q-header class="kb-header">
-    <q-toolbar>
-      <q-btn
-        flat
-        dense
-        round
-        icon="sym_o_menu"
-        @click="uiStateStore.toggleMainDrawer"
-      />
-      <q-toolbar-title>{{ kbStore.current?.name ?? '知识库' }}</q-toolbar-title>
-      <q-badge
-        v-if="isViewer"
-        outline
-        color="primary"
-        class="kb-role-badge"
-      >
-        只读
-      </q-badge>
-      <q-badge
-        v-if="isArchived"
-        outline
-        color="warning"
-        class="kb-role-badge"
-      >
-        已归档
-      </q-badge>
-      <q-btn
-        v-if="kbStore.isOwner"
-        flat
-        dense
-        no-caps
-        icon="sym_o_ios_share"
-        label="分享"
-        data-testid="kb-manage"
-        @click="kbStore.openManage('share')"
-      />
-    </q-toolbar>
-  </q-header>
+  <!-- KB role badges and the share entry live in the shell TopBar. -->
+  <teleport
+    defer
+    to="#topbar-actions"
+  >
+    <q-badge
+      v-if="isViewer"
+      outline
+      color="primary"
+      class="kb-role-badge"
+    >
+      只读
+    </q-badge>
+    <q-badge
+      v-if="isArchived"
+      outline
+      color="warning"
+      class="kb-role-badge"
+    >
+      已归档
+    </q-badge>
+    <q-btn
+      v-if="kbStore.isOwner"
+      flat
+      dense
+      no-caps
+      icon="sym_o_ios_share"
+      label="分享"
+      data-testid="kb-manage"
+      @click="kbStore.openManage('share')"
+    />
+  </teleport>
   <q-page-container>
     <q-page
       v-if="userId && !kbStore.id"
@@ -267,7 +261,6 @@ import NewFolderDialog from 'src/components/NewFolderDialog.vue'
 import UploadDialog from 'src/components/UploadDialog.vue'
 import { useRequireLogin } from 'src/composables/require-login'
 import { useKbStore } from 'src/stores/knowledge-base'
-import { useUiStateStore } from 'src/stores/ui-state'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { pageFhStyle } from 'src/utils/functions'
 import { identityClient, session } from 'src/utils/identity-client'
@@ -282,7 +275,6 @@ const router = useRouter()
 const $q = useQuasar()
 const queryClient = useQueryClient()
 const kbStore = useKbStore()
-const uiStateStore = useUiStateStore()
 
 const userId = computed(() => session.value.data?.user.id)
 const listReady = computed(() => kbStore.kbsStatus === 'success')
@@ -376,14 +368,8 @@ function onDeleted() {
 </script>
 
 <style scoped>
-.kb-header {
-  background-color: var(--tk-surface);
-  color: var(--tk-text);
-}
-
 .kb-role-badge {
   font-weight: 400;
-  margin-right: var(--tk-space-2);
 }
 
 .kb-page {

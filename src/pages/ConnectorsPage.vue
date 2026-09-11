@@ -1,16 +1,4 @@
 <template>
-  <q-header class="tk-header">
-    <q-toolbar>
-      <q-btn
-        flat
-        dense
-        round
-        icon="sym_o_menu"
-        @click="uiStateStore.toggleMainDrawer"
-      />
-      <q-toolbar-title>连接器</q-toolbar-title>
-    </q-toolbar>
-  </q-header>
   <q-page-container>
     <q-page class="tk-page connectors-page">
       <section class="tk-card connectors-card">
@@ -291,7 +279,6 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { copyToClipboard, useQuasar } from 'quasar'
 import { useRouter } from 'vue-router'
 import { useKbStore } from 'src/stores/knowledge-base'
-import { useUiStateStore } from 'src/stores/ui-state'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { identityClient, session } from 'src/utils/identity-client'
 import { mcpHttpUrl } from 'src/utils/mcp-config'
@@ -309,7 +296,6 @@ const scopeOptions = [
   'mcp:knowledge:write',
 ]
 const kbStore = useKbStore()
-const uiStateStore = useUiStateStore()
 const $q = useQuasar()
 const router = useRouter()
 

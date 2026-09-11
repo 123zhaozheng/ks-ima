@@ -89,6 +89,9 @@ vi.mock('quasar', async () => {
 })
 
 const stubs = {
+  // The conversation subject teleports into the shell TopBar; render it in
+  // place so the title is part of the mounted output.
+  teleport: true,
   'q-header': { template: '<div><slot /></div>' },
   'q-toolbar': { template: '<div><slot /></div>' },
   'q-toolbar-title': { template: '<div><slot /></div>' },

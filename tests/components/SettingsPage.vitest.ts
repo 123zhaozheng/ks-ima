@@ -12,7 +12,6 @@ import { session } from 'src/utils/identity-client'
  */
 
 vi.mock('src/composables/require-login', () => ({ useRequireLogin: () => undefined }))
-vi.mock('src/stores/ui-state', () => ({ useUiStateStore: () => ({ toggleMainDrawer: () => undefined }) }))
 // The perfs store pulls the kb store, which needs a router; the settings page
 // does not interact with knowledge base selection.
 vi.mock('src/stores/knowledge-base', () => ({ useKbStore: () => ({ id: null }) }))

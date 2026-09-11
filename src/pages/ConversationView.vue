@@ -1,18 +1,16 @@
 <template>
-  <q-header class="cv-header">
-    <q-toolbar>
-      <q-btn
-        flat
-        dense
-        round
-        icon="sym_o_menu"
-        @click="uiStateStore.toggleMainDrawer"
-      />
-      <q-toolbar-title data-testid="conversation-title">
-        {{ title }}
-      </q-toolbar-title>
-    </q-toolbar>
-  </q-header>
+  <!-- The shell TopBar shows the live conversation subject (override + node). -->
+  <teleport
+    defer
+    to="#topbar-title"
+  >
+    <div
+      class="tk-topbar-title-text"
+      data-testid="conversation-title"
+    >
+      {{ title }}
+    </div>
+  </teleport>
   <q-page-container>
     <q-page
       class="cv-page"
@@ -242,7 +240,7 @@
 
 <script setup lang="ts">
 import type { components } from 'src/api/generated/schema'
-import { computed, inject, onMounted, ref, watch } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import { Notify } from 'quasar'
 import AskComposer from 'src/components/AskComposer.vue'
@@ -252,8 +250,8 @@ import SaveAnswerDialog from 'src/components/SaveAnswerDialog.vue'
 import { groundedClient } from 'src/api/grounded-client'
 import { groundedKey, useGroundedKnowledge } from 'src/composables/use-grounded-knowledge'
 import { useRequireLogin } from 'src/composables/require-login'
+import { topbarTitleOverride } from 'src/composables/topbar'
 import { useKbStore } from 'src/stores/knowledge-base'
-import { useUiStateStore } from 'src/stores/ui-state'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { pageFhStyle } from 'src/utils/functions'
 import { citationMarkerRanks, injectCitationMarks, renderMarkdown } from 'src/utils/markdown'
@@ -265,7 +263,6 @@ useRequireLogin()
 
 const route = useRoute()
 const kbStore = useKbStore()
-const uiStateStore = useUiStateStore()
 
 const grounded = inject(groundedKey) ?? useGroundedKnowledge(() => kbStore.id)
 
@@ -282,6 +279,11 @@ watch(conversationId, id => {
 const query = grounded.conversation
 const messages = computed(() => query.data.value?.messages ?? [])
 const title = computed(() => query.data.value?.title ?? '提问')
+
+// The unified TopBar shows the live conversation subject; clear the override
+// when this page unmounts so other pages fall back to their route-meta title.
+watchEffect(() => { topbarTitleOverride.value = title.value })
+onUnmounted(() => { topbarTitleOverride.value = '' })
 
 // Citations and saved notes live in the knowledge base that owns this
 // conversation, which may differ from the currently selected one.
@@ -436,11 +438,6 @@ onMounted(() => scrollToBottom(true))
 </script>
 
 <style scoped>
-.cv-header {
-  background-color: var(--tk-surface);
-  color: var(--tk-text);
-}
-
 .cv-page {
   display: flex;
 }

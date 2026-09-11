@@ -125,11 +125,17 @@ export const CAPABILITY_LABELS: Record<Capability, string> = {
   rerank: '重排序',
 }
 
-/** 按模型 ID 猜测能力：含 embedding/bge → 向量化；含 rerank → 重排序；其余对话 */
+/** 重排序模型 ID 特征：rerank/reranker 家族与 cross-encoder 交叉编码器 */
+const RERANK_PATTERN = /rerank|reranker|cross-encoder|jina-reranker/
+
+/**
+ * 按模型 ID 猜测能力：重排序优先（`bge-reranker-*` 同时含 `bge` 与 `rerank`，
+ * 必须先判 rerank），其次含 embedding/bge → 向量化，其余对话。
+ */
 export function guessCapability(modelId: string): Capability {
   const value = modelId.toLowerCase()
+  if (RERANK_PATTERN.test(value)) return 'rerank'
   if (value.includes('embedding') || value.includes('bge')) return 'embedding'
-  if (value.includes('rerank')) return 'rerank'
   return 'chat'
 }
 

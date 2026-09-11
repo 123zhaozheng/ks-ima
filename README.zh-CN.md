@@ -45,6 +45,22 @@ cd ..
 bun dev
 ```
 
+### 本地完整环境
+
+`docker-compose.dev.yml` 配合 `backend/run_server.py` 可用本地 Postgres 与 MinIO 跑起同一套栈，开发默认值已内置。
+
+```sh
+docker compose -f docker-compose.dev.yml up -d # Postgres 位于 127.0.0.1:5430，MinIO 位于 127.0.0.1:9000（控制台 9001）
+cd backend
+uv sync --frozen
+IMA_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5430/app uv run ima migrate
+python run_server.py # API 位于 9016；脚本自带开发数据库、origin 与对象存储环境变量
+cd ..
+bun install
+bun quasar prepare
+bun dev # 前端位于 9015；管理控制台在 /admin
+```
+
 `docker compose -f docker-compose.example.yml up --build` 会运行完整的部署示例（Postgres、API、worker、带 Caddy 的 web）。
 
 模型请指向内网 OpenAI 兼容网关。

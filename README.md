@@ -45,6 +45,22 @@ cd ..
 bun dev
 ```
 
+### Full local stack
+
+`docker-compose.dev.yml` and `backend/run_server.py` run the same stack against local Postgres and MinIO, with the dev defaults filled in.
+
+```sh
+docker compose -f docker-compose.dev.yml up -d # Postgres at 127.0.0.1:5430, MinIO at 127.0.0.1:9000 (console 9001)
+cd backend
+uv sync --frozen
+IMA_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5430/app uv run ima migrate
+python run_server.py # API on 9016; supplies the dev DB, origin, and object-storage env
+cd ..
+bun install
+bun quasar prepare
+bun dev # front on 9015; admin console at /admin
+```
+
 `docker compose -f docker-compose.example.yml up --build` runs the full deployment example (Postgres, API, worker, web with Caddy).
 
 Point model providers at an intranet OpenAI-compatible gateway. Do not configure public search or crawl endpoints.

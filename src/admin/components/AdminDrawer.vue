@@ -66,15 +66,14 @@
     </q-list>
     <q-list mt-a>
       <q-item
-        clickable
-        @click="signOut"
+        to="/"
         item-rd
       >
         <q-item-section avatar>
-          <q-icon name="sym_o_logout" />
+          <q-icon name="sym_o_arrow_back" />
         </q-item-section>
         <q-item-section>
-          退出登录
+          返回应用
         </q-item-section>
       </q-item>
     </q-list>
@@ -83,20 +82,13 @@
 
 <script setup lang="ts">
 import { useQuasar } from 'quasar'
-import { identityClient, session } from 'src/utils/identity-client'
-import { useRouter } from 'vue-router'
+import { session } from 'src/utils/identity-client'
 import UpdateSettingsDialog from './UpdateSettingsDialog.vue'
 import { computed } from 'vue'
 
 const canManageUsers = computed(() => session.value.data?.user.platformRoles.includes('super_admin') || session.value.data?.user.platformRoles.includes('platform_admin'))
 const canManageSettings = canManageUsers
 const canReadModelGovernance = computed(() => canManageUsers.value || session.value.data?.user.platformRoles.includes('security_auditor'))
-
-const router = useRouter()
-function signOut() {
-  identityClient.signOut()
-  router.push('/auth/sign-in')
-}
 
 const $q = useQuasar()
 function openSettings() {

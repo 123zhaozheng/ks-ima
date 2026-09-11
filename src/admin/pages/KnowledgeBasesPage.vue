@@ -1,92 +1,111 @@
 <template>
-  <q-page-container>
-    <q-page p-4>
-      <div
-        flex
-        gap-2
+  <div>
+    <div class="admin-toolbar">
+      <q-input
+        v-model="search"
+        dense
+        outlined
+        label="搜索知识库"
       >
+        <template #prepend>
+          <q-icon
+            name="sym_o_search"
+            size="18px"
+          />
+        </template>
+      </q-input>
+      <template v-if="canManage">
         <q-input
-          v-model="search"
+          v-model="newName"
           dense
           outlined
-          label="搜索知识库"
+          label="新建知识库"
         />
-        <template v-if="canManage">
-          <q-input
-            v-model="newName"
-            dense
-            outlined
-            label="新建知识库"
-          />
-          <q-input
-            v-model="newOwnerUserId"
-            dense
-            outlined
-            label="初始所有者用户 ID"
+        <q-input
+          v-model="newOwnerUserId"
+          dense
+          outlined
+          label="初始所有者用户 ID"
+        />
+        <q-btn
+          class="tk-btn-primary"
+          unelevated
+          no-caps
+          icon="sym_o_add"
+          :disable="!newName || !newOwnerUserId"
+          @click="create"
+        >
+          新建
+        </q-btn>
+      </template>
+      <q-btn
+        class="tk-btn-ghost"
+        flat
+        no-caps
+        icon="sym_o_refresh"
+        label="刷新"
+        ml-a
+        @click="load"
+      />
+    </div>
+    <div
+      v-if="error"
+      class="admin-banner admin-banner-error"
+      mt-2
+    >
+      {{ error }} <q-btn
+        icon="refresh"
+        flat
+        dense
+        @click="load"
+      />
+    </div>
+    <q-table
+      :rows="rows"
+      :columns="columns"
+      row-key="id"
+      flat
+      mt-4
+      :loading="loading"
+    >
+      <template #body-cell-actions="props">
+        <q-td v-if="canManage">
+          <q-btn
+            v-if="props.row.isActive"
+            class="tk-btn-ghost"
+            icon="sym_o_archive"
+            flat
+            no-caps
+            label="归档"
+            @click="archive(props.row.id)"
           />
           <q-btn
-            color="primary"
-            unelevated
-            icon="sym_o_add"
-            :disable="!newName || !newOwnerUserId"
-            @click="create"
-          >
-            新建
-          </q-btn>
-        </template>
-        <q-btn
-          flat
-          icon="sym_o_refresh"
-          label="刷新"
-          @click="load"
+            v-else
+            class="tk-btn-ghost"
+            icon="sym_o_restore_from_trash"
+            flat
+            no-caps
+            label="恢复"
+            @click="restore(props.row.id)"
+          />
+          <q-btn
+            class="tk-btn-danger-ghost"
+            icon="sym_o_delete"
+            flat
+            no-caps
+            label="删除"
+            @click="remove(props.row.id)"
+          />
+        </q-td>
+      </template>
+      <template #no-data>
+        <pane-empty-state
+          icon="sym_o_folder_open"
+          title="暂无知识库"
         />
-      </div>
-      <q-banner
-        v-if="error"
-        bg-err-c
-        text-on-err-c
-      >
-        {{ error }} <q-btn
-          icon="refresh"
-          flat
-          @click="load"
-        />
-      </q-banner>
-      <q-table
-        :rows="rows"
-        :columns="columns"
-        row-key="id"
-        flat
-        mt-4
-        :loading="loading"
-      >
-        <template #body-cell-actions="props">
-          <q-td v-if="canManage">
-            <q-btn
-              v-if="props.row.isActive"
-              icon="sym_o_archive"
-              flat
-              label="归档"
-              @click="archive(props.row.id)"
-            />
-            <q-btn
-              v-else
-              icon="sym_o_restore_from_trash"
-              flat
-              label="恢复"
-              @click="restore(props.row.id)"
-            />
-            <q-btn
-              icon="sym_o_delete"
-              flat
-              label="删除"
-              @click="remove(props.row.id)"
-            />
-          </q-td>
-        </template>
-      </q-table>
-    </q-page>
-  </q-page-container>
+      </template>
+    </q-table>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -94,6 +113,7 @@ import { computed, ref } from 'vue'
 import type { QTableColumn } from 'quasar'
 import type { components } from 'src/api/generated/schema'
 import { identityClient, session } from 'src/utils/identity-client'
+import PaneEmptyState from 'src/components/PaneEmptyState.vue'
 
 type KnowledgeBaseInfo = components['schemas']['KnowledgeBaseInfo']
 const rows = ref<KnowledgeBaseInfo[]>([])

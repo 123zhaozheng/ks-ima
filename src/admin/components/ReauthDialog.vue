@@ -10,7 +10,7 @@
           需要再次验证身份
         </div>
       </q-card-section>
-      <q-card-section class="q-pt-none text-grey-7">
+      <q-card-section class="q-pt-none reauth-hint">
         该操作属于敏感操作，之前的登录验证已过期。请输入密码继续。
       </q-card-section>
       <q-card-section class="q-pt-none">
@@ -89,3 +89,9 @@ async function submit() {
   onDialogOK()
 }
 </script>
+
+<style scoped>
+.reauth-hint {
+  color: var(--tk-text-secondary);
+}
+</style>

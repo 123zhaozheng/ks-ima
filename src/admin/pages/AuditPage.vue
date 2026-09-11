@@ -1,119 +1,113 @@
 <template>
-  <q-page-container>
-    <q-page class="audit-page q-pa-xl">
-      <div class="q-mb-lg">
-        <div class="text-h5 text-weight-medium">
-          审计日志
-        </div>
-        <div class="page-subtitle q-mt-xs">
-          查看平台上的重要操作记录：登录、知识库变更、模型配置等
-        </div>
-      </div>
+  <div>
+    <div class="page-subtitle q-mb-md">
+      查看平台上的重要操作记录：登录、知识库变更、模型配置等
+    </div>
 
-      <div class="row q-col-gutter-sm q-mb-md">
-        <div class="col-12 col-sm-4 col-md-3">
-          <q-select
-            v-model="groupFilter"
-            outlined
-            dense
-            emit-value
-            map-options
-            label="操作类型"
-            :options="groupOptions"
-          />
-        </div>
-        <div class="col-12 col-sm-4 col-md-3">
-          <q-select
-            v-model="resultFilter"
-            outlined
-            dense
-            emit-value
-            map-options
-            label="结果"
-            :options="resultOptions"
-          />
-        </div>
-        <div class="col-12 col-sm-4 col-md-3">
-          <q-btn
-            flat
-            dense
-            no-caps
-            icon="sym_o_refresh"
-            label="刷新"
-            :loading="loading"
-            @click="load"
-          />
-        </div>
-      </div>
-
-      <q-table
+    <div class="admin-toolbar">
+      <q-select
+        v-model="groupFilter"
+        outlined
+        dense
+        emit-value
+        map-options
+        label="操作类型"
+        :options="groupOptions"
+      />
+      <q-select
+        v-model="resultFilter"
+        outlined
+        dense
+        emit-value
+        map-options
+        label="结果"
+        :options="resultOptions"
+      />
+      <q-btn
+        class="tk-btn-ghost"
         flat
-        bordered
-        separator="horizontal"
-        class="audit-table"
-        :rows="filteredRows"
-        :columns="columns"
-        row-key="id"
+        no-caps
+        icon="sym_o_refresh"
+        label="刷新"
         :loading="loading"
-        no-data-label="暂无审计记录"
-        :rows-per-page-options="[20, 50, 100]"
-        :rows-per-page-label="'每页条数'"
-      >
-        <template #body-cell-createdAt="props">
-          <q-td :props="props">
-            <span :title="absoluteTime(props.row.createdAt)">{{ relativeTime(props.row.createdAt) }}</span>
-          </q-td>
-        </template>
-        <template #body-cell-actor="props">
-          <q-td
-            :props="props"
-            class="text-grey-8"
+        ml-a
+        @click="load"
+      />
+    </div>
+
+    <q-table
+      flat
+      bordered
+      separator="horizontal"
+      class="audit-table"
+      :rows="filteredRows"
+      :columns="columns"
+      row-key="id"
+      :loading="loading"
+      :rows-per-page-options="[20, 50, 100]"
+      :rows-per-page-label="'每页条数'"
+      mt-4
+    >
+      <template #body-cell-createdAt="props">
+        <q-td :props="props">
+          <span :title="absoluteTime(props.row.createdAt)">{{ relativeTime(props.row.createdAt) }}</span>
+        </q-td>
+      </template>
+      <template #body-cell-actor="props">
+        <q-td
+          :props="props"
+          class="cell-muted"
+        >
+          {{ props.row.actorId || '系统' }}
+        </q-td>
+      </template>
+      <template #body-cell-action="props">
+        <q-td :props="props">
+          <div>{{ actionLabel(props.row.action) }}</div>
+          <div class="tk-caption">
+            {{ props.row.action }}
+          </div>
+        </q-td>
+      </template>
+      <template #body-cell-target="props">
+        <q-td
+          :props="props"
+          class="cell-muted"
+        >
+          <template v-if="props.row.targetId">
+            {{ targetTypeLabel(props.row.targetType) }}
+            <span class="tk-caption">{{ props.row.targetId }}</span>
+          </template>
+          <span
+            v-else
+            class="tk-caption"
+          >—</span>
+        </q-td>
+      </template>
+      <template #body-cell-result="props">
+        <q-td :props="props">
+          <q-badge
+            outline
+            :color="resultColor(props.row.result)"
           >
-            {{ props.row.actorId || '系统' }}
-          </q-td>
-        </template>
-        <template #body-cell-action="props">
-          <q-td :props="props">
-            <div>{{ actionLabel(props.row.action) }}</div>
-            <div class="text-caption text-grey-6">
-              {{ props.row.action }}
-            </div>
-          </q-td>
-        </template>
-        <template #body-cell-target="props">
-          <q-td
-            :props="props"
-            class="text-grey-8"
+            {{ resultLabel(props.row.result) }}
+          </q-badge>
+          <div
+            v-if="props.row.reasonCode"
+            class="tk-caption q-mt-xs"
           >
-            <template v-if="props.row.targetId">
-              {{ targetTypeLabel(props.row.targetType) }}
-              <span class="text-caption text-grey-6">{{ props.row.targetId }}</span>
-            </template>
-            <span
-              v-else
-              class="text-grey-6"
-            >—</span>
-          </q-td>
-        </template>
-        <template #body-cell-result="props">
-          <q-td :props="props">
-            <q-badge
-              outline
-              :color="resultColor(props.row.result)"
-            >
-              {{ resultLabel(props.row.result) }}
-            </q-badge>
-            <div
-              v-if="props.row.reasonCode"
-              class="text-caption text-grey-6 q-mt-xs"
-            >
-              {{ reasonLabel(props.row.reasonCode) }}
-            </div>
-          </q-td>
-        </template>
-      </q-table>
-    </q-page>
-  </q-page-container>
+            {{ reasonLabel(props.row.reasonCode) }}
+          </div>
+        </q-td>
+      </template>
+      <template #no-data>
+        <pane-empty-state
+          icon="sym_o_history"
+          title="暂无审计记录"
+        />
+      </template>
+    </q-table>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -121,6 +115,7 @@ import { computed, ref } from 'vue'
 import type { QTableColumn } from 'quasar'
 import type { components } from 'src/api/generated/schema'
 import { identityClient } from 'src/utils/identity-client'
+import PaneEmptyState from 'src/components/PaneEmptyState.vue'
 
 type AuditEvent = components['schemas']['AuditEvent']
 
@@ -357,18 +352,12 @@ load()
 </script>
 
 <style scoped>
-.audit-page {
-  background: var(--tk-bg);
-}
-
 .page-subtitle {
   color: var(--tk-text-secondary);
-  font-size: 14px;
+  font-size: 13px;
 }
 
-.audit-table {
-  background: var(--tk-surface-white);
-  border-radius: var(--tk-radius);
-  border-color: var(--tk-border);
+.cell-muted {
+  color: var(--tk-text-secondary);
 }
 </style>

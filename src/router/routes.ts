@@ -54,6 +54,20 @@ const routes: RouteRecordRaw[] = [
       },
       authRoute,
       { path: '/oauth/consent', component: OAuthConsentPage, meta: { title: '连接智能体' } },
+      // The admin console shares this shell (compact rail + 56px TopBar); its
+      // section chrome and pages stay lazy so users never download them.
+      {
+        path: '/admin',
+        component: () => import('src/admin/layouts/AdminShell.vue'),
+        meta: { requiresAdmin: true },
+        children: [
+          { path: '', component: () => import('src/admin/pages/EmptyPage.vue'), meta: { title: '管理控制台' } },
+          { path: 'users', component: () => import('src/admin/pages/UsersPage.vue'), meta: { title: '用户' } },
+          { path: 'knowledge-bases', component: () => import('src/admin/pages/KnowledgeBasesPage.vue'), meta: { title: '知识库' } },
+          { path: 'models', component: () => import('src/admin/pages/ModelsPage.vue'), meta: { title: '模型配置' } },
+          { path: 'audit', component: () => import('src/admin/pages/AuditPage.vue'), meta: { title: '审计' } },
+        ],
+      },
       // Always leave this as last one,
       // but you can also remove it
       {
@@ -63,18 +77,6 @@ const routes: RouteRecordRaw[] = [
           title: '未找到页面',
         },
       },
-    ],
-  },
-  {
-    path: '/admin',
-    component: () => import('src/admin/layouts/MainLayout.vue'),
-    meta: { requiresAdmin: true },
-    children: [
-      { path: '', component: () => import('src/admin/pages/EmptyPage.vue'), meta: { title: '管理控制台' } },
-      { path: 'users', component: () => import('src/admin/pages/UsersPage.vue'), meta: { title: '用户' } },
-      { path: 'knowledge-bases', component: () => import('src/admin/pages/KnowledgeBasesPage.vue'), meta: { title: '知识库' } },
-      { path: 'models', component: () => import('src/admin/pages/ModelsPage.vue'), meta: { title: '模型配置' } },
-      { path: 'audit', component: () => import('src/admin/pages/AuditPage.vue'), meta: { title: '审计' } },
     ],
   },
 ]

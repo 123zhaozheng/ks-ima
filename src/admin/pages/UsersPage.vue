@@ -1,164 +1,167 @@
 <template>
-  <q-page-container>
-    <q-page p-4>
-      <div
-        flex
-        gap-2
-      >
-        <q-input
-          v-model="searchValue"
-          :debounce="200"
-          placeholder="搜索用户"
-          dense
-        >
-          <template #append>
-            <q-btn-dropdown
-              flat
-              dense
-              :label="searchFieldLabel"
-            >
-              <q-list>
-                <menu-item
-                  label="邮箱"
-                  @click="searchField = 'email'"
-                />
-                <menu-item
-                  label="名称"
-                  @click="searchField = 'name'"
-                />
-              </q-list>
-            </q-btn-dropdown>
-          </template>
-        </q-input>
-        <q-btn
-          v-if="canManageUsers"
-          icon="sym_o_add"
-          label="创建用户"
-          @click="createUser"
-          unelevated
-          bg-pri-c
-          text-on-pri-c
-          no-caps
-          ml-a
-          shrink-0
-        />
-      </div>
-      <q-banner
-        v-if="session.data?.user.platformRoles.includes('super_admin')"
+  <div>
+    <div class="admin-toolbar">
+      <q-input
+        v-model="searchValue"
+        :debounce="200"
+        placeholder="搜索用户"
+        outlined
         dense
-        mt-2
       >
-        超级管理员角色管理已启用。
-      </q-banner>
-      <q-banner
-        v-if="errorMessage"
-        bg-err-c
-        text-on-err-c
-        mt-2
-      >
-        {{ errorMessage }} <q-btn
-          icon="refresh"
-          flat
-          @click="refresh"
-        />
-      </q-banner>
-      <q-table
-        class="users-table"
-        ref="tableRef"
-        :rows
-        :columns
-        row-key="id"
-        v-model:pagination="pagination"
-        :loading
-        binary-state-sort
-        @request="onRequest"
-        :rows-per-page-options="[10, 20, 50, 100]"
-        flat
-        bg-sur-c-low
-        mt-4
-      >
-        <template #body-cell-actions="props">
-          <q-td
-            :props
-            text-on-sur-var
-          >
-            <template v-if="canManageUsers">
-              <q-btn
-                icon="sym_o_edit"
-                title="编辑信息"
-                flat
-                round
-                size="sm"
-                @click="editUser(props.row)"
-              />
-              <q-btn
-                icon="sym_o_more_vert"
-                title="操作"
-                flat
-                round
-                size="sm"
-              >
-                <q-menu>
-                  <q-list>
-                    <menu-item
-                      label="查看知识库"
-                      :to="`/knowledge-bases?ownerId=${props.row.id}`"
-                    />
-                    <menu-item
-                      label="重置密码"
-                      @click="resetPassword(props.row)"
-                    />
-                    <menu-item
-                      label="撤销会话"
-                      @click="revokeSessions(props.row)"
-                    />
-                    <menu-item
-                      v-if="props.row.isActive"
-                      label="停用用户"
-                      @click="banUser(props.row)"
-                    />
-                    <menu-item
-                      v-else
-                      label="恢复用户"
-                      @click="identityClient.restoreUser(props.row.id).then(refresh)"
-                    />
-                    <menu-item
-                      label="重置 TOTP"
-                      @click="resetTotp(props.row)"
-                    />
-                    <template v-if="session.data?.user.platformRoles.includes('super_admin')">
-                      <q-separator />
-                      <menu-item
-                        label="授予平台管理员"
-                        @click="identityClient.grantRole(props.row.id, 'platform_admin').then(refresh)"
-                      />
-                      <menu-item
-                        label="授予安全审计员"
-                        @click="identityClient.grantRole(props.row.id, 'security_auditor').then(refresh)"
-                      />
-                      <menu-item
-                        label="撤销平台管理员"
-                        @click="identityClient.revokeRole(props.row.id, 'platform_admin').then(refresh)"
-                      />
-                      <menu-item
-                        label="撤销安全审计员"
-                        @click="identityClient.revokeRole(props.row.id, 'security_auditor').then(refresh)"
-                      />
-                    </template>
-                    <menu-item
-                      label="删除用户"
-                      @click="deleteUser(props.row)"
-                      hover:text-err
-                    />
-                  </q-list>
-                </q-menu>
-              </q-btn>
-            </template>
-          </q-td>
+        <template #prepend>
+          <q-icon
+            name="sym_o_search"
+            size="18px"
+          />
         </template>
-      </q-table>
-    </q-page>
-  </q-page-container>
+        <template #append>
+          <q-btn-dropdown
+            flat
+            dense
+            :label="searchFieldLabel"
+          >
+            <q-list>
+              <menu-item
+                label="邮箱"
+                @click="searchField = 'email'"
+              />
+              <menu-item
+                label="名称"
+                @click="searchField = 'name'"
+              />
+            </q-list>
+          </q-btn-dropdown>
+        </template>
+      </q-input>
+      <q-btn
+        v-if="canManageUsers"
+        icon="sym_o_add"
+        label="创建用户"
+        @click="createUser"
+        unelevated
+        no-caps
+        class="tk-btn-primary"
+        ml-a
+        shrink-0
+      />
+    </div>
+    <div
+      v-if="session.data?.user.platformRoles.includes('super_admin')"
+      class="admin-banner"
+      mt-2
+    >
+      超级管理员角色管理已启用。
+    </div>
+    <div
+      v-if="errorMessage"
+      class="admin-banner admin-banner-error"
+      mt-2
+    >
+      {{ errorMessage }} <q-btn
+        icon="refresh"
+        flat
+        dense
+        @click="refresh"
+      />
+    </div>
+    <q-table
+      class="users-table"
+      ref="tableRef"
+      :rows
+      :columns
+      row-key="id"
+      v-model:pagination="pagination"
+      :loading
+      binary-state-sort
+      @request="onRequest"
+      :rows-per-page-options="[10, 20, 50, 100]"
+      flat
+      mt-4
+    >
+      <template #body-cell-actions="props">
+        <q-td :props>
+          <template v-if="canManageUsers">
+            <q-btn
+              icon="sym_o_edit"
+              title="编辑信息"
+              flat
+              round
+              size="sm"
+              @click="editUser(props.row)"
+            />
+            <q-btn
+              icon="sym_o_more_vert"
+              title="操作"
+              flat
+              round
+              size="sm"
+            >
+              <q-menu>
+                <q-list>
+                  <menu-item
+                    label="查看知识库"
+                    :to="`/knowledge-bases?ownerId=${props.row.id}`"
+                  />
+                  <menu-item
+                    label="重置密码"
+                    @click="resetPassword(props.row)"
+                  />
+                  <menu-item
+                    label="撤销会话"
+                    @click="revokeSessions(props.row)"
+                  />
+                  <menu-item
+                    v-if="props.row.isActive"
+                    label="停用用户"
+                    @click="banUser(props.row)"
+                  />
+                  <menu-item
+                    v-else
+                    label="恢复用户"
+                    @click="identityClient.restoreUser(props.row.id).then(refresh)"
+                  />
+                  <menu-item
+                    label="重置 TOTP"
+                    @click="resetTotp(props.row)"
+                  />
+                  <template v-if="session.data?.user.platformRoles.includes('super_admin')">
+                    <q-separator />
+                    <menu-item
+                      label="授予平台管理员"
+                      @click="identityClient.grantRole(props.row.id, 'platform_admin').then(refresh)"
+                    />
+                    <menu-item
+                      label="授予安全审计员"
+                      @click="identityClient.grantRole(props.row.id, 'security_auditor').then(refresh)"
+                    />
+                    <menu-item
+                      label="撤销平台管理员"
+                      @click="identityClient.revokeRole(props.row.id, 'platform_admin').then(refresh)"
+                    />
+                    <menu-item
+                      label="撤销安全审计员"
+                      @click="identityClient.revokeRole(props.row.id, 'security_auditor').then(refresh)"
+                    />
+                  </template>
+                  <menu-item
+                    label="删除用户"
+                    @click="deleteUser(props.row)"
+                    hover:text-err
+                  />
+                </q-list>
+              </q-menu>
+            </q-btn>
+          </template>
+        </q-td>
+      </template>
+      <template #no-data>
+        <pane-empty-state
+          icon="sym_o_group"
+          title="暂无用户"
+        />
+      </template>
+    </q-table>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -168,6 +171,7 @@ import { identityClient, session } from 'src/utils/identity-client'
 import { computed, onMounted, ref, watch } from 'vue'
 import UpdateUserDialog from '../components/UpdateUserDialog.vue'
 import MenuItem from 'src/components/MenuItem.vue'
+import PaneEmptyState from 'src/components/PaneEmptyState.vue'
 import BanUserDialog from '../components/BanUserDialog.vue'
 import CreateUserDialog from '../components/CreateUserDialog.vue'
 import type { components } from 'src/api/generated/schema'
@@ -309,10 +313,13 @@ function deleteUser({ id, displayName }: UserWithRole) {
 }
 </script>
 <style lang="scss">
-.users-table {
-  th:last-child,
-  td:last-child {
-    --at-apply: 'pos-sticky right-0 z-1 bg-sur-c-low';
-  }
+/* :deep — the cells render inside QTable, so scoped attributes never reach them. */
+.users-table :deep(th:last-child),
+.users-table :deep(td:last-child) {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background-color: var(--tk-surface-white);
+  color: var(--tk-text-secondary);
 }
 </style>

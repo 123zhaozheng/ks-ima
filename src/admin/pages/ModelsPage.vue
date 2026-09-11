@@ -1,522 +1,519 @@
 <template>
-  <q-page-container>
-    <q-page class="models-page q-pa-xl">
-      <div class="q-mb-lg">
-        <div class="text-h5 text-weight-medium">
-          模型配置
-        </div>
-        <div class="page-subtitle q-mt-xs">
-          集中管理系统使用的 AI 服务商与模型
-        </div>
-      </div>
+  <div>
+    <div class="page-subtitle q-mb-md">
+      集中管理系统使用的 AI 服务商与模型
+    </div>
 
-      <q-banner
-        v-if="error"
-        class="bg-red-1 text-negative q-mb-md error-banner"
-        rounded
+    <div
+      v-if="error"
+      class="admin-banner admin-banner-error q-mb-md"
+    >
+      {{ error }}
+      <q-btn
+        flat
+        dense
+        no-caps
+        label="重试"
+        @click="refresh"
+      />
+    </div>
+
+    <q-tabs
+      v-model="tab"
+      align="left"
+      no-caps
+      active-color="primary"
+      indicator-color="primary"
+      class="models-tabs"
+    >
+      <q-tab
+        name="services"
+        label="模型服务"
+      />
+      <q-tab
+        name="scenes"
+        label="场景配置"
+      />
+    </q-tabs>
+    <q-separator class="models-divider" />
+
+    <q-tab-panels
+      v-model="tab"
+      animated
+      style="background: transparent"
+    >
+      <!-- Tab 1：模型服务 -->
+      <q-tab-panel
+        name="services"
+        class="q-px-none"
       >
-        {{ error }}
-        <template #action>
+        <div class="admin-toolbar justify-end q-mb-md">
           <q-btn
+            class="tk-btn-ghost"
             flat
             no-caps
-            label="重试"
+            icon="sym_o_refresh"
+            label="刷新"
+            :loading="loading"
             @click="refresh"
           />
-        </template>
-      </q-banner>
+          <q-btn
+            v-if="canManage"
+            class="tk-btn-primary"
+            unelevated
+            no-caps
+            icon="sym_o_add"
+            label="添加服务商"
+            @click="openGatewayDialog(null)"
+          />
+        </div>
 
-      <q-tabs
-        v-model="tab"
-        align="left"
-        no-caps
-        active-color="primary"
-        indicator-color="primary"
-        class="text-grey-8"
-      >
-        <q-tab
-          name="services"
-          label="模型服务"
-        />
-        <q-tab
-          name="scenes"
-          label="场景配置"
-        />
-      </q-tabs>
-      <q-separator />
-
-      <q-tab-panels
-        v-model="tab"
-        animated
-        style="background: transparent"
-      >
-        <!-- Tab 1：模型服务 -->
-        <q-tab-panel
-          name="services"
-          class="q-px-none"
+        <div
+          v-if="gateways.length"
+          class="row q-col-gutter-md"
         >
-          <div class="row items-center justify-end q-mb-md q-gutter-sm">
-            <q-btn
-              flat
-              dense
-              no-caps
-              icon="sym_o_refresh"
-              label="刷新"
-              :loading="loading"
-              @click="refresh"
-            />
-            <q-btn
-              v-if="canManage"
-              color="primary"
-              unelevated
-              no-caps
-              icon="sym_o_add"
-              label="添加服务商"
-              @click="openGatewayDialog(null)"
-            />
-          </div>
-
           <div
-            v-if="gateways.length"
-            class="row q-col-gutter-md"
+            v-for="gateway in gateways"
+            :key="gateway.id"
+            class="col-12 col-md-6 col-lg-4"
           >
-            <div
-              v-for="gateway in gateways"
-              :key="gateway.id"
-              class="col-12 col-md-6 col-lg-4"
+            <q-card
+              flat
+              bordered
+              class="surface-card q-pa-md full-height"
             >
-              <q-card
-                flat
-                bordered
-                class="surface-card q-pa-md full-height"
-              >
-                <div class="row items-center no-wrap">
-                  <model-avatar
-                    :model="gateway.baseUrl || gateway.name"
-                    :size="32"
-                  />
-                  <div
-                    class="q-ml-sm column"
-                    style="min-width: 0"
-                  >
-                    <div class="text-subtitle1 text-weight-medium ellipsis">
-                      {{ gateway.name }}
-                    </div>
-                    <div class="text-caption text-grey-7 ellipsis">
-                      {{ maskedUrl(gateway.baseUrl) }}
-                    </div>
+              <div class="row items-center no-wrap">
+                <model-avatar
+                  :model="gateway.baseUrl || gateway.name"
+                  :size="32"
+                />
+                <div
+                  class="q-ml-sm column"
+                  style="min-width: 0"
+                >
+                  <div class="tk-card-title ellipsis">
+                    {{ gateway.name }}
                   </div>
-                  <q-space />
-                  <q-toggle
-                    :model-value="gateway.enabled"
-                    dense
-                    :disable="!canManage"
-                    @update:model-value="toggleGateway(gateway, $event)"
-                  />
+                  <div class="tk-caption ellipsis">
+                    {{ maskedUrl(gateway.baseUrl) }}
+                  </div>
                 </div>
-                <div class="row items-center q-gutter-sm q-mt-md">
-                  <q-btn
-                    color="primary"
-                    unelevated
-                    dense
-                    no-caps
-                    label="拉取模型"
-                    :disable="!canManage"
-                    @click="openDiscover(gateway)"
-                  />
-                  <q-btn
-                    flat
-                    dense
-                    no-caps
-                    label="健康检查"
-                    @click="health(gateway.id)"
-                  />
-                  <q-btn
-                    flat
-                    dense
-                    no-caps
-                    label="编辑"
-                    :disable="!canManage"
-                    @click="openGatewayDialog(gateway)"
-                  />
-                  <q-btn
-                    flat
-                    dense
-                    no-caps
-                    class="text-negative"
-                    label="删除"
-                    :disable="!canManage"
-                    @click="deleteGateway(gateway)"
-                  />
-                </div>
-              </q-card>
-            </div>
-          </div>
-          <q-card
-            v-else-if="!loading"
-            flat
-            bordered
-            class="surface-card q-pa-xl text-center text-grey-7"
-          >
-            还没有接入任何服务商。点击右上角「添加服务商」，填写 OpenAI 兼容的地址和密钥即可接入。
-          </q-card>
-
-          <div class="text-subtitle1 text-weight-medium q-mt-xl q-mb-sm">
-            模型清单
-          </div>
-          <div class="text-caption text-grey-7 q-mb-md">
-            在服务商卡片上点「拉取模型」可以一键导入；模型验证通过后才能启用。
-          </div>
-          <q-table
-            flat
-            bordered
-            separator="horizontal"
-            class="surface-card"
-            :rows="models"
-            :columns="modelColumns"
-            row-key="id"
-            :loading="loading"
-            no-data-label="还没有模型"
-            :rows-per-page-options="[10, 20, 50]"
-          >
-            <template #body-cell-name="props">
-              <q-td :props="props">
-                <div class="row items-center no-wrap">
-                  <model-avatar
-                    :model="props.row.remoteName || props.row.businessLabel"
-                    :size="24"
-                  />
-                  <span class="q-ml-sm">{{ props.row.businessLabel }}</span>
-                </div>
-              </q-td>
-            </template>
-            <template #body-cell-capability="props">
-              <q-td :props="props">
-                <q-badge
-                  outline
-                  :color="capabilityColor(props.row.capability)"
-                >
-                  {{ capabilityLabel(props.row.capability) }}
-                </q-badge>
-              </q-td>
-            </template>
-            <template #body-cell-remoteName="props">
-              <q-td
-                :props="props"
-                class="text-grey-8"
-              >
-                {{ props.row.remoteName || '受限' }}
-              </q-td>
-            </template>
-            <template #body-cell-status="props">
-              <q-td :props="props">
-                <q-badge
-                  outline
-                  :color="props.row.validated ? 'positive' : 'grey-7'"
-                >
-                  {{ props.row.validated ? '已验证' : '草稿' }}
-                </q-badge>
-              </q-td>
-            </template>
-            <template #body-cell-enabled="props">
-              <q-td :props="props">
+                <q-space />
                 <q-toggle
-                  :model-value="props.row.enabled"
+                  :model-value="gateway.enabled"
                   dense
-                  :disable="!props.row.validated || !canManage"
-                  @update:model-value="toggleModel(props.row, $event)"
-                />
-              </q-td>
-            </template>
-            <template #body-cell-actions="props">
-              <q-td :props="props">
-                <q-btn
-                  flat
-                  dense
-                  no-caps
-                  label="验证"
                   :disable="!canManage"
-                  @click="validateModel(props.row)"
+                  @update:model-value="toggleGateway(gateway, $event)"
                 />
+              </div>
+              <div class="row items-center q-gutter-sm q-mt-md">
                 <q-btn
-                  flat
-                  dense
-                  no-caps
-                  class="text-negative"
-                  label="删除"
-                  :disable="!canManage"
-                  @click="deleteModel(props.row)"
-                />
-              </q-td>
-            </template>
-          </q-table>
-        </q-tab-panel>
-
-        <!-- Tab 2：场景配置 -->
-        <q-tab-panel
-          name="scenes"
-          class="q-px-none"
-        >
-          <div class="text-caption text-grey-7 q-mb-md">
-            为每个场景选择要使用的模型。修改后点击对应行「保存」即可生效。
-          </div>
-          <q-table
-            flat
-            bordered
-            separator="horizontal"
-            class="surface-card"
-            :rows="SCENES"
-            :columns="sceneColumns"
-            row-key="id"
-            hide-bottom
-            :pagination="{ rowsPerPage: 0 }"
-          >
-            <template #body-cell-scene="props">
-              <q-td :props="props">
-                <div class="text-subtitle2 text-weight-medium">
-                  {{ props.row.name }}
-                </div>
-                <div class="text-caption text-grey-7">
-                  {{ props.row.desc }}
-                </div>
-              </q-td>
-            </template>
-            <template #body-cell-model="props">
-              <q-td :props="props">
-                <q-select
-                  :model-value="sceneState[props.row.id][sceneSlot(props.row.id)]"
-                  outlined
-                  dense
-                  emit-value
-                  map-options
-                  clearable
-                  :options="modelOptions(sceneCapability(props.row.id))"
-                  :disable="!canManage"
-                  style="min-width: 220px"
-                  class="scene-model-select"
-                  @update:model-value="(val: string | null) => setSceneModel(props.row.id, val)"
-                />
-              </q-td>
-            </template>
-            <template #body-cell-status="props">
-              <q-td :props="props">
-                <q-badge
-                  outline
-                  :color="sceneState[props.row.id][sceneSlot(props.row.id)] ? 'positive' : 'grey-6'"
-                >
-                  {{ sceneState[props.row.id][sceneSlot(props.row.id)] ? '已设' : '未设' }}
-                </q-badge>
-              </q-td>
-            </template>
-            <template #body-cell-actions="props">
-              <q-td :props="props">
-                <q-btn
-                  v-if="canManage"
-                  color="primary"
+                  class="tk-btn-primary"
                   unelevated
                   dense
                   no-caps
-                  label="保存"
-                  :loading="savingScene === props.row.id"
-                  :disable="savingScene !== null && savingScene !== props.row.id"
-                  @click="saveSceneConfig(props.row.id)"
+                  label="拉取模型"
+                  :disable="!canManage"
+                  @click="openDiscover(gateway)"
                 />
-              </q-td>
-            </template>
-          </q-table>
-        </q-tab-panel>
-      </q-tab-panels>
-
-      <!-- 添加/编辑服务商对话框 -->
-      <q-dialog v-model="gatewayDialog.show">
-        <q-card style="width: min(92vw, 560px)">
-          <q-card-section>
-            <div class="text-h6">
-              {{ gatewayDialog.editId ? '编辑服务商' : '添加服务商' }}
-            </div>
-            <div class="text-caption text-grey-7 q-mt-xs">
-              任何 OpenAI 兼容网关都可以接入，填写地址与密钥即可。
-            </div>
-          </q-card-section>
-          <q-card-section class="q-pt-none q-gutter-y-md">
-            <q-input
-              v-model="gatewayForm.name"
-              outlined
-              dense
-              label="名称"
-              placeholder="如：DeepSeek"
-            />
-            <q-input
-              v-model="gatewayForm.baseUrl"
-              outlined
-              dense
-              label="API 地址"
-              placeholder="如：https://api.deepseek.com/v1"
-            />
-            <q-input
-              v-if="!gatewayDialog.editId"
-              v-model="gatewayForm.secret"
-              outlined
-              dense
-              type="password"
-              label="API 密钥（仅显示一次）"
-            />
-            <div>
-              <q-toggle
-                v-model="gatewayForm.insecurePrivate"
-                dense
-                label="允许白名单内的内网 HTTP 地址"
-              />
-              <div class="text-caption text-grey-7 q-ml-xl">
-                仅在使用 HTTP（未加密）的内网地址时需要开启，HTTPS 地址无需此选项。
+                <q-btn
+                  class="tk-btn-ghost"
+                  flat
+                  dense
+                  no-caps
+                  label="健康检查"
+                  @click="health(gateway.id)"
+                />
+                <q-btn
+                  class="tk-btn-ghost"
+                  flat
+                  dense
+                  no-caps
+                  label="编辑"
+                  :disable="!canManage"
+                  @click="openGatewayDialog(gateway)"
+                />
+                <q-btn
+                  class="tk-btn-danger-ghost"
+                  flat
+                  dense
+                  no-caps
+                  label="删除"
+                  :disable="!canManage"
+                  @click="deleteGateway(gateway)"
+                />
               </div>
-            </div>
-          </q-card-section>
-          <q-card-actions
-            align="right"
-            class="q-pa-md"
-          >
-            <q-btn
-              flat
-              no-caps
-              label="取消"
-              @click="gatewayDialog.show = false"
-            />
-            <q-btn
-              color="primary"
-              unelevated
-              no-caps
-              :loading="gatewayDialog.saving"
-              :label="gatewayDialog.editId ? '保存' : '添加'"
-              @click="saveGateway"
-            />
-          </q-card-actions>
-        </q-card>
-      </q-dialog>
+            </q-card>
+          </div>
+        </div>
+        <pane-empty-state
+          v-else-if="!loading"
+          icon="sym_o_dns"
+          title="还没有接入任何服务商"
+          description="点击右上角「添加服务商」，填写 OpenAI 兼容的地址和密钥即可接入。"
+        />
 
-      <!-- 拉取模型对话框 -->
-      <q-dialog v-model="discoverDialog.show">
-        <q-card style="width: min(92vw, 640px)">
-          <q-card-section class="row items-center no-wrap">
-            <div class="text-h6">
-              拉取模型
-            </div>
-            <div
-              v-if="discoverDialog.gateway"
-              class="text-caption text-grey-7 q-ml-sm"
-            >
-              来自「{{ discoverDialog.gateway.name }}」
-            </div>
-          </q-card-section>
-          <q-separator />
-          <q-card-section
-            v-if="discoverDialog.loading"
-            class="row items-center q-gutter-sm text-grey-7"
-          >
-            <q-spinner
-              size="20px"
-              color="primary"
-            />
-            <span>正在拉取远端模型列表…</span>
-          </q-card-section>
-          <q-card-section
-            v-else-if="discoverDialog.error"
-            class="text-grey-7"
-          >
-            {{ discoverDialog.error }}
-          </q-card-section>
-          <q-card-section
-            v-else
-            class="scroll q-py-none"
-            style="max-height: 56vh"
-          >
-            <q-list separator>
-              <q-item
-                v-for="item in discoverDialog.items"
-                :key="item.name"
-                dense
-                class="q-px-sm"
-                :class="{ 'discover-item-exists': item.exists }"
+        <div class="section-title q-mt-xl q-mb-sm">
+          模型清单
+        </div>
+        <div class="tk-caption q-mt-xs q-mb-md">
+          在服务商卡片上点「拉取模型」可以一键导入；模型验证通过后才能启用。
+        </div>
+        <q-table
+          flat
+          bordered
+          separator="horizontal"
+          class="surface-card"
+          :rows="models"
+          :columns="modelColumns"
+          row-key="id"
+          :loading="loading"
+          :rows-per-page-options="[10, 20, 50]"
+        >
+          <template #body-cell-name="props">
+            <q-td :props="props">
+              <div class="row items-center no-wrap">
+                <model-avatar
+                  :model="props.row.remoteName || props.row.businessLabel"
+                  :size="24"
+                />
+                <span class="q-ml-sm">{{ props.row.businessLabel }}</span>
+              </div>
+            </q-td>
+          </template>
+          <template #body-cell-capability="props">
+            <q-td :props="props">
+              <q-badge
+                outline
+                :color="capabilityColor(props.row.capability)"
               >
-                <q-item-section side>
-                  <q-checkbox
-                    v-model="item.selected"
-                    dense
-                    :disable="item.exists"
-                  />
-                </q-item-section>
-                <q-item-section
-                  avatar
-                  class="q-pr-none"
-                >
-                  <model-avatar
-                    :model="item.name"
-                    :size="24"
-                  />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label class="text-body2">
-                    {{ item.name }}
-                    <q-badge
-                      v-if="item.exists"
-                      outline
-                      color="grey-7"
-                      class="q-ml-sm"
-                    >
-                      已导入
-                    </q-badge>
-                  </q-item-label>
-                  <q-item-label caption>
-                    <q-badge
-                      outline
-                      :color="capabilityColor(item.capability)"
-                    >
-                      {{ capabilityLabel(item.capability) }}
-                    </q-badge>
-                  </q-item-label>
-                </q-item-section>
-                <q-item-section
-                  v-if="item.capability === 'embedding'"
-                  side
-                >
-                  <q-input
-                    v-model.number="item.dimension"
-                    dense
-                    outlined
-                    type="number"
-                    label="维度"
-                    style="width: 110px"
-                    :disable="item.exists"
-                  />
-                </q-item-section>
-              </q-item>
-            </q-list>
-          </q-card-section>
-          <q-separator />
-          <q-card-actions
-            align="right"
-            class="q-pa-md"
+                {{ capabilityLabel(props.row.capability) }}
+              </q-badge>
+            </q-td>
+          </template>
+          <template #body-cell-remoteName="props">
+            <q-td
+              :props="props"
+              class="cell-muted"
+            >
+              {{ props.row.remoteName || '受限' }}
+            </q-td>
+          </template>
+          <template #body-cell-status="props">
+            <q-td :props="props">
+              <q-badge
+                outline
+                :color="props.row.validated ? 'positive' : 'grey-7'"
+              >
+                {{ props.row.validated ? '已验证' : '草稿' }}
+              </q-badge>
+            </q-td>
+          </template>
+          <template #body-cell-enabled="props">
+            <q-td :props="props">
+              <q-toggle
+                :model-value="props.row.enabled"
+                dense
+                :disable="!props.row.validated || !canManage"
+                @update:model-value="toggleModel(props.row, $event)"
+              />
+            </q-td>
+          </template>
+          <template #body-cell-actions="props">
+            <q-td :props="props">
+              <q-btn
+                class="tk-btn-ghost"
+                flat
+                dense
+                no-caps
+                label="验证"
+                :disable="!canManage"
+                @click="validateModel(props.row)"
+              />
+              <q-btn
+                class="tk-btn-danger-ghost"
+                flat
+                dense
+                no-caps
+                label="删除"
+                :disable="!canManage"
+                @click="deleteModel(props.row)"
+              />
+            </q-td>
+          </template>
+          <template #no-data>
+            <pane-empty-state
+              icon="sym_o_neurology"
+              title="还没有模型"
+            />
+          </template>
+        </q-table>
+      </q-tab-panel>
+
+      <!-- Tab 2：场景配置 -->
+      <q-tab-panel
+        name="scenes"
+        class="q-px-none"
+      >
+        <div class="tk-caption q-mb-md">
+          为每个场景选择要使用的模型。修改后点击对应行「保存」即可生效。
+        </div>
+        <q-table
+          flat
+          bordered
+          separator="horizontal"
+          class="surface-card"
+          :rows="SCENES"
+          :columns="sceneColumns"
+          row-key="id"
+          hide-bottom
+          :pagination="{ rowsPerPage: 0 }"
+        >
+          <template #body-cell-scene="props">
+            <q-td :props="props">
+              <div class="text-subtitle2 text-weight-medium">
+                {{ props.row.name }}
+              </div>
+              <div class="tk-caption">
+                {{ props.row.desc }}
+              </div>
+            </q-td>
+          </template>
+          <template #body-cell-model="props">
+            <q-td :props="props">
+              <q-select
+                :model-value="sceneState[props.row.id][sceneSlot(props.row.id)]"
+                outlined
+                dense
+                emit-value
+                map-options
+                clearable
+                :options="modelOptions(sceneCapability(props.row.id))"
+                :disable="!canManage"
+                style="min-width: 220px"
+                class="scene-model-select"
+                @update:model-value="(val: string | null) => setSceneModel(props.row.id, val)"
+              />
+            </q-td>
+          </template>
+          <template #body-cell-status="props">
+            <q-td :props="props">
+              <q-badge
+                outline
+                :color="sceneState[props.row.id][sceneSlot(props.row.id)] ? 'positive' : 'grey-6'"
+              >
+                {{ sceneState[props.row.id][sceneSlot(props.row.id)] ? '已设' : '未设' }}
+              </q-badge>
+            </q-td>
+          </template>
+          <template #body-cell-actions="props">
+            <q-td :props="props">
+              <q-btn
+                v-if="canManage"
+                class="tk-btn-primary"
+                unelevated
+                dense
+                no-caps
+                label="保存"
+                :loading="savingScene === props.row.id"
+                :disable="savingScene !== null && savingScene !== props.row.id"
+                @click="saveSceneConfig(props.row.id)"
+              />
+            </q-td>
+          </template>
+        </q-table>
+      </q-tab-panel>
+    </q-tab-panels>
+
+    <!-- 添加/编辑服务商对话框 -->
+    <q-dialog v-model="gatewayDialog.show">
+      <q-card style="width: min(92vw, 560px)">
+        <q-card-section>
+          <div class="text-h6">
+            {{ gatewayDialog.editId ? '编辑服务商' : '添加服务商' }}
+          </div>
+          <div class="tk-caption q-mt-xs">
+            任何 OpenAI 兼容网关都可以接入，填写地址与密钥即可。
+          </div>
+        </q-card-section>
+        <q-card-section class="q-pt-none q-gutter-y-md">
+          <q-input
+            v-model="gatewayForm.name"
+            outlined
+            dense
+            label="名称"
+            placeholder="如：DeepSeek"
+          />
+          <q-input
+            v-model="gatewayForm.baseUrl"
+            outlined
+            dense
+            label="API 地址"
+            placeholder="如：https://api.deepseek.com/v1"
+          />
+          <q-input
+            v-if="!gatewayDialog.editId"
+            v-model="gatewayForm.secret"
+            outlined
+            dense
+            type="password"
+            label="API 密钥（仅显示一次）"
+          />
+          <div>
+            <q-toggle
+              v-model="gatewayForm.insecurePrivate"
+              dense
+              label="允许白名单内的内网 HTTP 地址"
+            />
+            <div class="tk-caption q-ml-xl">
+              仅在使用 HTTP（未加密）的内网地址时需要开启，HTTPS 地址无需此选项。
+            </div>
+          </div>
+        </q-card-section>
+        <q-card-actions
+          align="right"
+          class="q-pa-md"
+        >
+          <q-btn
+            flat
+            no-caps
+            label="取消"
+            @click="gatewayDialog.show = false"
+          />
+          <q-btn
+            class="tk-btn-primary"
+            unelevated
+            no-caps
+            :loading="gatewayDialog.saving"
+            :label="gatewayDialog.editId ? '保存' : '添加'"
+            @click="saveGateway"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- 拉取模型对话框 -->
+    <q-dialog v-model="discoverDialog.show">
+      <q-card style="width: min(92vw, 640px)">
+        <q-card-section class="row items-center no-wrap">
+          <div class="text-h6">
+            拉取模型
+          </div>
+          <div
+            v-if="discoverDialog.gateway"
+            class="tk-caption q-ml-sm"
           >
-            <q-btn
-              flat
-              no-caps
-              label="取消"
-              @click="discoverDialog.show = false"
-            />
-            <q-btn
-              color="primary"
-              unelevated
-              no-caps
-              :loading="discoverDialog.importing"
-              :disable="!selectedDiscoverCount"
-              :label="`导入所选 (${selectedDiscoverCount})`"
-              @click="importSelected"
-            />
-          </q-card-actions>
-        </q-card>
-      </q-dialog>
-    </q-page>
-  </q-page-container>
+            来自「{{ discoverDialog.gateway.name }}」
+          </div>
+        </q-card-section>
+        <q-separator />
+        <q-card-section
+          v-if="discoverDialog.loading"
+          class="row items-center q-gutter-sm cell-muted"
+        >
+          <q-spinner
+            size="20px"
+            color="primary"
+          />
+          <span>正在拉取远端模型列表…</span>
+        </q-card-section>
+        <q-card-section
+          v-else-if="discoverDialog.error"
+          class="cell-muted"
+        >
+          {{ discoverDialog.error }}
+        </q-card-section>
+        <q-card-section
+          v-else
+          class="scroll q-py-none"
+          style="max-height: 56vh"
+        >
+          <q-list separator>
+            <q-item
+              v-for="item in discoverDialog.items"
+              :key="item.name"
+              dense
+              class="q-px-sm"
+              :class="{ 'discover-item-exists': item.exists }"
+            >
+              <q-item-section side>
+                <q-checkbox
+                  v-model="item.selected"
+                  dense
+                  :disable="item.exists"
+                />
+              </q-item-section>
+              <q-item-section
+                avatar
+                class="q-pr-none"
+              >
+                <model-avatar
+                  :model="item.name"
+                  :size="24"
+                />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label class="text-body2">
+                  {{ item.name }}
+                  <q-badge
+                    v-if="item.exists"
+                    outline
+                    color="grey-7"
+                    class="q-ml-sm"
+                  >
+                    已导入
+                  </q-badge>
+                </q-item-label>
+                <q-item-label caption>
+                  <q-badge
+                    outline
+                    :color="capabilityColor(item.capability)"
+                  >
+                    {{ capabilityLabel(item.capability) }}
+                  </q-badge>
+                </q-item-label>
+              </q-item-section>
+              <q-item-section
+                v-if="item.capability === 'embedding'"
+                side
+              >
+                <q-input
+                  v-model.number="item.dimension"
+                  dense
+                  outlined
+                  type="number"
+                  label="维度"
+                  style="width: 110px"
+                  :disable="item.exists"
+                />
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+        <q-separator />
+        <q-card-actions
+          align="right"
+          class="q-pa-md"
+        >
+          <q-btn
+            flat
+            no-caps
+            label="取消"
+            @click="discoverDialog.show = false"
+          />
+          <q-btn
+            class="tk-btn-primary"
+            unelevated
+            no-caps
+            :loading="discoverDialog.importing"
+            :disable="!selectedDiscoverCount"
+            :label="`导入所选 (${selectedDiscoverCount})`"
+            @click="importSelected"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -527,6 +524,7 @@ import type { components } from 'src/api/generated/schema'
 import { identityClient, session } from 'src/utils/identity-client'
 import { apiErrorCode, apiErrorMessage } from 'src/utils/api-error'
 import ModelAvatar from '../components/ModelAvatar.vue'
+import PaneEmptyState from 'src/components/PaneEmptyState.vue'
 import ReauthDialog from '../components/ReauthDialog.vue'
 import VerifyTotpDialog from 'src/components/VerifyTotpDialog.vue'
 import { CAPABILITY_LABELS, KNOWN_DIMENSIONS, guessCapability } from 'src/admin/model-catalog'
@@ -914,23 +912,40 @@ async function saveSceneConfig(id: Workflow) {
 </script>
 
 <style scoped>
-.models-page {
-  background: var(--tk-bg);
-}
-
 .page-subtitle {
   color: var(--tk-text-secondary);
-  font-size: 14px;
+  font-size: 13px;
+}
+
+.models-tabs {
+  color: var(--tk-text-secondary);
+}
+
+.models-tabs :deep(.q-tab) {
+  min-height: 40px;
+  padding: 0 var(--tk-space-3);
+  font-size: 13px;
+}
+
+.models-divider {
+  background-color: var(--tk-border-subtle);
+}
+
+.section-title {
+  margin: 0;
+  font-size: var(--tk-font-size-md);
+  font-weight: var(--tk-weight-semibold);
+  color: var(--tk-text);
+}
+
+.cell-muted {
+  color: var(--tk-text-secondary);
 }
 
 .surface-card {
   background: var(--tk-surface-white);
-  border-radius: var(--tk-radius);
-  border-color: var(--tk-border);
-}
-
-.error-banner {
-  border-radius: var(--tk-radius);
+  border-radius: var(--tk-radius-lg);
+  border-color: var(--tk-border-subtle);
 }
 
 .discover-item-exists {

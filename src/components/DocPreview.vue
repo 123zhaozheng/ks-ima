@@ -180,8 +180,21 @@
           />
         </template>
       </q-banner>
+      <div
+        v-if="document?.kind === 'file' && document.fileState === 'ready'"
+        class="kb-ingest-inline"
+      >
+        <span class="kb-ingest-ready">
+          <q-icon
+            name="sym_o_task_alt"
+            size="14px"
+          />
+          已就绪，可被检索
+        </span>
+        <span class="kb-ingest-version">版本 {{ document.currentContentVersion }}</span>
+      </div>
       <q-banner
-        v-if="document?.kind === 'file' && document.fileState"
+        v-else-if="document?.kind === 'file' && document.fileState"
         rounded
         class="kb-banner-info"
       >
@@ -269,7 +282,10 @@
           @click="abortReplacement"
         />
       </div>
-      <div class="text-caption text-on-sur-var">
+      <div
+        v-if="document.fileState !== 'ready'"
+        class="text-caption text-on-sur-var"
+      >
         版本 {{ document.currentContentVersion }}
       </div>
       <iframe
@@ -279,14 +295,52 @@
         :title="document.title"
       />
       <div
-        v-else-if="!query.isLoading.value"
+        v-else-if="previewFailure === 'error'"
         flex
         flex-1
         items-center
         justify-center
-        text-on-sur-var
       >
-        无法预览
+        <pane-empty-state
+          icon="sym_o_visibility_off"
+          title="预览加载失败"
+        >
+          <template #actions>
+            <q-btn
+              flat
+              no-caps
+              class="tk-btn-secondary"
+              icon="sym_o_refresh"
+              label="重试"
+              data-testid="doc-preview-retry"
+              @click="loadPreviewUrl"
+            />
+          </template>
+        </pane-empty-state>
+      </div>
+      <div
+        v-else-if="!previewLoading"
+        flex
+        flex-1
+        items-center
+        justify-center
+      >
+        <pane-empty-state
+          icon="sym_o_visibility_off"
+          title="暂不支持预览"
+          description="该文件已成功处理并可被检索，但当前格式无法在浏览器中预览。"
+        >
+          <template #actions>
+            <q-btn
+              flat
+              no-caps
+              class="tk-btn-secondary"
+              icon="sym_o_download"
+              label="下载文件"
+              @click="download"
+            />
+          </template>
+        </pane-empty-state>
       </div>
     </div>
     <div
@@ -371,6 +425,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Notify, useQuasar } from 'quasar'
+import PaneEmptyState from 'src/components/PaneEmptyState.vue'
 import { useFileVersions, useKnowledgeDocument, useKnowledgeIngestion, useKnowledgeMutations, useKnowledgeVersions } from 'src/composables/use-knowledge'
 import { knowledgeClient } from 'src/api/knowledge-client'
 import { IMAApiError } from 'src/api/ima-client'
@@ -414,6 +469,11 @@ const saving = ref(false)
 const showHistory = ref(false)
 const conflict = ref(false)
 const previewUrl = ref<string>()
+// Local substitute for the removed failure toast: 'unsupported' = the format
+// cannot render in a browser (PREVIEW_UNAVAILABLE), 'error' = transient,
+// retryable.
+const previewFailure = ref<'unsupported' | 'error'>()
+const previewLoading = ref(false)
 const replacementInput = ref<HTMLInputElement>()
 const replacementProgress = ref(0)
 const replacing = ref(false)
@@ -432,6 +492,7 @@ watch(() => props.documentId, () => {
   dirty.value = false
   conflict.value = false
   previewUrl.value = undefined
+  previewFailure.value = undefined
   mode.value = props.startInEdit ? 'edit' : 'read'
 }, { immediate: true })
 
@@ -498,11 +559,15 @@ async function download() {
 
 async function loadPreviewUrl() {
   if (!document.value) return
+  previewLoading.value = true
+  previewFailure.value = undefined
   try {
     previewUrl.value = (await knowledgeClient.preview(document.value.id)).url
   } catch (error) {
     previewUrl.value = undefined
-    Notify.create({ type: 'negative', message: apiErrorMessage(error, '无法预览') })
+    previewFailure.value = error instanceof IMAApiError && error.problem?.code === 'PREVIEW_UNAVAILABLE' ? 'unsupported' : 'error'
+  } finally {
+    previewLoading.value = false
   }
 }
 
@@ -605,7 +670,9 @@ function confirmDelete() {
 }
 
 .kb-banner-info {
-  background-color: var(--tk-surface);
+  border-radius: var(--tk-radius);
+  border: 1px solid var(--tk-border);
+  background-color: var(--tk-accent-soft);
   color: var(--tk-text-secondary);
 }
 
@@ -614,6 +681,27 @@ function confirmDelete() {
   align-items: center;
   gap: var(--tk-space-1);
   font-weight: var(--tk-weight-semibold);
+}
+
+/* Ready files replace the banner with a quiet inline status + version. */
+.kb-ingest-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--tk-space-3);
+}
+
+.kb-ingest-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tk-space-1);
+  font-size: 13px;
+  font-weight: var(--tk-weight-medium);
+  color: var(--tk-success);
+}
+
+.kb-ingest-version {
+  font-size: var(--tk-font-size-xs);
+  color: var(--tk-text-tertiary);
 }
 
 .doc-preview-iframe {

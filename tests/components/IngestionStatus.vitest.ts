@@ -109,8 +109,11 @@ describe('KnowledgeList ingestion status', () => {
     expect(wrapper.find('[title="存储迁移完成前，文件操作不可用"]').exists()).toBe(false)
     expect(wrapper.find('[name="sym_o_lock"]').exists()).toBe(false)
     expect(wrapper.find('[name="sym_o_pending"]').exists()).toBe(true)
-    expect(wrapper.find('[name="sym_o_task_alt"]').exists()).toBe(true)
     expect(wrapper.find('[name="sym_o_error"]').exists()).toBe(true)
+    // Ready files calm down to the green-dot badge instead of an icon.
+    const readyBadge = wrapper.findAll('.kb-row')[2]!.find('.tk-status-badge')
+    expect(readyBadge.classes()).toContain('tk-status-badge--success')
+    expect(readyBadge.find('.tk-status-badge-dot').exists()).toBe(true)
 
     // Pending files must remain deletable (regression: the old lock branch hid the menu).
     const rows = wrapper.findAll('.kb-row')

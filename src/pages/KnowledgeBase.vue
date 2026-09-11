@@ -98,6 +98,7 @@
       </div>
       <div class="kb-page-body">
         <aside
+          v-show="!(isNarrow && treeCollapsed)"
           class="kb-tree-pane"
           data-testid="kb-tree-pane"
         >
@@ -117,11 +118,43 @@
           <folder-tree ref="treeRef" />
         </aside>
         <section class="kb-list-pane">
-          <div class="kb-pane-header">
+          <div class="kb-pane-header kb-list-header">
             <q-btn
-              v-if="canWrite"
+              v-if="isNarrow"
               flat
               dense
+              round
+              icon="sym_o_menu"
+              title="文件夹"
+              aria-label="文件夹"
+              data-testid="kb-tree-toggle"
+              @click="treeCollapsed = !treeCollapsed"
+            />
+            <nav
+              class="kb-breadcrumb"
+              aria-label="所在位置"
+            >
+              <button
+                type="button"
+                class="kb-breadcrumb-root"
+                @click="goRoot"
+              >
+                全部资料
+              </button>
+              <template v-if="currentFolderTitle">
+                <q-icon
+                  name="sym_o_chevron_right"
+                  size="14px"
+                  class="kb-breadcrumb-sep"
+                />
+                <span class="kb-breadcrumb-current">{{ currentFolderTitle }}</span>
+              </template>
+            </nav>
+            <q-btn
+              v-if="canWrite"
+              unelevated
+              no-caps
+              class="tk-btn-secondary"
               icon="sym_o_note_add"
               label="新建笔记"
               :disable="!folderId"
@@ -130,8 +163,9 @@
             />
             <q-btn
               v-if="canWrite"
-              flat
-              dense
+              unelevated
+              no-caps
+              class="tk-btn-secondary"
               icon="sym_o_upload_file"
               label="上传"
               :disable="!folderId"
@@ -145,9 +179,15 @@
             :readonly="!canWrite"
           />
         </section>
+        <div
+          v-if="isNarrow && documentId && !previewCollapsed"
+          class="kb-preview-backdrop"
+          @click="previewCollapsed = true"
+        />
         <section
           v-if="!previewCollapsed"
           class="kb-preview-pane"
+          :class="{ 'kb-preview-drawer': isNarrow && documentId }"
           data-testid="kb-preview-pane"
         >
           <doc-preview
@@ -164,15 +204,12 @@
             flex-1
             items-center
             justify-center
-            gap-2
-            p-6
-            text-on-sur-var
+            min-h-0
           >
-            <q-icon
-              name="sym_o_visibility"
-              size="40px"
+            <pane-empty-state
+              icon="sym_o_visibility"
+              title="选择一篇文档以预览"
             />
-            <div>选择一篇文档以预览</div>
           </div>
         </section>
         <div
@@ -249,7 +286,7 @@
 
 <script setup lang="ts">
 import type { components } from 'src/api/generated/schema'
-import { computed, ref, useTemplateRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import { Notify, useQuasar } from 'quasar'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useRoute, useRouter } from 'vue-router'
@@ -257,6 +294,7 @@ import CreateNoteDialog from 'src/components/CreateNoteDialog.vue'
 import DocPreview from 'src/components/DocPreview.vue'
 import FolderTree from 'src/components/FolderTree.vue'
 import KnowledgeList from 'src/components/KnowledgeList.vue'
+import PaneEmptyState from 'src/components/PaneEmptyState.vue'
 import NewFolderDialog from 'src/components/NewFolderDialog.vue'
 import UploadDialog from 'src/components/UploadDialog.vue'
 import { useRequireLogin } from 'src/composables/require-login'
@@ -297,6 +335,31 @@ const documentId = computed(() => {
 })
 
 const treeRef = useTemplateRef<InstanceType<typeof FolderTree>>('treeRef')
+
+// Below 1000px the preview becomes an overlay drawer and the tree pane can
+// fold away behind the list header toggle.
+const narrowQuery = window.matchMedia('(max-width: 999px)')
+const isNarrow = ref(narrowQuery.matches)
+const treeCollapsed = ref(false)
+
+function onNarrowChange(event: MediaQueryListEvent) {
+  isNarrow.value = event.matches
+}
+
+narrowQuery.addEventListener('change', onNarrowChange)
+onBeforeUnmount(() => narrowQuery.removeEventListener('change', onNarrowChange))
+
+// The tree owns the folder map; read the current folder's title for the list
+// header breadcrumb (empty at the knowledge base root).
+const currentFolderTitle = computed(() => {
+  const id = folderId.value
+  if (!id || id === kbStore.id) return ''
+  return treeRef.value?.folderTitle(id) ?? ''
+})
+
+function goRoot() {
+  router.push('/kb')
+}
 // Only one KB dialog may be open at a time; they previously stacked.
 const activeDialog = ref<'folder' | 'note' | 'upload' | null>(null)
 const showCreateKb = ref(false)
@@ -386,14 +449,15 @@ function onDeleted() {
 }
 
 .kb-page-body {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
 }
 
 .kb-tree-pane {
-  width: 240px;
-  flex: 0 0 240px;
+  width: 232px;
+  flex: 0 0 232px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -415,6 +479,52 @@ function onDeleted() {
   color: var(--tk-text-secondary);
 }
 
+.kb-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--tk-space-1);
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.kb-breadcrumb-root {
+  padding: 0;
+  border: none;
+  font: inherit;
+  color: var(--tk-text-secondary);
+  background: none;
+  cursor: pointer;
+  border-radius: var(--tk-radius-sm);
+}
+
+.kb-breadcrumb-root:hover {
+  color: var(--tk-text);
+}
+
+.kb-breadcrumb-sep {
+  flex: none;
+  color: var(--tk-text-tertiary);
+}
+
+.kb-breadcrumb-current {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: var(--tk-weight-medium);
+  color: var(--tk-text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.kb-list-header .tk-btn-secondary {
+  min-height: 34px;
+  padding: 0 var(--tk-space-3);
+}
+
+.kb-list-header :deep(.tk-btn-secondary .q-icon) {
+  font-size: 16px;
+}
+
 .kb-list-pane {
   flex: 1 1 0;
   min-width: 320px;
@@ -422,16 +532,47 @@ function onDeleted() {
   flex-direction: column;
   min-height: 0;
   border-right: 1px solid var(--tk-border);
-  background-color: var(--tk-bg);
+  background-color: var(--tk-surface-white);
 }
 
 .kb-preview-pane {
-  flex: 1 1 0;
-  min-width: 380px;
+  flex: 0 0 clamp(380px, 32vw, 480px);
   display: flex;
   flex-direction: column;
   min-height: 0;
   background-color: var(--tk-bg);
+}
+
+/* Below 1000px the preview floats over the panes as a drawer. */
+.kb-preview-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  flex: 0 0 auto;
+  width: min(420px, 100%);
+  background-color: var(--tk-surface-white);
+  border-left: 1px solid var(--tk-border);
+  box-shadow: var(--tk-shadow-lg);
+  animation: kb-drawer-in var(--tk-dur-slow) var(--tk-ease-out);
+}
+
+.kb-preview-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background-color: rgba(0, 0, 0, 0.32);
+}
+
+@keyframes kb-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
 }
 
 .kb-preview-reopen {

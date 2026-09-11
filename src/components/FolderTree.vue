@@ -186,7 +186,10 @@ async function refresh(parentId?: string) {
   await loadChildren(target)
 }
 
-defineExpose({ refresh })
+defineExpose({
+  refresh,
+  folderTitle: (id: string) => folderMap.value[id]?.title ?? '',
+})
 
 watch(() => kbStore.id, id => {
   byParent.value = new Map()

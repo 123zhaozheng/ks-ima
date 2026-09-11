@@ -26,21 +26,31 @@
         :aria-label="item.title"
       >
         <q-item-section avatar>
-          <q-icon :name="item.kind === 'folder' ? 'sym_o_folder' : item.kind === 'note' ? 'sym_o_description' : 'sym_o_insert_drive_file'" />
+          <q-icon
+            :name="item.kind === 'folder' ? 'sym_o_folder' : item.kind === 'note' ? 'sym_o_description' : 'sym_o_insert_drive_file'"
+            size="18px"
+          />
         </q-item-section>
-        <q-item-section>
-          <q-item-label>{{ item.title }}</q-item-label>
+        <q-item-section min-w-0>
+          <q-item-label
+            class="kb-row-title"
+            text-ellipsis
+            whitespace-nowrap
+            overflow-hidden
+          >
+            {{ item.title }}
+          </q-item-label>
           <q-item-label
             v-if="item.kind === 'file'"
             caption
             class="kb-file-status"
-            :style="{ color: statusOf(item).color }"
           >
-            <q-icon
-              :name="statusOf(item).icon"
-              size="14px"
+            <status-badge
+              :tone="statusTone(item)"
+              :label="statusOf(item).label"
+              :dot="statusOf(item).tone === 'ready'"
+              :icon="statusOf(item).icon"
             />
-            {{ statusOf(item).label }}
           </q-item-label>
         </q-item-section>
         <q-item-section
@@ -80,6 +90,7 @@
       <q-item
         v-if="nextCursor"
         clickable
+        class="kb-load-more"
         @click="loadMore"
       >
         <q-item-section>加载更多</q-item-section>
@@ -128,6 +139,7 @@
 import type { components } from 'src/api/generated/schema'
 import { Notify, useQuasar } from 'quasar'
 import { computed, ref, watch } from 'vue'
+import StatusBadge from 'src/components/StatusBadge.vue'
 import { knowledgeClient } from 'src/api/knowledge-client'
 import { IMAApiError } from 'src/api/ima-client'
 import { useFolderContents, useKnowledgeMutations } from 'src/composables/use-knowledge'
@@ -162,6 +174,13 @@ function isSelected(item: ContentRow) {
 
 function statusOf(item: ContentRow) {
   return fileStateView(item.fileState)
+}
+
+// StatusBadge tone per fileStateView tone; ready calms down to the dot.
+const STATUS_TONES = { pending: 'warning', ready: 'success', failed: 'danger', unknown: 'muted' } as const
+
+function statusTone(item: ContentRow) {
+  return STATUS_TONES[statusOf(item).tone]
 }
 
 async function loadMore() {
@@ -212,12 +231,34 @@ function confirmDelete(item: ContentRow) {
 
 <style scoped>
 .kb-row {
-  min-height: 38px;
+  min-height: 48px;
   border-radius: var(--tk-radius);
 }
 
-.kb-row-active {
+.kb-row-title {
+  font-size: var(--tk-font-size-sm);
+  font-weight: var(--tk-weight-medium);
+}
+
+.kb-row:hover {
+  background-color: var(--tk-bg);
+}
+
+/* After the hover rule so a hovered selected row keeps the soft fill. */
+.kb-row.kb-row-active {
   background-color: var(--tk-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--tk-accent-soft-stronger);
+}
+
+.kb-load-more {
+  justify-content: center;
+  min-height: 40px;
+  font-size: 13px;
+  color: var(--tk-text-tertiary);
+}
+
+.kb-load-more .q-item__section {
+  align-items: center;
 }
 
 .kb-file-status {

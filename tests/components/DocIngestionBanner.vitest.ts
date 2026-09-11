@@ -70,6 +70,11 @@ function hasButton(wrapper: ReturnType<typeof mountPreview>, label: string) {
   return wrapper.findAll('button').some(button => button.text().includes(label))
 }
 
+// Ingestion actions live in the banner; the preview pane has its own Retry.
+function bannerHasButton(wrapper: ReturnType<typeof mountPreview>, label: string) {
+  return wrapper.findAll('.kb-banner-info button').some(button => button.text().includes(label))
+}
+
 describe('DocPreview ingestion banner', () => {
   beforeEach(() => {
     state.document = null
@@ -87,8 +92,8 @@ describe('DocPreview ingestion banner', () => {
     expect(text).not.toContain('embed')
     expect(text).not.toContain('running')
 
-    expect(hasButton(wrapper, '取消')).toBe(true)
-    expect(hasButton(wrapper, '重试')).toBe(false)
+    expect(bannerHasButton(wrapper, '取消')).toBe(true)
+    expect(bannerHasButton(wrapper, '重试')).toBe(false)
   })
 
   test('renders a Chinese failure state and exposes 重试', () => {
@@ -101,8 +106,8 @@ describe('DocPreview ingestion banner', () => {
     expect(text).toContain('切分 · 处理失败')
     expect(text).not.toContain('dead_letter')
 
-    expect(hasButton(wrapper, '重试')).toBe(true)
-    expect(hasButton(wrapper, '取消')).toBe(false)
+    expect(bannerHasButton(wrapper, '重试')).toBe(true)
+    expect(bannerHasButton(wrapper, '取消')).toBe(false)
   })
 
   test('reports a cancelled ingestion as 已取消 while offering 重试', () => {
@@ -113,8 +118,8 @@ describe('DocPreview ingestion banner', () => {
 
     expect(text).toContain('已取消')
     expect(text).not.toContain('处理失败')
-    expect(hasButton(wrapper, '重试')).toBe(true)
-    expect(hasButton(wrapper, '取消')).toBe(false)
+    expect(bannerHasButton(wrapper, '重试')).toBe(true)
+    expect(bannerHasButton(wrapper, '取消')).toBe(false)
   })
 
   test('reports a ready document as searchable without listing jobs', () => {
@@ -125,7 +130,9 @@ describe('DocPreview ingestion banner', () => {
 
     expect(text).toContain('已就绪，可被检索')
     expect(text).not.toContain('向量化')
+    // The banner (and with it the ingestion actions) is replaced by the
+    // compact inline status; the preview Retry button is a separate concern.
+    expect(wrapper.find('.kb-banner-info').exists()).toBe(false)
     expect(hasButton(wrapper, '取消')).toBe(false)
-    expect(hasButton(wrapper, '重试')).toBe(false)
   })
 })

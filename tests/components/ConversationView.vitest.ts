@@ -205,4 +205,73 @@ describe('ConversationView', () => {
     // Optimistic user bubble shows while the stream is in flight.
     expect(wrapper.text()).toContain('Follow up question')
   })
+
+  test('shows the pinned scope chip and echoes the scope on follow-up', async () => {
+    mocks.conversation.mockResolvedValue({
+      ...loadedDetail,
+      scope: { folderId: 'folder-1', title: 'Folder A' },
+    })
+    const wrapper = mountView()
+    await vi.waitFor(() => expect(wrapper.text()).toContain('What is the policy?'))
+    expect(wrapper.find('[data-testid="ask-scope-chip"]').text()).toContain('Folder A')
+
+    const textarea = wrapper.get('textarea')
+    await textarea.setValue('Scoped follow up')
+    await textarea.trigger('keydown', { key: 'Enter' })
+
+    await vi.waitFor(() => expect(mocks.ask).toHaveBeenCalledWith(
+      'kb-1',
+      { question: 'Scoped follow up', conversationId: 'conv-1', scope: { folderId: 'folder-1' } },
+      expect.any(AbortSignal),
+      expect.any(Function),
+    ))
+  })
+
+  test('renders the scoped knowledge-gap copy for a scoped conversation', async () => {
+    mocks.conversation.mockResolvedValue({
+      ...loadedDetail,
+      scope: { folderId: 'folder-1', title: 'Folder A' },
+      messages: [
+        message({ id: 'msg-u1', role: 'user', content: 'Scoped question', sequence: 1 }),
+        message({ id: 'msg-a1', role: 'assistant', status: 'knowledge_gap', content: '', sequence: 2 }),
+      ],
+    })
+    const wrapper = mountView()
+    await vi.waitFor(() => expect(wrapper.text()).toContain('该范围下未找到相关内容。'))
+  })
+
+  test('renders the default knowledge-gap copy for an unscoped conversation', async () => {
+    mocks.conversation.mockResolvedValue({
+      ...loadedDetail,
+      messages: [
+        message({ id: 'msg-u1', role: 'user', content: 'Question', sequence: 1 }),
+        message({ id: 'msg-a1', role: 'assistant', status: 'knowledge_gap', content: '', sequence: 2 }),
+      ],
+    })
+    const wrapper = mountView()
+    await vi.waitFor(() => expect(wrapper.text()).toContain('知识库中没有找到这个问题的答案。'))
+  })
+
+  test('retry echoes the pinned conversation scope', async () => {
+    mocks.conversation.mockResolvedValue({
+      ...loadedDetail,
+      scope: { folderId: 'folder-1', title: 'Folder A' },
+      messages: [
+        message({ id: 'msg-u1', role: 'user', content: 'Question', sequence: 1 }),
+        message({ id: 'msg-a1', role: 'assistant', status: 'failed', content: '', sequence: 2 }),
+      ],
+    })
+    const wrapper = mountView()
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="answer-retry"]').exists()).toBe(true))
+    await wrapper.find('[data-testid="answer-retry"]').trigger('click')
+    await vi.waitFor(() => expect(mocks.retry).toHaveBeenCalledWith(
+      'kb-1',
+      'conv-1',
+      'msg-u1',
+      1,
+      { folderId: 'folder-1' },
+      expect.any(AbortSignal),
+      expect.any(Function),
+    ))
+  })
 })

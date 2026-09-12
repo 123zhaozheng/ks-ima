@@ -2,6 +2,7 @@ import type { components } from 'src/api/generated/schema'
 import { IMAApiError, imaClient } from './ima-client'
 
 type AskRequest = components['schemas']['AskRequest']
+type AskScope = components['schemas']['AskScope']
 type Citation = components['schemas']['CitationResponse']
 type Conversation = components['schemas']['ConversationDetail']
 type ConversationPage = components['schemas']['ConversationPage']
@@ -72,5 +73,5 @@ export const groundedClient = {
   deleteConversation: (kbId: string, conversationId: string, expectedVersion: number) => imaClient.request<void>(`/api/v1/knowledge-bases/${path(kbId)}/conversations/${path(conversationId)}?expectedVersion=${path(expectedVersion)}`, { method: 'DELETE' }),
   citation: (kbId: string, messageId: string, ordinal: number, signal?: AbortSignal) => imaClient.request<Citation>(`/api/v1/knowledge-bases/${path(kbId)}/messages/${path(messageId)}/citations/${path(ordinal)}`, { signal }),
   ask: (kbId: string, request: AskRequest, signal: AbortSignal, onEvent: StreamHandler) => streamRequest(`/api/v1/knowledge-bases/${path(kbId)}/ask`, request, signal, onEvent)(),
-  retry: (kbId: string, conversationId: string, messageId: string, expectedVersion: number, signal: AbortSignal, onEvent: StreamHandler) => streamRequest(`/api/v1/knowledge-bases/${path(kbId)}/conversations/${path(conversationId)}/retry`, { messageId, expectedVersion }, signal, onEvent)(),
+  retry: (kbId: string, conversationId: string, messageId: string, expectedVersion: number, scope: AskScope | null | undefined, signal: AbortSignal, onEvent: StreamHandler) => streamRequest(`/api/v1/knowledge-bases/${path(kbId)}/conversations/${path(conversationId)}/retry`, { messageId, expectedVersion, ...(scope ? { scope } : {}) }, signal, onEvent)(),
 }

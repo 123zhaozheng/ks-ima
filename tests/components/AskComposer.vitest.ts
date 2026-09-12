@@ -1,7 +1,9 @@
 import { mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
+import type { Pinia } from 'pinia'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import AskComposer from 'src/components/AskComposer.vue'
+import { useAskContextStore } from 'src/stores/ask-context'
 
 /*
  * The scope picker is exercised through a stubbed FolderPickerList that emits
@@ -36,11 +38,12 @@ const stubs = {
 }
 
 function mountComposer(props: Record<string, unknown> = {}) {
-  const pinia = createPinia()
-  return mount(AskComposer, {
+  const pinia: Pinia = createPinia()
+  const wrapper = mount(AskComposer, {
     props,
     global: { plugins: [pinia], stubs },
   })
+  return { wrapper, pinia }
 }
 
 beforeEach(() => {
@@ -49,14 +52,14 @@ beforeEach(() => {
 
 describe('AskComposer', () => {
   test('defaults the scope chip to the whole knowledge base', () => {
-    const wrapper = mountComposer({ kbId: 'kb-1' })
+    const { wrapper } = mountComposer({ kbId: 'kb-1' })
     const chip = wrapper.find('[data-testid="ask-scope-chip"]')
     expect(chip.exists()).toBe(true)
     expect(chip.text()).toContain('整个知识库')
   })
 
   test('picks a folder scope from the picker and can return to the knowledge base', async () => {
-    const wrapper = mountComposer({ kbId: 'kb-1' })
+    const { wrapper } = mountComposer({ kbId: 'kb-1' })
     await wrapper.find('[data-testid="pick-folder-a"]').trigger('click')
     expect(wrapper.find('[data-testid="ask-scope-chip"]').text()).toContain('Folder A')
     await wrapper.find('[data-testid="pick-whole-kb"]').trigger('click')
@@ -64,7 +67,7 @@ describe('AskComposer', () => {
   })
 
   test('blocks sending in home mode without a selected knowledge base', async () => {
-    const wrapper = mountComposer({ kbId: '' })
+    const { wrapper } = mountComposer({ kbId: '' })
     // Without a knowledge base the scope control is hidden entirely.
     expect(wrapper.find('[data-testid="ask-scope-chip"]').exists()).toBe(false)
     const textarea = wrapper.get('textarea')
@@ -76,16 +79,16 @@ describe('AskComposer', () => {
   })
 
   test('submits trimmed text on Enter and clears the textarea', async () => {
-    const wrapper = mountComposer({ kbId: 'kb-1' })
+    const { wrapper } = mountComposer({ kbId: 'kb-1' })
     const textarea = wrapper.get('textarea')
     await textarea.setValue('  What is the policy?  ')
     await textarea.trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['What is the policy?']])
+    expect(wrapper.emitted('submit')).toEqual([['What is the policy?', null]])
     expect((textarea.element as HTMLTextAreaElement).value).toBe('')
   })
 
   test('Shift+Enter keeps the newline, Ctrl+Enter also submits', async () => {
-    const wrapper = mountComposer({ kbId: 'kb-1' })
+    const { wrapper } = mountComposer({ kbId: 'kb-1' })
     const textarea = wrapper.get('textarea')
     await textarea.setValue('line one')
     await textarea.trigger('keydown', { key: 'Enter', shiftKey: true })
@@ -95,10 +98,44 @@ describe('AskComposer', () => {
   })
 
   test('conversation mode can send without a knowledge base prop', async () => {
-    const wrapper = mountComposer({ mode: 'conversation' })
+    const { wrapper } = mountComposer({ mode: 'conversation' })
     const textarea = wrapper.get('textarea')
     await textarea.setValue('Follow up')
     await textarea.trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['Follow up']])
+    expect(wrapper.emitted('submit')).toEqual([['Follow up', null]])
+  })
+
+  test('emits the picked folder scope with the question', async () => {
+    const { wrapper } = mountComposer({ kbId: 'kb-1' })
+    await wrapper.find('[data-testid="pick-folder-a"]').trigger('click')
+    const textarea = wrapper.get('textarea')
+    await textarea.setValue('Scoped question')
+    await textarea.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('submit')).toEqual([['Scoped question', { folderId: 'folder-a' }]])
+  })
+
+  test('emits the one-shot document scope from the ask-context store', async () => {
+    const { wrapper, pinia } = mountComposer({ kbId: 'kb-1' })
+    const askContext = useAskContextStore(pinia)
+    askContext.askAboutDocument('doc-9', 'Doc 9')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="ask-scope-chip"]').text()).toContain('Doc 9')
+    const textarea = wrapper.get('textarea')
+    await textarea.setValue('About this document')
+    await textarea.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('submit')).toEqual([['About this document', { documentId: 'doc-9' }]])
+    expect(askContext.hasDocumentScope).toBe(false)
+  })
+
+  test('conversation mode shows the pinned scope chip and echoes it on submit', async () => {
+    const { wrapper } = mountComposer({
+      mode: 'conversation',
+      scope: { folderId: 'folder-1', title: 'Folder A' },
+    })
+    expect(wrapper.find('[data-testid="ask-scope-chip"]').text()).toContain('Folder A')
+    const textarea = wrapper.get('textarea')
+    await textarea.setValue('Follow up in scope')
+    await textarea.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('submit')).toEqual([['Follow up in scope', { folderId: 'folder-1' }]])
   })
 })

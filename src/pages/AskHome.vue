@@ -138,6 +138,7 @@ import { computed, inject, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Notify, useQuasar } from 'quasar'
 import { useQueryClient } from '@tanstack/vue-query'
+import type { components } from 'src/api/generated/schema'
 import AskComposer from 'src/components/AskComposer.vue'
 import { groundedKey, useGroundedKnowledge } from 'src/composables/use-grounded-knowledge'
 import { useRequireLogin } from 'src/composables/require-login'
@@ -209,7 +210,7 @@ function joinWithLink() {
   })
 }
 
-async function onSubmit(question: string) {
+async function onSubmit(question: string, scope: components['schemas']['AskScope'] | null) {
   if (asking.value) return
   // Asking requires a selected knowledge base; the composer blocks send
   // without one, and we guard again here.
@@ -223,7 +224,7 @@ async function onSubmit(question: string) {
     router.push(`/ask/${id}`)
   }, { immediate: true })
   try {
-    await grounded.ask(question)
+    await grounded.ask(question, scope)
   } catch (error) {
     Notify.create({ type: 'negative', message: apiErrorMessage(error, '提问失败') })
   } finally {

@@ -199,12 +199,54 @@
             "minLength": 1,
             "title": "Question",
             "type": "string"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AskScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "question"
         ],
         "title": "AskRequest",
+        "type": "object"
+      },
+      "AskScope": {
+        "additionalProperties": false,
+        "description": "Optional retrieval scope for grounded Ask: one folder subtree or one document.",
+        "properties": {
+          "documentId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documentid"
+          },
+          "folderId": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folderid"
+          }
+        },
+        "title": "AskScope",
         "type": "object"
       },
       "AuditEvent": {
@@ -980,6 +1022,16 @@
             "title": "Messages",
             "type": "array"
           },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -1093,6 +1145,16 @@
             "title": "Lifecycle",
             "type": "string"
           },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -1132,6 +1194,16 @@
             "format": "uuid",
             "title": "Messageid",
             "type": "string"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AskScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1139,6 +1211,48 @@
           "expectedVersion"
         ],
         "title": "ConversationRetryRequest",
+        "type": "object"
+      },
+      "ConversationScope": {
+        "additionalProperties": false,
+        "description": "The scope pinned on a conversation; title is resolved at read time.",
+        "properties": {
+          "documentId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documentid"
+          },
+          "folderId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folderid"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ConversationScope",
         "type": "object"
       },
       "CreateUserRequest": {
@@ -10490,6 +10604,23 @@
                 }
               ],
               "title": "Folderid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "documentId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Documentid"
             }
           }
         ],

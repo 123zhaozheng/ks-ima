@@ -7,6 +7,8 @@ import { session } from 'src/utils/identity-client'
 
 type Citation = components['schemas']['CitationResponse']
 type Conversation = components['schemas']['ConversationDetail']
+type ConversationScope = components['schemas']['ConversationScope']
+type AskScope = components['schemas']['AskScope']
 type SearchMode = 'keyword' | 'vector' | 'hybrid'
 
 export type GroundedKnowledge = ReturnType<typeof useGroundedKnowledge>
@@ -25,7 +27,19 @@ export function useGroundedKnowledge(kbId: () => string | null) {
   const status = ref<'idle' | 'streaming' | 'completed' | 'knowledge_gap' | 'failed' | 'cancelled'>('idle')
   const conversationId = ref<string | null>(null)
   const messageId = ref<string | null>(null)
+  // Scope of the in-flight stream, for rendering scoped states before the
+  // conversation detail reloads.
+  const streamScope = ref<ConversationScope | null>(null)
   const kb = computed(kbId)
+
+  // The server pins the scope on the conversation; strip the read-time title
+  // before echoing it back in ask/retry request bodies.
+  function requestScope(scope: ConversationScope | AskScope | null | undefined): AskScope | undefined {
+    if (!scope) return undefined
+    if (scope.folderId) return { folderId: scope.folderId }
+    if (scope.documentId) return { documentId: scope.documentId }
+    return undefined
+  }
 
   // User-level history: one list across every knowledge base; each item carries
   // the knowledge base it belongs to.
@@ -90,14 +104,17 @@ export function useGroundedKnowledge(kbId: () => string | null) {
     }
   }
 
-  async function ask(question: string) {
+  async function ask(question: string, scope?: ConversationScope | AskScope | null) {
     if (!kb.value) return
-    await stream(signal => groundedClient.ask(kb.value!, { question, conversationId: conversationId.value }, signal, applyEvent))
+    streamScope.value = requestScope(scope) ?? (conversationId.value ? (conversation.data.value?.scope ?? null) : null)
+    await stream(signal => groundedClient.ask(kb.value!, { question, conversationId: conversationId.value, scope: requestScope(scope) }, signal, applyEvent))
   }
 
   async function retry(message: Conversation['messages'][number]) {
     if (!conversationKbId.value || !conversationId.value || message.role !== 'user') return
-    await stream(signal => groundedClient.retry(conversationKbId.value!, conversationId.value!, message.id, message.version, signal, applyEvent))
+    const scope = conversation.data.value?.scope ?? null
+    streamScope.value = scope
+    await stream(signal => groundedClient.retry(conversationKbId.value!, conversationId.value!, message.id, message.version, requestScope(scope), signal, applyEvent))
   }
 
   async function search(query: string, mode: SearchMode, signal?: AbortSignal) {
@@ -132,6 +149,7 @@ export function useGroundedKnowledge(kbId: () => string | null) {
     }
     conversationId.value = null
     messageId.value = null
+    streamScope.value = null
   }
 
   watch(kb, (next, previous) => {
@@ -139,5 +157,5 @@ export function useGroundedKnowledge(kbId: () => string | null) {
   })
 
   onScopeDispose(cancel)
-  return { answer, archive, ask, cancel, citations, conversation, conversationId, conversationKbId, conversations, messageId, remove, rename, resetForKbSwitch, retry, search, status }
+  return { answer, archive, ask, cancel, citations, conversation, conversationId, conversationKbId, conversations, messageId, remove, rename, resetForKbSwitch, retry, search, status, streamScope }
 }

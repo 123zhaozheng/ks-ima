@@ -99,7 +99,7 @@
                   class="cv-gap"
                 >
                   <q-icon name="sym_o_search_off" />
-                  <span>知识库中没有找到这个问题的答案。</span>
+                  <span>{{ gapText }}</span>
                 </div>
                 <div
                   v-else-if="message.status === 'failed' || message.status === 'cancelled'"
@@ -186,7 +186,7 @@
                 class="cv-gap"
               >
                 <q-icon name="sym_o_search_off" />
-                <span>知识库中没有找到这个问题的答案。</span>
+                <span>{{ gapText }}</span>
               </div>
               <div
                 v-else-if="liveStatus === 'failed' || liveStatus === 'cancelled'"
@@ -210,6 +210,7 @@
           <ask-composer
             mode="conversation"
             :busy="streaming"
+            :scope="conversationScope"
             placeholder="在这个对话中继续追问"
             @submit="followUp"
             @stop="grounded.cancel()"
@@ -280,6 +281,14 @@ const query = grounded.conversation
 const messages = computed(() => query.data.value?.messages ?? [])
 const title = computed(() => query.data.value?.title ?? '提问')
 
+// The scope pinned at conversation creation: follow-ups stay in it, and the
+// knowledge-gap copy reflects it. The stream's own scope covers the window
+// before the detail reloads.
+const conversationScope = computed(() => query.data.value?.scope ?? null)
+const gapText = computed(() => (conversationScope.value ?? grounded.streamScope.value)
+  ? '该范围下未找到相关内容。'
+  : '知识库中没有找到这个问题的答案。')
+
 // The unified TopBar shows the live conversation subject; clear the override
 // when this page unmounts so other pages fall back to their route-meta title.
 watchEffect(() => { topbarTitleOverride.value = title.value })
@@ -332,10 +341,10 @@ watch(messages, value => {
   }
 }, { immediate: true })
 
-async function followUp(question: string) {
+async function followUp(question: string, scope: components['schemas']['AskScope'] | null) {
   pendingQuestion.value = question
   try {
-    await grounded.ask(question)
+    await grounded.ask(question, scope)
   } catch (error) {
     Notify.create({ type: 'negative', message: apiErrorMessage(error, '提问失败') })
   }

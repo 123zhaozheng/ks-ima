@@ -2024,6 +2024,17 @@ export interface components {
             conversationId?: string | null;
             /** Question */
             question: string;
+            scope?: components["schemas"]["AskScope"] | null;
+        };
+        /**
+         * AskScope
+         * @description Optional retrieval scope for grounded Ask: one folder subtree or one document.
+         */
+        AskScope: {
+            /** Documentid */
+            documentId?: string | null;
+            /** Folderid */
+            folderId?: string | null;
         };
         /** AuditEvent */
         AuditEvent: {
@@ -2344,6 +2355,7 @@ export interface components {
             lifecycle: "active" | "archived";
             /** Messages */
             messages: components["schemas"]["MessageResponse"][];
+            scope?: components["schemas"]["ConversationScope"] | null;
             /** Title */
             title: string;
             /**
@@ -2389,6 +2401,7 @@ export interface components {
              * @enum {string}
              */
             lifecycle: "active" | "archived";
+            scope?: components["schemas"]["ConversationScope"] | null;
             /** Title */
             title: string;
             /**
@@ -2408,6 +2421,19 @@ export interface components {
              * Format: uuid
              */
             messageId: string;
+            scope?: components["schemas"]["AskScope"] | null;
+        };
+        /**
+         * ConversationScope
+         * @description The scope pinned on a conversation; title is resolved at read time.
+         */
+        ConversationScope: {
+            /** Documentid */
+            documentId?: string | null;
+            /** Folderid */
+            folderId?: string | null;
+            /** Title */
+            title?: string | null;
         };
         /** CreateUserRequest */
         CreateUserRequest: {
@@ -7574,6 +7600,7 @@ export interface operations {
                 topK?: number;
                 threshold?: number;
                 folderId?: string | null;
+                documentId?: string | null;
             };
             header?: never;
             path: {

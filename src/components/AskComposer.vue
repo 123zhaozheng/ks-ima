@@ -43,12 +43,25 @@
           <q-menu v-model="scopeMenuOpen">
             <folder-picker-list
               :kb-id="kbId"
-              :selected-id="scope?.id ?? null"
+              :selected-id="folderScope?.id ?? null"
               @select="pickScope"
             />
           </q-menu>
         </q-btn>
       </template>
+      <!-- Conversation scope is pinned by the server at creation; the chip is
+           display-only so follow-ups visibly stay in scope. -->
+      <q-chip
+        v-else-if="mode === 'conversation' && scope"
+        dense
+        color="primary"
+        text-color="white"
+        class="ask-composer-scope"
+        data-testid="ask-scope-chip"
+        title="本对话限定在此范围提问"
+      >
+        {{ scope.title || '限定范围' }}
+      </q-chip>
       <!-- Model picker slot: stays empty until a gateway can be configured. -->
       <slot name="model" />
       <q-space />
@@ -76,51 +89,69 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { QInput } from 'quasar'
+import type { components } from 'src/api/generated/schema'
 import FolderPickerList from 'src/components/FolderPickerList.vue'
 import type { PickedFolder } from 'src/components/folder-picker-list'
 import { useAskContextStore } from 'src/stores/ask-context'
+
+type ConversationScope = components['schemas']['ConversationScope']
+type AskScope = components['schemas']['AskScope']
 
 const props = withDefaults(defineProps<{
   mode?: 'home' | 'conversation'
   busy?: boolean
   kbId?: string
   placeholder?: string
+  scope?: ConversationScope | null
 }>(), {
   mode: 'home',
   busy: false,
   kbId: '',
   placeholder: undefined,
+  scope: null,
 })
 
 const emit = defineEmits<{
-  submit: [question: string]
+  submit: [question: string, scope: AskScope | null]
   stop: []
 }>()
 
 const askContext = useAskContextStore()
 
 const question = ref('')
-const scope = ref<PickedFolder | null>(null)
+const folderScope = ref<PickedFolder | null>(null)
 const scopeMenuOpen = ref(false)
 const inputRef = ref<InstanceType<typeof QInput>>()
 
 const placeholderText = computed(() => props.placeholder ?? '询问关于你知识库的任何问题')
-const scopeLabel = computed(() => scope.value?.title ?? '整个知识库')
+const scopeLabel = computed(() => folderScope.value?.title ?? '整个知识库')
 // A question without a knowledge base can never be answered; block the submit.
 const canSend = computed(() => Boolean(question.value.trim()) && !props.busy && (props.mode === 'conversation' || Boolean(props.kbId)))
 
 function pickScope(folder: PickedFolder | null) {
-  scope.value = folder
+  folderScope.value = folder
   scopeMenuOpen.value = false
+}
+
+function submitScope(): AskScope | null {
+  // Conversation scope is pinned server-side; echo it for the mismatch guard.
+  if (props.mode === 'conversation') {
+    if (props.scope?.folderId) return { folderId: props.scope.folderId }
+    if (props.scope?.documentId) return { documentId: props.scope.documentId }
+    return null
+  }
+  if (askContext.hasDocumentScope && askContext.documentId) return { documentId: askContext.documentId }
+  return folderScope.value ? { folderId: folderScope.value.id } : null
 }
 
 function send() {
   if (!canSend.value) return
   const text = question.value.trim()
   question.value = ''
+  const scope = submitScope()
   // Document prefill from the knowledge pane is a one-shot scope hint.
   if (askContext.hasDocumentScope) askContext.clearDocumentScope()
-  emit('submit', text)
+  emit('submit', text, scope)
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -140,7 +171,7 @@ function focus() {
   inputRef.value?.focus?.()
 }
 
-defineExpose({ focus, scope, setText })
+defineExpose({ focus, scope: folderScope, setText })
 </script>
 
 <style scoped>

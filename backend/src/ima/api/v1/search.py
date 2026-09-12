@@ -20,13 +20,22 @@ from ima.api.v1.search_contracts import (
     SearchResponse,
     VectorIndexResponse,
 )
-from ima.application.search import SearchService
+from ima.api.v1.search_contracts import (
+    AskScope as AskScopeContract,
+)
+from ima.application.search import AskScope, SearchService
 
 router = APIRouter(tags=["search"])
 
 
 def service(request: Request) -> SearchService:
     return cast(SearchService, request.app.state.search_service)
+
+
+def request_scope(scope: AskScopeContract | None) -> AskScope | None:
+    if scope is None:
+        return None
+    return AskScope(folder_id=scope.folder_id, document_id=scope.document_id)
 
 
 @router.get(
@@ -43,6 +52,7 @@ async def search(
     top_k: Annotated[int, Query(alias="topK", ge=1, le=50)] = 8,
     threshold: Annotated[float, Query(ge=0, le=1)] = 0,
     folder_id: Annotated[str | None, Query(alias="folderId", max_length=32)] = None,
+    document_id: Annotated[UUID | None, Query(alias="documentId")] = None,
 ) -> dict[str, object]:
     return await service(request).search(
         current[1].id,
@@ -52,6 +62,7 @@ async def search(
         top_k=top_k,
         threshold=threshold,
         folder_id=folder_id,
+        document_id=document_id,
     )
 
 
@@ -141,7 +152,12 @@ async def retry_conversation(
     session, actor = current
     check_csrf(request, session)
     stream = await service(request).retry(
-        actor.id, kb_id, conversation_id, payload.message_id, payload.expected_version
+        actor.id,
+        kb_id,
+        conversation_id,
+        payload.message_id,
+        payload.expected_version,
+        request_scope(payload.scope),
     )
     return StreamingResponse(
         stream,
@@ -156,7 +172,9 @@ async def ask(
 ) -> StreamingResponse:
     session, actor = current
     check_csrf(request, session)
-    stream = await service(request).ask(actor.id, kb_id, payload.question, payload.conversation_id)
+    stream = await service(request).ask(
+        actor.id, kb_id, payload.question, payload.conversation_id, request_scope(payload.scope)
+    )
     return StreamingResponse(
         stream,
         media_type="text/event-stream",

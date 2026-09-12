@@ -37,6 +37,14 @@ class SearchError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class AskScope:
+    """Retrieval scope for grounded Ask: one folder subtree or one document."""
+
+    folder_id: str | None = None
+    document_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class BoundedAskResult:
     conversation_id: UUID
     message_id: UUID
@@ -47,6 +55,11 @@ class BoundedAskResult:
 
 def now() -> datetime:
     return datetime.now(UTC)
+
+
+def _iso(value: object) -> object:
+    """ISO 8601 for datetimes inside SSE payloads; anything else passes through."""
+    return value.isoformat() if isinstance(value, datetime) else value
 
 
 def sse(event: str, sequence: int, payload: dict[str, object]) -> bytes:
@@ -395,6 +408,7 @@ class SearchService:
         kb_id: str,
         query: str,
         folder_id: str | None,
+        document_id: UUID | None,
         limit: int,
     ) -> list[dict[str, Any]]:
         rows = (
@@ -405,12 +419,16 @@ class SearchService:
           FROM ima.document_chunks c JOIN ima.documents d ON d.id=c.document_id
           WHERE c.kb_id=:kb AND d.kb_id=:kb AND d.lifecycle='active'
             AND c.version=COALESCE(d.current_version,c.version) AND c.search_vector @@ websearch_to_tsquery('ima.mixed', :query)
-            AND (CAST(:folder AS varchar(32)) IS NULL OR d.folder_id=CAST(:folder AS varchar(32)))
+            AND (CAST(:folder AS varchar(32)) IS NULL OR d.folder_id IN (
+              SELECT descendant_id FROM ima.folder_closure
+              WHERE kb_id=:kb AND ancestor_id=CAST(:folder AS varchar(32))))
+            AND (CAST(:document AS uuid) IS NULL OR c.document_id=CAST(:document AS uuid))
           ORDER BY score DESC,d.id,c.version,c.generation,c.ordinal LIMIT :limit"""),
                     {
                         "query": query,
                         "kb": kb_id,
                         "folder": folder_id,
+                        "document": document_id,
                         "limit": limit,
                     },
                 )
@@ -427,6 +445,7 @@ class SearchService:
         query_vector: tuple[float, ...],
         target: dict[str, Any],
         folder_id: str | None,
+        document_id: UUID | None,
         limit: int,
     ) -> list[dict[str, Any]]:
         dimension = int(target["embedding_dimension"])
@@ -436,7 +455,10 @@ class SearchService:
           FROM ima.document_chunks c JOIN ima.documents d ON d.id=c.document_id
           WHERE c.kb_id=:kb AND d.kb_id=:kb AND d.lifecycle='active'
             AND c.version=COALESCE(d.current_version,c.version) AND c.embedding_status='ready' AND c.model_id=:model AND c.model_version=:version AND c.embedding_dimension=:dimension
-            AND (CAST(:folder AS varchar(32)) IS NULL OR d.folder_id=CAST(:folder AS varchar(32)))
+            AND (CAST(:folder AS varchar(32)) IS NULL OR d.folder_id IN (
+              SELECT descendant_id FROM ima.folder_closure
+              WHERE kb_id=:kb AND ancestor_id=CAST(:folder AS varchar(32))))
+            AND (CAST(:document AS uuid) IS NULL OR c.document_id=CAST(:document AS uuid))
           ORDER BY c.embedding::vector({dimension}) <=> CAST(:vector AS vector({dimension})),d.id,c.version,c.generation,c.ordinal LIMIT :limit"""
         rows = (
             (
@@ -449,6 +471,7 @@ class SearchService:
                         "version": target["model_version"],
                         "dimension": target["embedding_dimension"],
                         "folder": folder_id,
+                        "document": document_id,
                         "limit": limit,
                     },
                 )
@@ -468,12 +491,15 @@ class SearchService:
         top_k: int = 8,
         threshold: float = 0,
         folder_id: str | None = None,
+        document_id: UUID | None = None,
         action: KbAction = KbAction.VIEW_CONTENT,
     ) -> dict[str, object]:
         if not query.strip() or len(query) > 4000:
             raise SearchError(422, "INVALID_QUERY", "Query is invalid")
         if mode not in {"keyword", "vector", "hybrid"}:
             raise SearchError(422, "INVALID_MODE", "Search mode is invalid")
+        if folder_id and document_id:
+            raise SearchError(422, "INVALID_SCOPE", "Scope accepts either folderId or documentId")
         top_k, threshold, pool = (
             max(1, min(top_k, 50)),
             max(0.0, min(threshold, 1.0)),
@@ -492,8 +518,17 @@ class SearchService:
                 )
                 if not folder_exists:
                     raise SearchError(404, "FOLDER_NOT_FOUND", "Folder not found")
+            if document_id:
+                document_exists = await conn.scalar(
+                    text(
+                        "SELECT EXISTS(SELECT 1 FROM ima.documents WHERE id=CAST(:document AS uuid) AND kb_id=:kb AND lifecycle='active')"
+                    ),
+                    {"document": document_id, "kb": kb_id},
+                )
+                if not document_exists:
+                    raise SearchError(404, "DOCUMENT_NOT_FOUND", "Document not found")
             keyword_rows = (
-                await self._keyword_candidates(conn, kb_id, query, folder_id, pool)
+                await self._keyword_candidates(conn, kb_id, query, folder_id, document_id, pool)
                 if mode in {"keyword", "hybrid"}
                 else []
             )
@@ -510,7 +545,7 @@ class SearchService:
                         503, "INVALID_EMBEDDING_RESPONSE", "Embedding response is invalid"
                     )
                 vector_rows = await self._vector_candidates(
-                    conn, kb_id, vectors[0], target, folder_id, pool
+                    conn, kb_id, vectors[0], target, folder_id, document_id, pool
                 )
             by_identity: dict[tuple[object, ...], dict[str, Any]] = {}
             keyword_scores: dict[tuple[object, ...], float] = {}
@@ -592,7 +627,7 @@ class SearchService:
     @staticmethod
     def _result(row: dict[str, Any], score: float, rank: int) -> dict[str, object]:
         return {
-            "documentId": row["document_id"],
+            "documentId": str(row["document_id"]),
             "documentVersion": row["version"],
             "fileGeneration": row["generation"],
             "chunkOrdinal": row["ordinal"],
@@ -610,8 +645,11 @@ class SearchService:
                 (
                     await conn.execute(
                         text(
-                            """SELECT c.id,c.kb_id,c.title,c.lifecycle,c.version,c.created_at,c.updated_at,kb.name AS kb_name
+                            """SELECT c.id,c.kb_id,c.title,c.lifecycle,c.version,c.scope,c.created_at,c.updated_at,kb.name AS kb_name,
+                            COALESCE(f.name,d.title) AS scope_title
                             FROM ima.conversations c JOIN ima.knowledge_bases kb ON kb.id=c.kb_id
+                            LEFT JOIN ima.folders f ON f.kb_id=c.kb_id AND f.id=c.scope->>'folderId'
+                            LEFT JOIN ima.documents d ON d.kb_id=c.kb_id AND d.id=CAST(c.scope->>'documentId' AS uuid)
                             WHERE c.owner_user_id=:owner ORDER BY c.updated_at DESC,c.id"""
                         ),
                         {"owner": actor},
@@ -658,8 +696,11 @@ class SearchService:
             (
                 await conn.execute(
                     text(
-                        """SELECT c.*,kb.name AS kb_name FROM ima.conversations c
+                        """SELECT c.*,kb.name AS kb_name,COALESCE(f.name,d.title) AS scope_title
+                        FROM ima.conversations c
                         JOIN ima.knowledge_bases kb ON kb.id=c.kb_id
+                        LEFT JOIN ima.folders f ON f.kb_id=c.kb_id AND f.id=c.scope->>'folderId'
+                        LEFT JOIN ima.documents d ON d.kb_id=c.kb_id AND d.id=CAST(c.scope->>'documentId' AS uuid)
                         WHERE c.id=:id AND c.kb_id=:kb AND c.owner_user_id=:owner"""
                         + (" FOR UPDATE" if for_update else "")
                     ),
@@ -742,6 +783,7 @@ class SearchService:
         conversation_id: UUID,
         message_id: UUID,
         expected_version: int,
+        scope: AskScope | None = None,
     ) -> AsyncIterator[bytes]:
         async with self.engine.connect() as conn:
             await self._require_kb(conn, actor, kb_id, KbAction.ASK)
@@ -770,7 +812,8 @@ class SearchService:
                     "Message is unavailable",
                 )
             question = str(row["content"])
-        return await self.ask(actor, kb_id, question, conversation_id)
+        # Scope validation against the pinned conversation scope happens in ask.
+        return await self.ask(actor, kb_id, question, conversation_id, scope=scope)
 
     async def ask_bounded(
         self,
@@ -946,18 +989,46 @@ class SearchService:
             await self._complete(assistant_id, "failed", "")
             raise
 
+    @staticmethod
+    def _scope_row(scope: AskScope | None) -> dict[str, str] | None:
+        """The persisted jsonb shape for a scope: exactly one target key."""
+        if scope is None:
+            return None
+        if scope.folder_id:
+            return {"folderId": scope.folder_id}
+        if scope.document_id:
+            return {"documentId": str(scope.document_id)}
+        return None
+
     async def ask(
-        self, actor: str, kb_id: str, question: str, conversation_id: UUID | None
+        self,
+        actor: str,
+        kb_id: str,
+        question: str,
+        conversation_id: UUID | None,
+        scope: AskScope | None = None,
     ) -> AsyncIterator[bytes]:
         if not question.strip() or len(question) > 20000:
             raise SearchError(422, "INVALID_QUESTION", "Question is invalid")
+        # An empty scope object means the whole knowledge base, same as no scope.
+        requested = scope if scope and (scope.folder_id or scope.document_id) else None
         async with self.engine.begin() as conn:
             kb_name = await self._require_kb(conn, actor, kb_id, KbAction.ASK)
             if conversation_id:
                 conversation = await self._owned_conversation(conn, actor, kb_id, conversation_id)
                 if conversation["lifecycle"] != "active":
                     raise SearchError(409, "CONVERSATION_ARCHIVED", "Conversation is archived")
+                effective_scope = self._persisted_scope(conversation)
+                if requested is not None and requested != effective_scope:
+                    raise SearchError(409, "SCOPE_MISMATCH", "The conversation scope cannot change")
+                # Scope targets can be deleted after creation; revalidate before
+                # any message is written so a stale scope fails without partial state.
+                if effective_scope is not None:
+                    await self._resolve_scope_title(conn, kb_id, effective_scope)
             else:
+                scope_title = (
+                    await self._resolve_scope_title(conn, kb_id, requested) if requested else None
+                )
                 conversation = {
                     "id": uuid4(),
                     "kb_id": kb_id,
@@ -966,15 +1037,23 @@ class SearchService:
                     "title": question.strip()[:200],
                     "lifecycle": "active",
                     "version": 1,
+                    "scope": self._scope_row(requested),
+                    "scope_title": scope_title,
                     "created_at": now(),
                     "updated_at": now(),
                 }
                 await conn.execute(
                     text(
-                        "INSERT INTO ima.conversations(id,kb_id,owner_user_id,title,lifecycle,version,created_at,updated_at) VALUES (:id,:kb_id,:owner_user_id,:title,:lifecycle,:version,:created_at,:updated_at)"
+                        "INSERT INTO ima.conversations(id,kb_id,owner_user_id,title,lifecycle,version,created_at,updated_at,scope) VALUES (:id,:kb_id,:owner_user_id,:title,:lifecycle,:version,:created_at,:updated_at,CAST(:scope AS jsonb))"
                     ),
-                    conversation,
+                    {
+                        **conversation,
+                        "scope": (
+                            json.dumps(conversation["scope"]) if conversation["scope"] else None
+                        ),
+                    },
                 )
+                effective_scope = requested
             sequence = int(
                 await conn.scalar(
                     text(
@@ -1006,6 +1085,8 @@ class SearchService:
                         "completed": timestamp if values[1] == "user" else None,
                     },
                 )
+        scope_folder = effective_scope.folder_id if effective_scope else None
+        scope_document = effective_scope.document_id if effective_scope else None
         async with self.engine.connect() as conn:
             ask_config = await self._profile(conn, kb_id)
         retrieval_mode = ask_config.retrieval_mode
@@ -1015,6 +1096,8 @@ class SearchService:
             question,
             mode=retrieval_mode,
             top_k=ask_config.top_k,
+            folder_id=scope_folder,
+            document_id=scope_document,
             action=KbAction.ASK,
         )
         citations = cast(list[dict[str, object]], results["items"])
@@ -1033,7 +1116,11 @@ class SearchService:
             yield sse("message", event_sequence, {**base, "status": "pending"})
             event_sequence += 1
             if not citations:
-                answer = "I could not find relevant information in your accessible knowledge."
+                answer = (
+                    "该范围下未找到相关内容。"
+                    if effective_scope
+                    else "I could not find relevant information in your accessible knowledge."
+                )
                 await self._complete(assistant_id, "knowledge_gap", answer)
                 yield sse(
                     "knowledge_gap", event_sequence, {**base, "answer": answer, "citations": []}
@@ -1045,6 +1132,8 @@ class SearchService:
                 question,
                 mode=retrieval_mode,
                 top_k=ask_config.top_k,
+                folder_id=scope_folder,
+                document_id=scope_document,
                 action=KbAction.ASK,
             )
             checked_citations = cast(list[dict[str, object]], checked["items"])
@@ -1128,7 +1217,7 @@ class SearchService:
             for item in citations:
                 await conn.execute(
                     text(
-                        "INSERT INTO ima.message_citations(message_id,ordinal,document_id,document_version,file_generation,chunk_ordinal,chunk_digest,quote,rank,score,created_at) VALUES (:message,:ordinal,:document,:version,:generation,:chunk,:digest,:quote,:rank,:score,:now)"
+                        "INSERT INTO ima.message_citations(message_id,ordinal,document_id,document_version,file_generation,chunk_ordinal,chunk_digest,quote,rank,score,created_at) VALUES (:message,:ordinal,CAST(:document AS uuid),:version,:generation,:chunk,:digest,:quote,:rank,:score,:now)"
                     ),
                     {
                         "message": message_id,
@@ -1180,18 +1269,84 @@ class SearchService:
                 "score": row["score"],
             }
 
+    async def _resolve_scope_title(
+        self, conn: AsyncConnection, kb_id: str, scope: AskScope
+    ) -> str | None:
+        """Validate the scope target inside the knowledge base and return its title.
+
+        Membership already grants the whole tree, so existence in this
+        knowledge base is the authorization boundary for a scope target.
+        """
+        if scope.folder_id:
+            title = await conn.scalar(
+                text(
+                    "SELECT name FROM ima.folders WHERE id=:folder AND kb_id=:kb AND lifecycle='active'"
+                ),
+                {"folder": scope.folder_id, "kb": kb_id},
+            )
+            if title is None:
+                raise SearchError(404, "FOLDER_NOT_FOUND", "Folder not found")
+            return str(title)
+        if scope.document_id:
+            title = await conn.scalar(
+                text(
+                    "SELECT title FROM ima.documents WHERE id=:document AND kb_id=:kb AND lifecycle='active'"
+                ),
+                {"document": scope.document_id, "kb": kb_id},
+            )
+            if title is None:
+                raise SearchError(404, "DOCUMENT_NOT_FOUND", "Document not found")
+            return str(title)
+        return None
+
+    @staticmethod
+    def _persisted_scope(conversation: dict[str, Any]) -> AskScope | None:
+        raw = conversation.get("scope")
+        if isinstance(raw, str):
+            raw = json.loads(raw) if raw else None
+        if not isinstance(raw, dict):
+            return None
+        if raw.get("folderId"):
+            return AskScope(folder_id=str(raw["folderId"]))
+        if raw.get("documentId"):
+            return AskScope(document_id=UUID(str(raw["documentId"])))
+        return None
+
+    @staticmethod
+    def _scope_payload(row: dict[str, Any]) -> dict[str, object] | None:
+        scope = SearchService._persisted_scope(row)
+        if scope is None:
+            return None
+        payload: dict[str, object] = {}
+        if scope.folder_id:
+            payload["folderId"] = scope.folder_id
+        if scope.document_id:
+            payload["documentId"] = str(scope.document_id)
+        title = row.get("scope_title")
+        if title:
+            payload["title"] = str(title)
+        return payload
+
     @staticmethod
     def _conversation(row: dict[str, Any]) -> dict[str, object]:
-        return {
-            "id": row["id"],
+        # SSE payloads go through plain json.dumps; emit the same string forms
+        # the REST contract produces (uuid as str, timestamptz as ISO 8601).
+        result: dict[str, object] = {
+            "id": str(row["id"]),
             "kbId": row["kb_id"],
             "kbName": row.get("kb_name"),
             "title": row["title"],
             "lifecycle": row["lifecycle"],
             "version": row["version"],
-            "createdAt": row["created_at"],
-            "updatedAt": row["updated_at"],
+            "createdAt": _iso(row["created_at"]),
+            "updatedAt": _iso(row["updated_at"]),
         }
+        # Scope stays absent (not null) on unscoped conversations so the
+        # default ask flow keeps its exact pre-scope event payload.
+        scope = SearchService._scope_payload(row)
+        if scope is not None:
+            result["scope"] = scope
+        return result
 
     @staticmethod
     def _message(row: dict[str, Any]) -> dict[str, object]:

@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from ima.api.contracts import ContractModel
 
@@ -29,6 +29,27 @@ class SearchResponse(ContractModel):
     profile_top_k: int = Field(alias="profileTopK")
 
 
+class AskScope(ContractModel):
+    """Optional retrieval scope for grounded Ask: one folder subtree or one document."""
+
+    folder_id: str | None = Field(default=None, alias="folderId", max_length=32)
+    document_id: UUID | None = Field(default=None, alias="documentId")
+
+    @model_validator(mode="after")
+    def _single_target(self) -> AskScope:
+        if self.folder_id and self.document_id:
+            raise ValueError("folderId and documentId are mutually exclusive")
+        return self
+
+
+class ConversationScope(ContractModel):
+    """The scope pinned on a conversation; title is resolved at read time."""
+
+    folder_id: str | None = Field(default=None, alias="folderId")
+    document_id: UUID | None = Field(default=None, alias="documentId")
+    title: str | None = None
+
+
 class ConversationResponse(ContractModel):
     id: UUID
     kb_id: str = Field(alias="kbId")
@@ -36,6 +57,7 @@ class ConversationResponse(ContractModel):
     title: str
     lifecycle: Literal["active", "archived"]
     version: int
+    scope: ConversationScope | None = None
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
 
@@ -63,6 +85,8 @@ class ConversationPage(ContractModel):
 class AskRequest(ContractModel):
     question: str = Field(min_length=1, max_length=20000)
     conversation_id: UUID | None = Field(default=None, alias="conversationId")
+    # Scope pins a new conversation; on follow-ups it must match the pinned one.
+    scope: AskScope | None = None
 
 
 class ConversationPatchRequest(ContractModel):
@@ -74,6 +98,8 @@ class ConversationPatchRequest(ContractModel):
 class ConversationRetryRequest(ContractModel):
     message_id: UUID = Field(alias="messageId")
     expected_version: int = Field(alias="expectedVersion", gt=0)
+    # Optional scope echo; the conversation's pinned scope stays authoritative.
+    scope: AskScope | None = None
 
 
 class VectorIndexResponse(ContractModel):

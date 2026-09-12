@@ -18,7 +18,9 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [],
+  "children": [
+    "09-12-kb-light-file-preview"
+  ],
   "parent": "09-11-ui-workspace-refresh",
   "relatedFiles": [],
   "notes": "",

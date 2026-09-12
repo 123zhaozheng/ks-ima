@@ -130,6 +130,7 @@ class DocumentResponse(ContractModel):
     lifecycle: Literal["active"]
     markdown: str | None = None
     file_state: Literal["pending", "ready", "failed"] = Field(alias="fileState")
+    mime_type: str | None = Field(default=None, alias="mimeType")
     metadata: dict[str, object]
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")

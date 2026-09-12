@@ -108,3 +108,16 @@ def test_copy_verified_uses_server_side_copy_and_rechecks_target() -> None:
         "Key": "target",
         "ChecksumMode": "ENABLED",
     }
+
+
+from ima.application.storage import _previewable_inline
+
+
+def test_inline_preview_whitelist_covers_browser_native_formats() -> None:
+    for mime in ('text/plain', 'text/markdown', 'application/json', 'application/pdf', 'image/png', 'image/jpeg', 'image/webp'):
+        assert _previewable_inline(mime), mime
+
+
+def test_inline_preview_rejects_office_and_unknown_formats() -> None:
+    for mime in ('application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/zip', None, ''):
+        assert not _previewable_inline(mime), mime

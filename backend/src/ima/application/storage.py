@@ -33,6 +33,19 @@ from ima.infrastructure.storage import ObjectStorageClient, StorageClientError
 from ima.infrastructure.tasks.service import JobService
 
 
+# Formats a browser can render inline inside an iframe: text-like payloads plus
+# PDF and images (both handled natively by Chrome's built-in viewers). Office
+# formats are intentionally excluded — the web client fetches the authorized
+# bytes and renders them in-page instead.
+_INLINE_PREVIEW_MIMES = {"text/plain", "text/markdown", "application/json", "application/pdf"}
+
+
+def _previewable_inline(mime_type: str | None) -> bool:
+    if not mime_type:
+        return False
+    return mime_type in _INLINE_PREVIEW_MIMES or mime_type.startswith("image/")
+
+
 class StorageService:
     def __init__(self, settings: Settings, engine: AsyncEngine, jobs: JobService) -> None:
         self.settings = settings
@@ -277,7 +290,7 @@ class StorageService:
             )
         if row["object_state"] != "verified":
             raise KnowledgeError(409, "FILE_NOT_READY", "File is not ready")
-        if preview and row["mime_type"] not in {"text/plain", "text/markdown", "application/json"}:
+        if preview and not _previewable_inline(row["mime_type"]):
             raise KnowledgeError(409, "PREVIEW_UNAVAILABLE", "Preview is unavailable")
         try:
             url = self.client.presigned_get(

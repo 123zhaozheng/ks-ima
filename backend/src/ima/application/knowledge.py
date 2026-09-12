@@ -278,6 +278,7 @@ class KnowledgeService:
                 "lifecycle": row["lifecycle"],
                 "markdown": version if row["kind"] == "note" else None,
                 "fileState": row["file_state"],
+                "mimeType": row["mime_type"] if row["kind"] == "file" else None,
                 "metadata": safe_metadata(row),
                 "createdAt": row["created_at"],
                 "updatedAt": row["updated_at"],

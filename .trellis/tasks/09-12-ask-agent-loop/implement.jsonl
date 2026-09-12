@@ -1,0 +1,6 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/09-12-ask-scope-agent/design.md", "reason": "B 节：agent loop 骨架、不变量、SSE 扩展"}
+{"file": ".trellis/spec/backend/search-grounded-ask-contracts.md", "reason": "ask 管线现有契约与不变量"}
+{"file": ".trellis/spec/backend/model-governance-contracts.md", "reason": "managed_chat_stream tools 参数与能力检测"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "错误码风格"}
+{"file": ".trellis/spec/frontend/grounded-search-ask-contracts.md", "reason": "前端 SSE 事件契约"}

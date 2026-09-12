@@ -1,0 +1,29 @@
+{
+  "id": "ask-scope-agent",
+  "name": "ask-scope-agent",
+  "title": "Agent 化提问与范围指定（显式 scope + agent 模式）",
+  "description": "提问双轨升级：P1 接通 composer 已有的目录/篇章范围选择（断链修复）；P2 引入 agent 模式（PydanticAI 或最小自研 loop），复用 MCP 授权检索工具，保留引用复核不变量。",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "zhaozheng",
+  "assignee": "zhaozheng",
+  "createdAt": "2026-09-12",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-12-ask-scope-wire",
+    "09-12-ask-agent-loop"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

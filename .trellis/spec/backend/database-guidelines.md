@@ -65,6 +65,21 @@ Migrations run only through `ima migrate` or an explicit Alembic invocation.
 The Procrastinate schema is installed only when its marker table is absent.
 Runtime startup never upgrades the database.
 
+**Local Windows run**: `migrations/env.py` builds a SYNC engine
+(`engine_from_config`), so `IMA_DATABASE_URL` for Alembic must use the psycopg
+driver — `postgresql+psycopg://user:password@localhost:5430/app`. Passing the
+runtime asyncpg URL fails with `MissingGreenlet`. The dev DB at `localhost:5430`
+lives in the `nyaai-dev-db-1` compose container; if connections are refused,
+`docker start nyaai-dev-db-1 nyaai-dev-minio-1`.
+
+**Integration gate**: `IMA_REQUIRE_POSTGRES=1` + `IMA_TEST_DATABASE_URL`
+(`postgresql+asyncpg://user:password@localhost:55432/app`, container
+`ima-test-pg`) and the suite must be run whole — conftest asserts the exact
+postgres-marked test count; update the count when adding tests. Residual test-DB
+state (e.g. a partial Procrastinate schema) causes confusing failures; reset
+with `docker exec ima-test-pg psql -U user -d postgres -c "DROP DATABASE app
+WITH (FORCE);" -c "CREATE DATABASE app;"`.
+
 ---
 
 ## Naming Conventions

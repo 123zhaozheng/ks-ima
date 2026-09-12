@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 17
-- **Last Active**: 2026-09-09
+- **Total Sessions**: 18
+- **Last Active**: 2026-09-12
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~596 | Active |
+| `journal-1.md` | ~630 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 18 | 2026-09-12 | UI 工作区精修 + 提问范围 P1 + 轻量文件预览 | `159a7f1`, `4b2a7b1`, `f7f8419`, `d6ca6bb`, `48f15f5`, `953ef4a`, `200ef81`, `6144db5`, `fa1c3f1`, `322b37b`, `b699850`, `9572b23`, `58bafe3`, `78fcd65` | `feat/intranet-ima` |
 | 17 | 2026-09-09 | Simplified model scene configuration and fixed Chinese UI | `c4ff55f` | `feat/intranet-ima` |
 | 16 | 2026-08-31 | 管理后台中文化与模型一键接入 | `80a93e2`, `fbb2361`, `0e12c53`, `fe26ff3`, `b3f861d`, `9cc63af` | `feat/intranet-ima` |
 | 15 | 2026-08-31 | 移除工作区概念，知识库一等公民与极简UX重构 | `c24ed33`, `15e2753`, `7bfb99c`, `afd3f84`, `080dc07` | `feat/intranet-ima` |

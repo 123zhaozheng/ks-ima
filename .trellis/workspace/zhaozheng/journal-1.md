@@ -594,3 +594,37 @@ Removed 'Knowledge Base Assignment' tab, simplified scene config with direct mod
 ### Status
 
 [OK] **Completed**
+
+
+## Session 18: UI 工作区精修 + 提问范围 P1 + 轻量文件预览
+
+**Date**: 2026-09-12
+**Task**: UI 工作区精修 + 提问范围 P1 + 轻量文件预览
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+完成 6 个任务并归档：统一顶栏检查修复（2 处）、KB 三栏工作区与管理弹窗精修、P8 管理控制台迁入 AppShell 并美化、提问范围指定 P1 端到端接通（scope 持久化+检索过滤，迁移 0014）、P9 修复 KB 列表全蓝（route-active 被 query 链接误触发，active-class 中性化+目录/文件视觉分层）、P10 轻量文件预览（白名单放行 PDF/图片，docx-preview/xlsx/pptx-preview 懒加载浏览器内渲染）。质量门全绿：后端 163 单测、前端 lint/vitest 79/vue-tsc/构建；前后端服务重启在 9015/9016 运行。另查明 3 条集成测试失败为存量问题（与本会话改动无关），P2 agent 模式提问仍处规划。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `159a7f1` | (see git log) |
+| `4b2a7b1` | (see git log) |
+| `f7f8419` | (see git log) |
+| `d6ca6bb` | (see git log) |
+| `48f15f5` | (see git log) |
+| `953ef4a` | (see git log) |
+| `200ef81` | (see git log) |
+| `6144db5` | (see git log) |
+| `fa1c3f1` | (see git log) |
+| `322b37b` | (see git log) |
+| `b699850` | (see git log) |
+| `9572b23` | (see git log) |
+| `58bafe3` | (see git log) |
+| `78fcd65` | (see git log) |
+
+### Status
+
+[OK] **Completed**

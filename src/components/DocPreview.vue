@@ -122,7 +122,7 @@
               v-if="document?.kind === 'file'"
               clickable
               :disable="!document"
-              @click="loadPreviewUrl"
+              @click="reloadPreview"
             >
               <q-item-section avatar>
                 <q-icon name="sym_o_refresh" />
@@ -295,6 +295,33 @@
         :title="document.title"
       />
       <div
+        v-else-if="officeFormat"
+        class="doc-preview-office"
+        flex-1
+        min-h-0
+        of-y-auto
+      >
+        <div
+          v-if="officeRendering"
+          flex
+          items-center
+          justify-center
+          p-6
+        >
+          <q-spinner color="primary" />
+        </div>
+        <div
+          v-if="officeHtml"
+          class="md-body doc-preview-sheet"
+          v-html="officeHtml"
+        />
+        <div
+          v-show="!officeHtml"
+          ref="officeContainer"
+          class="doc-preview-office-host"
+        />
+      </div>
+      <div
         v-else-if="previewFailure === 'error'"
         flex
         flex-1
@@ -313,7 +340,7 @@
               icon="sym_o_refresh"
               label="重试"
               data-testid="doc-preview-retry"
-              @click="loadPreviewUrl"
+              @click="reloadPreview"
             />
           </template>
         </pane-empty-state>
@@ -424,6 +451,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import DOMPurify from 'dompurify'
 import { Notify, useQuasar } from 'quasar'
 import PaneEmptyState from 'src/components/PaneEmptyState.vue'
 import { useFileVersions, useKnowledgeDocument, useKnowledgeIngestion, useKnowledgeMutations, useKnowledgeVersions } from 'src/composables/use-knowledge'
@@ -474,6 +502,24 @@ const previewUrl = ref<string>()
 // retryable.
 const previewFailure = ref<'unsupported' | 'error'>()
 const previewLoading = ref(false)
+
+// Office formats render in-page from the authorized bytes (see task
+// 09-12-kb-light-file-preview); the backend preview endpoint only serves
+// browser-native formats (PDF/images/text), so these never call it.
+type OfficeFormat = 'docx' | 'xlsx' | 'pptx'
+const OFFICE_MIMES: Record<string, OfficeFormat> = {
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.ms-excel': 'xlsx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+}
+const officeFormat = computed<OfficeFormat | undefined>(() => {
+  const mime = document.value?.mimeType
+  return mime ? OFFICE_MIMES[mime] : undefined
+})
+const officeContainer = ref<HTMLElement>()
+const officeHtml = ref<string>()
+const officeRendering = ref(false)
 const replacementInput = ref<HTMLInputElement>()
 const replacementProgress = ref(0)
 const replacing = ref(false)
@@ -493,12 +539,60 @@ watch(() => props.documentId, () => {
   conflict.value = false
   previewUrl.value = undefined
   previewFailure.value = undefined
+  officeHtml.value = undefined
+  if (officeContainer.value) officeContainer.value.innerHTML = ''
   mode.value = props.startInEdit ? 'edit' : 'read'
 }, { immediate: true })
 
 watch(document, value => {
-  if (value?.kind === 'file' && !previewUrl.value) loadPreviewUrl()
+  if (value?.kind === 'file' && !previewUrl.value) reloadPreview()
 })
+
+function reloadPreview() {
+  const format = officeFormat.value
+  if (format) renderOffice(format)
+  else loadPreviewUrl()
+}
+
+// Fetches the authorized bytes (presigned download URL) and renders Office
+// formats in-page. Renderers load lazily so the main bundle stays unchanged.
+async function renderOffice(format: OfficeFormat) {
+  if (!document.value) return
+  officeRendering.value = true
+  previewFailure.value = undefined
+  try {
+    const { url } = await knowledgeClient.download(document.value.id)
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`download failed: ${res.status}`)
+    const bytes = await res.arrayBuffer()
+    if (format === 'xlsx') {
+      const XLSX = await import('xlsx')
+      const workbook = XLSX.read(bytes, { type: 'array' })
+      const firstSheet = workbook.SheetNames[0]
+      if (!firstSheet) throw new Error('empty workbook')
+      officeHtml.value = DOMPurify.sanitize(XLSX.utils.sheet_to_html(workbook.Sheets[firstSheet]))
+      return
+    }
+    const container = officeContainer.value
+    if (!container) return
+    container.innerHTML = ''
+    if (format === 'docx') {
+      const { renderAsync } = await import('docx-preview')
+      await renderAsync(bytes, container)
+      return
+    }
+    const { init } = await import('pptx-preview')
+    const previewer = init(container, {
+      width: container.clientWidth || 960,
+      height: container.clientHeight || 540,
+    })
+    await previewer.preview(bytes)
+  } catch {
+    previewFailure.value = 'error'
+  } finally {
+    officeRendering.value = false
+  }
+}
 
 const renderedHtml = computed(() => renderMarkdown(document.value?.markdown ?? '', props.highlight))
 const draftHtml = computed(() => renderMarkdown(markdown.value))
@@ -711,6 +805,20 @@ function confirmDelete() {
   border: 1px solid var(--tk-border);
   border-radius: var(--tk-radius);
   background-color: var(--tk-surface);
+}
+
+.doc-preview-office {
+  border: 1px solid var(--tk-border);
+  border-radius: var(--tk-radius);
+  background-color: var(--tk-surface-white);
+}
+
+.doc-preview-office-host {
+  min-height: 100%;
+}
+
+.doc-preview-sheet {
+  padding: var(--tk-space-3);
 }
 
 .doc-preview-editor-input {

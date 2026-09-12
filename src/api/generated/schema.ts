@@ -2587,6 +2587,8 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+            /** Mimetype */
+            mimeType?: string | null;
             /** Title */
             title: string;
             /**

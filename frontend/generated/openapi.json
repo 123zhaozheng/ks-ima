@@ -1602,6 +1602,17 @@
             "title": "Metadata",
             "type": "object"
           },
+          "mimeType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mimetype"
+          },
           "title": {
             "title": "Title",
             "type": "string"

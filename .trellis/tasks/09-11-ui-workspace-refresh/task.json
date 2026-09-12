@@ -26,7 +26,8 @@
     "09-11-ui-history-list",
     "09-11-ui-connectors-settings",
     "09-11-ui-settings-account",
-    "09-11-ui-admin-console"
+    "09-11-ui-admin-console",
+    "09-12-ui-kb-list-distinction"
   ],
   "parent": null,
   "relatedFiles": [],

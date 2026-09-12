@@ -1,8 +1,10 @@
 export function mcpAgentOrigin(browserOrigin = window.location.origin) {
   try {
     const url = new URL(browserOrigin)
-    // Cursor/Claude are native clients; route them at the API origin, not the dev proxy.
-    if (url.port === '9015' || url.port === '9016') url.port = '3000'
+    // Native MCP clients bypass the dev proxy (which only forwards /api):
+    // point them straight at the API port. (The old hardcoded port 3000 came
+    // from a removed legacy stack and has no listener.)
+    if (url.port === '9015') url.port = '9016'
     // Windows often resolves localhost to ::1 while the API listens on IPv4.
     if (url.hostname === 'localhost') url.hostname = '127.0.0.1'
     return url.origin

@@ -584,7 +584,10 @@ class McpTransport:
         parsed = urlsplit(settings.public_origin)
         transport_security = TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
-            allowed_hosts=[parsed.netloc, f"{parsed.hostname}:*"],
+            # Loopback literals on top of the public origin: the dev stack
+            # listens on IPv4 only, so clients are pointed at 127.0.0.1 while
+            # public_origin usually says localhost (which may resolve to ::1).
+            allowed_hosts=[parsed.netloc, f"{parsed.hostname}:*", "127.0.0.1:*", "[::1]:*"],
             allowed_origins=[settings.public_origin, *settings.cors_origins],
         )
         sdk_app = self.server.streamable_http_app(

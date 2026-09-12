@@ -19,6 +19,7 @@
       py-0
       px-2
       :to="kbStore.id ? '/kb' : undefined"
+      active-class="kb-row-nav"
       :active="currentFolderId === kbStore.id"
       @keydown.enter.prevent="activate(kbStore.id!)"
       @keydown.space.prevent="activate(kbStore.id!)"
@@ -53,6 +54,7 @@
       pr-2
       :style="{ paddingLeft: `${8 + row.depth * 16}px` }"
       :to="{ path: '/kb', query: { folderId: row.folder.id } }"
+      active-class="kb-row-nav"
       :active="currentFolderId === row.folder.id"
       :aria-expanded="row.hasChildren ? expanded.has(row.folder.id) : undefined"
       @keydown.enter.prevent="activate(row.folder.id)"

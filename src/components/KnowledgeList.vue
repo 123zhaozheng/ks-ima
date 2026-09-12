@@ -19,15 +19,17 @@
         :key="item.id"
         clickable
         class="kb-row"
-        :class="{ 'kb-row-active': isSelected(item) }"
+        :class="{ 'kb-row-active': isSelected(item), 'kb-row-folder': item.kind === 'folder' }"
         :to="item.kind === 'folder'
           ? { path: '/kb', query: { folderId: item.id } }
           : { path: '/kb', query: { folderId: props.folderId, doc: item.id } }"
+        active-class="kb-row-nav"
         :aria-label="item.title"
       >
         <q-item-section avatar>
           <q-icon
             :name="item.kind === 'folder' ? 'sym_o_folder' : item.kind === 'note' ? 'sym_o_description' : 'sym_o_insert_drive_file'"
+            :class="{ 'icon-fill': item.kind === 'folder' }"
             size="18px"
           />
         </q-item-section>
@@ -237,7 +239,17 @@ function confirmDelete(item: ContentRow) {
 
 .kb-row-title {
   font-size: var(--tk-font-size-sm);
+  font-weight: var(--tk-weight-regular);
+}
+
+.kb-row-folder .kb-row-title {
   font-weight: var(--tk-weight-medium);
+}
+
+/* Rows are router links whose query does not affect route-active matching;
+   keep icons muted so only the selected row turns accent. */
+.kb-row .q-item__section--avatar {
+  color: var(--tk-text-secondary);
 }
 
 .kb-row:hover {
@@ -248,6 +260,11 @@ function confirmDelete(item: ContentRow) {
 .kb-row.kb-row-active {
   background-color: var(--tk-accent-soft);
   box-shadow: inset 0 0 0 1px var(--tk-accent-soft-stronger);
+}
+
+.kb-row.kb-row-active .kb-row-title,
+.kb-row.kb-row-active .q-item__section--avatar {
+  color: var(--tk-accent);
 }
 
 .kb-load-more {

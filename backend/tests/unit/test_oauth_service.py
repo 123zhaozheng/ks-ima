@@ -111,6 +111,7 @@ def service() -> tuple[McpAuthorizationService, Any, Any, Any, Settings]:
         rotate_credential=AsyncMock(),
         set_principal_state=AsyncMock(),
         exchange_credential=AsyncMock(),
+        resolve_credential_bearer=AsyncMock(return_value=None),
         find_credential_by_id=AsyncMock(),
         revoke_credential=AsyncMock(),
         acquire_concurrency_lease=AsyncMock(return_value=uuid4()),
@@ -718,3 +719,84 @@ async def test_concurrency_denial_maps_to_safe_rate_limit_and_release_is_idempot
     lease_id = uuid4()
     await subject.release_tool_lease(lease_id)
     repository.release_concurrency_lease.assert_awaited_once_with(lease_id)
+
+
+def credential_record(principal_record: ServicePrincipalRecord) -> CredentialRecord:
+    return CredentialRecord(
+        id=uuid4(),
+        principal_id=principal_record.id,
+        credential_id="key-1",
+        digest="digest",
+        secret_prefix="mcpsc_123",
+        expires_at=principal_record.expires_at,
+        created_at=datetime.now(UTC),
+    )
+
+
+@pytest.mark.asyncio
+async def test_authenticate_bearer_accepts_service_credential_directly() -> None:
+    subject, repository, _, _, _ = service()
+    machine = principal()
+    credential = credential_record(machine)
+    repository.load_access_token.return_value = None
+    repository.resolve_credential_bearer.return_value = (credential, machine)
+
+    actor = await subject.authenticate_bearer("credential-secret", source_ip="127.0.0.1")
+
+    assert actor.actor_type == "service_principal"
+    assert actor.principal_id == str(machine.id)
+    assert actor.scopes == machine.scopes
+    assert actor.token_id == str(credential.id)
+    assert actor.concurrency_limit == machine.concurrency_limit
+    repository.resolve_credential_bearer.assert_awaited_once_with(
+        "credential-secret", correlation_id=None
+    )
+    # Principal-level MCP bucket and per-secret tool bucket both apply.
+    repository.rate_allowed.assert_any_await(
+        "service", "mcp_request", f"{machine.id}:127.0.0.1", limit=machine.rate_limit
+    )
+    # No access-token row backs a credential, so it is never touched.
+    repository.touch_access_token.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_authenticate_bearer_rejects_unknown_credential_secret() -> None:
+    subject, repository, _, _, _ = service()
+    repository.load_access_token.return_value = None
+    repository.resolve_credential_bearer.return_value = None
+
+    with pytest.raises(McpAuthorizationError) as exc:
+        await subject.authenticate_bearer("wrong-secret", source_ip="127.0.0.1")
+
+    assert exc.value.reason == "invalid_token"
+
+
+@pytest.mark.asyncio
+async def test_authenticate_bearer_credential_respects_cidr_allowlist() -> None:
+    subject, repository, _, _, _ = service()
+    machine = principal()
+    machine.cidr_allowlist = ("10.0.0.0/8",)
+    repository.load_access_token.return_value = None
+    repository.resolve_credential_bearer.return_value = (credential_record(machine), machine)
+
+    with pytest.raises(McpAuthorizationError) as exc:
+        await subject.authenticate_bearer("credential-secret", source_ip="127.0.0.1")
+
+    assert exc.value.reason == "network_denied"
+    audit = repository.append_audit.await_args
+    assert audit.args[1] == "mcp.network.denied"
+    assert "credential-secret" not in str(audit)
+
+
+@pytest.mark.asyncio
+async def test_authenticate_bearer_credential_is_rate_limited_per_principal() -> None:
+    subject, repository, _, _, _ = service()
+    machine = principal()
+    repository.load_access_token.return_value = None
+    repository.resolve_credential_bearer.return_value = (credential_record(machine), machine)
+    repository.rate_allowed = AsyncMock(return_value=False)
+
+    with pytest.raises(McpAuthorizationError) as exc:
+        await subject.authenticate_bearer("credential-secret", source_ip="127.0.0.1")
+
+    assert exc.value.reason == "rate_limited"

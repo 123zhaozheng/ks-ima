@@ -899,6 +899,126 @@ async def test_oauth_service_principal_credential_finite_expiry_rotation_and_rev
 @pytest.mark.postgres
 @pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
 @pytest.mark.asyncio
+async def test_oauth_credential_bearer_direct_auth_lease_and_revocation() -> None:
+    assert DATABASE_URL is not None
+    await run_migrations_once()
+    settings = integration_settings()
+    engine = create_engine(settings)
+    repository = McpOauthRepository(engine, settings)
+    admin_id = await create_fixture(engine)
+    try:
+        principal_row = await repository.create_service_principal(
+            display_name="Direct Bearer",
+            purpose="Connector one-click config",
+            owner_user_id=admin_id,
+            scopes=("mcp:knowledge:read",),
+            expires_at=datetime.now(UTC) + timedelta(days=90),
+            rate_limit=5,
+            concurrency_limit=2,
+            created_by=admin_id,
+        )
+        raw_secret, credential = await repository.create_credential(
+            principal_id=principal_row.id,
+            created_by=admin_id,
+            expires_at=principal_row.expires_at,
+        )
+
+        resolved = await repository.resolve_credential_bearer(raw_secret)
+        assert resolved is not None
+        direct_credential, direct_principal = resolved
+        assert direct_credential.id == credential.id
+        assert direct_principal.id == principal_row.id
+        assert direct_credential.last_used_at is not None
+        assert await repository.resolve_credential_bearer("wrong-secret") is None
+
+        # Leases anchor on one durable access-token row per credential whose
+        # digest can never be presented as a bearer secret.
+        lease = await repository.acquire_concurrency_lease(
+            token_id=credential.id,
+            principal_id=principal_row.id,
+            source="127.0.0.1",
+            request_id="direct-1",
+            limit=principal_row.concurrency_limit,
+        )
+        assert lease is not None
+        async with engine.connect() as conn:
+            anchor = (
+                (
+                    await conn.execute(
+                        text(
+                            "SELECT token_digest,canonical_resource,principal_id FROM ima.mcp_access_tokens WHERE id=:id"
+                        ),
+                        {"id": credential.id},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            assert anchor is not None
+            assert UUID(str(anchor["principal_id"])) == principal_row.id
+            assert anchor["token_digest"] != repository._token_digest(raw_secret)
+            assert anchor["canonical_resource"] != settings.mcp_resource_url
+            count = await conn.scalar(
+                text("SELECT count(*) FROM ima.mcp_access_tokens WHERE id=:id"),
+                {"id": credential.id},
+            )
+            assert int(count) == 1
+        # The anchor backs leases only: even the guessable synthetic preimage
+        # never resolves as a bearer because the resource cannot match.
+        assert (
+            await repository.load_access_token(
+                f"mcp-credential-lease:{credential.id}",
+                expected_resource=settings.mcp_resource_url,
+            )
+            is None
+        )
+        await repository.release_concurrency_lease(lease)
+
+        # A revocation that lands on the anchor row (e.g. someone presents the
+        # synthetic string to /oauth/revoke) is repaired while the credential
+        # itself stays live.
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("UPDATE ima.mcp_access_tokens SET revoked_at=now() WHERE id=:id"),
+                {"id": credential.id},
+            )
+        healed = await repository.acquire_concurrency_lease(
+            token_id=credential.id,
+            principal_id=principal_row.id,
+            source="127.0.0.1",
+            request_id="direct-2",
+            limit=principal_row.concurrency_limit,
+        )
+        assert healed is not None
+        await repository.release_concurrency_lease(healed)
+
+        # Audit rows carry identifiers only, never the secret.
+        async with engine.connect() as conn:
+            audits = (
+                await conn.execute(
+                    text(
+                        "SELECT result,metadata FROM ima.audit_events WHERE action='mcp.credential.direct_auth' AND target_id=:pid"
+                    ),
+                    {"pid": str(principal_row.id)},
+                )
+            ).all()
+            assert [row[0] for row in audits] == ["success"]
+            assert "credential_id" in str(audits[0][1])
+            assert raw_secret not in str(audits)
+
+        # Revocation denies the secret immediately.
+        await repository.revoke_credential(
+            credential.credential_id, actor_id=admin_id, reason="test"
+        )
+        assert await repository.resolve_credential_bearer(raw_secret) is None
+    finally:
+        await cleanup(engine, admin_id)
+        await engine.dispose()
+
+
+@pytest.mark.postgres
+@pytest.mark.skipif(not DATABASE_URL, reason="IMA_TEST_DATABASE_URL is not configured")
+@pytest.mark.asyncio
 async def test_oauth_rate_buckets_and_safe_audit() -> None:
     assert DATABASE_URL is not None
     await run_migrations_once()

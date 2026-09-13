@@ -20,10 +20,10 @@ from __future__ import annotations
 import json
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import text
+from sqlalchemy import RowMapping, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from ima.application.mcp_contracts import redact_value
@@ -1938,6 +1938,70 @@ class McpOauthRepository:
             assert credential is not None and principal is not None
             return credential, principal
 
+    async def resolve_credential_bearer(
+        self, raw_secret: str, *, correlation_id: str | None = None
+    ) -> tuple[CredentialRecord, ServicePrincipalRecord] | None:
+        """Validate a service credential presented directly as an MCP bearer.
+
+        Digest lookup with the same pepper and the same lifecycle checks as
+        the /oauth/token exchange: revocation, expiry, rotation overlap,
+        active principal and owner.  ``last_used_at`` and the safe
+        ``mcp.credential.direct_auth`` audit row commit in the same
+        transaction; the raw secret is never stored or audited.
+        """
+        now = utcnow()
+        async with self.engine.begin() as conn:
+            row = (
+                (
+                    await conn.execute(
+                        text(
+                            """SELECT c.id,c.principal_id FROM ima.mcp_credentials c
+                               JOIN ima.mcp_service_principals p ON p.id=c.principal_id
+                               JOIN ima.users owner ON owner.id=p.owner_user_id AND owner.is_active
+                               WHERE c.digest=:digest
+                                 AND c.revoked_at IS NULL AND c.expires_at>:now
+                                 AND (c.replaced_by IS NULL OR c.overlap_expires_at>:now)
+                                 AND p.state='active' AND p.expires_at>:now
+                               FOR UPDATE OF c"""
+                        ),
+                        {
+                            "digest": self._token_digest(raw_secret),
+                            "now": now,
+                        },
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if not row:
+                await self._audit(
+                    conn,
+                    None,
+                    "mcp.credential.direct_auth",
+                    "failure",
+                    reason="invalid_credential",
+                    correlation_id=correlation_id,
+                )
+                return None
+            await conn.execute(
+                text("UPDATE ima.mcp_credentials SET last_used_at=:now WHERE id=:id"),
+                {"id": row["id"], "now": now},
+            )
+            await self._audit(
+                conn,
+                None,
+                "mcp.credential.direct_auth",
+                "success",
+                target_type="service_principal",
+                target_id=str(row["principal_id"]),
+                metadata={"credential_id": str(row["id"])},
+                correlation_id=correlation_id,
+            )
+            credential = await self._credential_record(conn, row["id"])
+            principal = await self._service_principal_record(conn, row["principal_id"])
+            assert credential is not None and principal is not None
+            return credential, principal
+
     async def list_service_principals(
         self, *, owner_user_id: str
     ) -> tuple[ServicePrincipalRecord, ...]:
@@ -2219,6 +2283,49 @@ class McpOauthRepository:
                 .mappings()
                 .first()
             )
+            if token is None:
+                # Credential-direct bearers lease against one durable anchor
+                # row (id equal to the credential id) because the lease table
+                # keeps a NOT NULL foreign key into mcp_access_tokens.  The
+                # row is written once per credential, never per request.  Its
+                # canonical_resource is a sentinel no real resource equals, so
+                # load_access_token can never resolve the synthetic digest as
+                # a bearer, and a live credential repairs a revoked anchor.
+                credential = (
+                    (
+                        await conn.execute(
+                            text(
+                                """SELECT c.id,c.principal_id,p.scopes,p.expires_at FROM ima.mcp_credentials c
+                                   JOIN ima.mcp_service_principals p ON p.id=c.principal_id
+                                   WHERE c.id=:token AND c.revoked_at IS NULL AND c.expires_at>:now
+                                     AND p.state='active' AND p.expires_at>:now"""
+                            ),
+                            {"token": token_id, "now": now},
+                        )
+                    )
+                    .mappings()
+                    .first()
+                )
+                if credential is not None:
+                    await conn.execute(
+                        text(
+                            """INSERT INTO ima.mcp_access_tokens(id,token_digest,grant_id,principal_id,client_id,
+                               canonical_resource,scopes,security_stamp,expires_at,created_at)
+                               VALUES (:id,:digest,NULL,:principal,NULL,:resource,:scopes,NULL,:expires,:now)
+                               ON CONFLICT (id) DO UPDATE SET revoked_at=NULL,revoke_reason=NULL
+                               WHERE ima.mcp_access_tokens.revoked_at IS NOT NULL"""
+                        ),
+                        {
+                            "id": token_id,
+                            "digest": self._token_digest(f"mcp-credential-lease:{token_id}"),
+                            "principal": credential["principal_id"],
+                            "resource": "mcp-credential-lease",
+                            "scopes": list(credential["scopes"]),
+                            "expires": credential["expires_at"],
+                            "now": now,
+                        },
+                    )
+                    token = cast("RowMapping", {"principal_id": credential["principal_id"]})
             if token is None:
                 await self._audit(
                     conn,

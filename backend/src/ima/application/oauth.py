@@ -452,7 +452,12 @@ class McpAuthorizationService:
             correlation_id=correlation_id,
         )
         if record is None:
-            raise McpAuthorizationError("invalid_token", "Bearer token is invalid")
+            # Long-lived service credentials are also accepted directly as
+            # /mcp bearers; the credential path applies the same policy as
+            # the principal-token path below.
+            return await self._authenticate_credential_bearer(
+                raw_token, source_ip=source_ip, correlation_id=correlation_id
+            )
         if record.grant_id is not None:
             grant = await self.repository.load_grant(record.grant_id)
             if (
@@ -517,6 +522,59 @@ class McpAuthorizationService:
             raise McpAuthorizationError("rate_limited", "MCP request rate is exceeded")
         await self.repository.touch_access_token(record.id)
         return actor
+
+    async def _authenticate_credential_bearer(
+        self, raw_secret: str, *, source_ip: str, correlation_id: str | None
+    ) -> McpActor:
+        """Authenticate a service credential used directly as a bearer token.
+
+        Same policy as a principal-bound access token: revocation/expiry and
+        principal lifecycle (checked by the repository lookup), CIDR
+        allowlist, and principal-level rate limit.  The actor's token_id is
+        the credential id, which the concurrency lease anchors to a stable
+        access-token row.  The secret is never echoed into audit rows.
+        """
+        resolved = await self.repository.resolve_credential_bearer(
+            raw_secret, correlation_id=correlation_id
+        )
+        if resolved is None:
+            raise McpAuthorizationError("invalid_token", "Bearer token is invalid")
+        credential, principal = resolved
+        if not self._source_allowed(source_ip, principal.cidr_allowlist):
+            await self.repository.append_audit(
+                None,
+                "mcp.network.denied",
+                "failure",
+                target_type="service_principal",
+                target_id=str(principal.id),
+                reason="network_denied",
+                metadata={"owner_user_id": principal.owner_user_id},
+                correlation_id=correlation_id,
+            )
+            raise McpAuthorizationError("network_denied", "Source network is not allowed")
+        if not await self.repository.rate_allowed(
+            "service",
+            "mcp_request",
+            f"{principal.id}:{source_ip}",
+            limit=principal.rate_limit,
+        ):
+            raise McpAuthorizationError("rate_limited", "Principal rate is exceeded")
+        if not await self.repository.rate_allowed(
+            "tool",
+            "request",
+            f"{credential.id}:{source_ip}",
+            limit=principal.rate_limit,
+        ):
+            raise McpAuthorizationError("rate_limited", "MCP request rate is exceeded")
+        return McpActor(
+            actor_type="service_principal",
+            principal_id=str(principal.id),
+            scopes=principal.scopes,
+            correlationId=correlation_id or "",
+            token_id=str(credential.id),
+            source_ip=source_ip,
+            concurrency_limit=principal.concurrency_limit,
+        )
 
     async def acquire_tool_lease(self, actor: McpActor, request_id: str) -> UUID:
         if actor.token_id is None or actor.source_ip is None:

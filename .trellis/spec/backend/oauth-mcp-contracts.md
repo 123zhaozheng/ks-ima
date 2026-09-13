@@ -212,6 +212,41 @@ When adding a tool whose inner budget exceeds 15s (model calls, bounded Ask, lar
 
 ---
 
+## Contract: Service credential secrets authenticate directly as /mcp bearers
+
+### Scope / Trigger
+
+Captured from task `09-13-connectors-one-click-mcp-config`. The connectors page issues one-click MCP configs whose token must work pasted as a static `Authorization: Bearer` value, so the 600-second exchange token cannot satisfy it.
+
+### Rule
+
+- `McpAuthorizationService.authenticate_bearer` first resolves an access token; on a miss it falls back to resolving the raw bearer as a service credential secret via the `_token_digest` HMAC convention against `ima.mcp_credentials`. A miss in both is `invalid_token`.
+- The credential path applies the same policy chain as the access-token path: not revoked, not expired, principal active and unexpired, CIDR allowlist (`network_denied` → 403), principal-level `mcp_request` rate limit (`rate_limited` → 429). Scopes always come from the principal, never narrowed per credential.
+- Concurrency leases need a row in `mcp_access_tokens` (FK), so the credential path keeps one persistent **anchor row** with `id = credential.id`, a synthetic digest of `"mcp-credential-lease:<credential_id>"`, and the sentinel `canonical_resource = 'mcp-credential-lease'`. The sentinel guarantees the guessable preimage can never authenticate, because `load_access_token` filters by the server-controlled resource. The anchor is written once per credential (`ON CONFLICT (id) ...`) and self-heals from synthetic revocations only while the credential itself is live.
+- Direct-auth attempts append `mcp.credential.direct_auth` audit rows with credential/principal ids only — never the secret. Failure rows are written for unknown bearers too, so watch audit growth from unauthenticated scanners.
+
+### Wrong
+
+```python
+# Anchor inserted with the real resource URL: the guessable string
+# "mcp-credential-lease:<credential_id>" now authenticates as a bearer,
+# and anchor revocation bricks lease acquisition for a live credential.
+```
+
+### Correct
+
+```python
+# Sentinel resource + unpresentable synthetic digest + self-healing upsert.
+anchor_resource = "mcp-credential-lease"  # never equals settings.mcp_resource_url
+```
+
+### Tests Required
+
+- Contract: a valid credential completes `initialize`/`tools/list` at `/mcp`; unknown/revoked/expired credentials get 401 `invalid_token`; CIDR denial is 403 with an audit row and no secret echo.
+- PostgreSQL integration: direct auth works, `load_access_token("mcp-credential-lease:<id>")` is None (unpresentable), anchor self-heals after synthetic revocation, and revoking the credential denies the next request immediately.
+
+---
+
 ## Related Specs
 
 - [Identity And Platform Contracts](./identity-platform-contracts.md) — digests, sessions, audit, internal routes

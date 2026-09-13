@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 from uuid import UUID
 
@@ -22,9 +24,11 @@ from ima.application.oauth import (
     KB_ROLE_RANK,
     TOOL_MIN_ROLE,
     McpAuthorizationError,
+    McpAuthorizationService,
 )
 from ima.application.search import BoundedAskResult
 from ima.config import Settings
+from ima.domain.oauth import CredentialRecord, ServicePrincipalRecord
 
 # user-1 can edit one knowledge base, view a second one, and is a member of
 # nothing else.  The transport stub enforces the same scope+role matrix the
@@ -640,3 +644,135 @@ async def test_authenticated_boundary_strips_raw_credentials_before_sdk_dispatch
     assert headers[b"x-ima-mcp-request"] != b"client-spoof"
     assert actors == {}
     calls.authorization.authenticate_bearer.assert_awaited_once()
+
+
+CREDENTIAL_SECRET = "mcp-credential-secret"
+
+
+def credential_runtime(cidr: tuple[str, ...] = ()) -> tuple[McpRuntime, Any]:
+    """Real McpAuthorizationService over fakes: /mcp credential passthrough."""
+    machine = ServicePrincipalRecord(
+        id=UUID("00000000-0000-0000-0000-0000000000c1"),
+        display_name="Connector key",
+        purpose="One-click MCP config",
+        owner_user_id="owner-1",
+        scopes=("mcp:knowledge:read", "mcp:knowledge:write"),
+        state="active",
+        expires_at=datetime.now(UTC) + timedelta(days=90),
+        rate_limit=300,
+        concurrency_limit=10,
+        cidr_allowlist=cidr,
+    )
+    credential = CredentialRecord(
+        id=UUID("00000000-0000-0000-0000-0000000000d1"),
+        principal_id=machine.id,
+        credential_id="key-1",
+        digest="digest",
+        secret_prefix="mcpsc_123",
+        expires_at=machine.expires_at,
+        created_at=datetime.now(UTC),
+    )
+
+    async def resolve(raw: str, *, correlation_id: str | None = None) -> object:
+        return (credential, machine) if raw == CREDENTIAL_SECRET else None
+
+    repository = SimpleNamespace(
+        resolve_credential_bearer=AsyncMock(side_effect=resolve),
+        rate_allowed=AsyncMock(return_value=True),
+        load_access_token=AsyncMock(return_value=None),
+        load_service_principal=AsyncMock(return_value=machine),
+        touch_access_token=AsyncMock(),
+        append_audit=AsyncMock(),
+        acquire_concurrency_lease=AsyncMock(
+            return_value=UUID("00000000-0000-0000-0000-000000000099")
+        ),
+        release_concurrency_lease=AsyncMock(),
+    )
+    identity = SimpleNamespace(active_security_stamp=AsyncMock(return_value="stamp-1"))
+    kb = SimpleNamespace(list_knowledge_bases=AsyncMock(return_value=KB_SUMMARIES))
+    authorization = McpAuthorizationService(
+        repository, identity, kb, Settings(environment="test", public_origin="http://testserver")
+    )
+    knowledge = SimpleNamespace(create_note=AsyncMock(), get_document=AsyncMock())
+    runtime = McpRuntime(
+        authorization=authorization,
+        kb=kb,
+        knowledge=knowledge,
+        storage=SimpleNamespace(),
+        search=SimpleNamespace(),
+    )
+    calls = SimpleNamespace(
+        authorization=authorization,
+        repository=repository,
+        kb=kb,
+        knowledge=knowledge,
+    )
+    return runtime, calls
+
+
+@pytest.mark.asyncio
+async def test_service_credential_secret_is_a_valid_mcp_bearer() -> None:
+    runtime, calls = credential_runtime()
+    calls.knowledge.create_note.return_value = {"id": DOC_ID, "title": "Title"}
+    settings = Settings(environment="test", public_origin="http://testserver")
+    transport = McpTransport(lambda: runtime, settings)
+    http = httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=transport.app),
+        base_url="http://testserver",
+        headers={"Authorization": f"Bearer {CREDENTIAL_SECRET}"},
+    )
+    async with transport.sdk_app.router.lifespan_context(transport.sdk_app):
+        async with http:
+            async with streamable_http_client("http://testserver/mcp", http_client=http) as streams:
+                async with ClientSession(streams[0], streams[1]) as session:
+                    await session.initialize()
+                    tools = await session.list_tools()
+                    result = await session.call_tool(
+                        "kb_create_note",
+                        {
+                            "kb_id": "kb-editor",
+                            "folder_id": "folder-1",
+                            "title": "Title",
+                            "markdown": "Body",
+                        },
+                    )
+    assert result.is_error is False
+    assert "kb_create_note" in {tool.name for tool in tools.tools}
+    calls.knowledge.create_note.assert_awaited_once_with("owner-1", "folder-1", "Title", "Body")
+    # The credential resolves through the credential path, never the token path.
+    calls.repository.resolve_credential_bearer.assert_awaited()
+    calls.repository.touch_access_token.assert_not_awaited()
+    calls.repository.acquire_concurrency_lease.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_unknown_credential_secret_gets_invalid_token_challenge() -> None:
+    runtime, _ = credential_runtime()
+    settings = Settings(environment="test", public_origin="http://testserver")
+    transport = McpTransport(lambda: runtime, settings)
+    async with httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=transport.app), base_url="http://testserver"
+    ) as http:
+        response = await http.post(
+            "/mcp", headers={"Authorization": "Bearer revoked-or-wrong"}, content=b"{}"
+        )
+    assert response.status_code == 401
+    assert 'error="invalid_token"' in response.headers["www-authenticate"]
+
+
+@pytest.mark.asyncio
+async def test_credential_bearer_outside_cidr_allowlist_is_forbidden() -> None:
+    runtime, calls = credential_runtime(cidr=("10.0.0.0/8",))
+    settings = Settings(environment="test", public_origin="http://testserver")
+    transport = McpTransport(lambda: runtime, settings)
+    async with httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=transport.app),
+        base_url="http://testserver",
+        headers={"Authorization": f"Bearer {CREDENTIAL_SECRET}"},
+    ) as http:
+        response = await http.post("/mcp", content=b"{}")
+    assert response.status_code == 403
+    assert 'error="insufficient_scope"' in response.headers["www-authenticate"]
+    audit = calls.repository.append_audit.await_args
+    assert audit.args[1] == "mcp.network.denied"
+    assert CREDENTIAL_SECRET not in str(audit)

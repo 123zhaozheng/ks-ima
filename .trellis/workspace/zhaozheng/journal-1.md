@@ -628,3 +628,24 @@ Removed 'Knowledge Base Assignment' tab, simplified scene config with direct mod
 ### Status
 
 [OK] **Completed**
+
+
+## Session 19: 会话过期跳转、MCP 凭据直通与连接器一键配置
+
+**Date**: 2026-09-13
+**Task**: 会话过期跳转、MCP 凭据直通与连接器一键配置
+**Branch**: `feat/intranet-ima`
+
+### Summary
+
+修复登录过期后页面不跳转登录页：请求层 401 时防抖重校验 /auth/session，区分会话真过期（清空会话触发 useRequireLogin 跳转）与近期验证 401（保留会话）。新建任务 09-13-connectors-one-click-mcp-config：后端 authenticate_bearer 支持服务凭据直接作为 /mcp Bearer（digest 查找、撤销/过期/CIDR/限流/审计，租约锚定用哨兵 canonical_resource 防猜测原像）；连接器页面改为一键生成 90 天密钥 + Cursor/Claude Desktop 两种可复制配置代码块 + 扁平密钥列表与撤销，提取 useRecentAuth 共享重验流程（ReauthDialog 移至 src/components），ModelsPage 同步切换。质量门全绿：pytest 229+12、bun 13、vitest 85、vue-tsc、lint、PWA build。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `471dede` | (see git log) |
+
+### Status
+
+[OK] **Completed**

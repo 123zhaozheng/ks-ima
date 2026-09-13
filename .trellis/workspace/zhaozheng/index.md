@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 18
-- **Last Active**: 2026-09-12
+- **Total Sessions**: 19
+- **Last Active**: 2026-09-13
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~630 | Active |
+| `journal-1.md` | ~651 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 19 | 2026-09-13 | 会话过期跳转、MCP 凭据直通与连接器一键配置 | `471dede` | `feat/intranet-ima` |
 | 18 | 2026-09-12 | UI 工作区精修 + 提问范围 P1 + 轻量文件预览 | `159a7f1`, `4b2a7b1`, `f7f8419`, `d6ca6bb`, `48f15f5`, `953ef4a`, `200ef81`, `6144db5`, `fa1c3f1`, `322b37b`, `b699850`, `9572b23`, `58bafe3`, `78fcd65` | `feat/intranet-ima` |
 | 17 | 2026-09-09 | Simplified model scene configuration and fixed Chinese UI | `c4ff55f` | `feat/intranet-ima` |
 | 16 | 2026-08-31 | 管理后台中文化与模型一键接入 | `80a93e2`, `fbb2361`, `0e12c53`, `fe26ff3`, `b3f861d`, `9cc63af` | `feat/intranet-ima` |

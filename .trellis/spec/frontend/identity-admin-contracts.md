@@ -16,6 +16,7 @@ src/admin/pages/UsersPage.vue         # user/security/role lifecycle
 src/admin/pages/KnowledgeBasesPage.vue # capability-aware knowledge base registry lifecycle
 src/admin/pages/AuditPage.vue         # typed read-only audit data
 src/components/AcceptInviteForm.vue   # platform user invite (not knowledge base joining)
+src/pages/ConnectorsPage.vue          # one-click MCP config card + OAuth grant revocation
 
 bun run generate:api
 bun run test:unit
@@ -30,6 +31,12 @@ bun run test:e2e
 - Cookies remain HttpOnly; CSRF comes from the readable cookie and is added only
   by the central client to unsafe requests. Tokens are never persisted in local
   or session storage.
+- The connectors page issues ready-to-paste MCP client configs (Cursor HTTP
+  headers, Claude Desktop `mcp-remote`) via `cursorMcpConfig` /
+  `claudeDesktopMcpConfig` from `src/utils/mcp-config.ts`. The credential works
+  directly as the `/mcp` bearer (see backend oauth-mcp contracts), renders once
+  in the config code block, lives only in memory, and is never persisted; after
+  a refresh the page lists only the credential prefix plus revoke.
 - Successful password/TOTP/recovery authentication refreshes the central
   session ref. Route guards watch both pending state and identity, because
   `undefined -> undefined` user IDs do not trigger a user-ID-only watcher.

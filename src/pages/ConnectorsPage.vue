@@ -78,7 +78,10 @@
           </q-item>
         </q-list>
       </section>
-      <section class="tk-card connectors-card">
+      <section
+        class="tk-card connectors-card"
+        data-testid="connectors-mcp-config"
+      >
         <header class="connectors-card-head">
           <q-icon
             name="sym_o_key"
@@ -87,10 +90,10 @@
           />
           <div>
             <h2 class="tk-card-title">
-              服务访问
+              MCP 配置
             </h2>
             <p class="tk-card-subtitle">
-              无人值守智能体
+              一键生成，粘贴到 Cursor / Claude Desktop 即可连接
             </p>
           </div>
         </header>
@@ -102,132 +105,79 @@
         >
           {{ error }}
         </q-banner>
-        <q-banner
-          v-if="oneTime"
-          rounded
-          class="connectors-secret"
-        >
-          <strong>一次性凭据</strong>
-          <code class="mono">{{ oneTime.secret }}</code>
-          <template #action>
+        <template v-if="issued">
+          <q-banner
+            rounded
+            class="connectors-hint"
+          >
+            密钥有效期 90 天，仅此一次完整显示，请立即复制并妥善保管。
+          </q-banner>
+          <q-btn-toggle
+            v-model="clientKind"
+            class="connectors-toggle"
+            dense
+            no-caps
+            unelevated
+            toggle-color="primary"
+            :options="[
+              { label: 'Cursor / HTTP', value: 'cursor' },
+              { label: 'Claude Desktop', value: 'claude' },
+            ]"
+          />
+          <pre class="connectors-config"><code data-testid="connectors-config-json">{{ configJson }}</code></pre>
+          <div class="connectors-actions">
             <q-btn
-              flat
-              round
-              dense
+              unelevated
+              no-caps
+              color="primary"
               icon="sym_o_content_copy"
-              title="复制"
-              @click="copy(oneTime.secret)"
-            />
-            <q-btn
-              flat
-              round
-              dense
-              icon="sym_o_close"
-              title="不再提示"
-              @click="oneTime = null"
-            />
-          </template>
-        </q-banner>
-        <div class="create-grid">
-          <q-input
-            v-model="form.displayName"
-            outlined
-            dense
-            label="名称"
-          />
-          <q-input
-            v-model="form.purpose"
-            outlined
-            dense
-            label="用途"
-          />
-          <q-input
-            v-model.number="form.expiresDays"
-            outlined
-            dense
-            type="number"
-            min="1"
-            max="90"
-            label="有效天数"
-          />
-          <div class="scopes">
-            <q-checkbox
-              v-for="scope in scopeOptions"
-              :key="scope"
-              v-model="form.scopes"
-              :val="scope"
-              :label="scopeLabel(scope)"
+              label="复制配置"
+              @click="copyConfig"
             />
           </div>
+        </template>
+        <div
+          v-else
+          class="connectors-actions"
+        >
           <q-btn
             unelevated
             no-caps
             color="primary"
-            icon="sym_o_add"
-            label="创建服务主体"
+            icon="sym_o_key"
+            label="获取 MCP 配置"
             :loading="creating"
-            @click="createPrincipal"
+            data-testid="connectors-generate"
+            @click="generateConfig"
           />
         </div>
         <q-list separator>
           <q-item v-if="loading">
-            <q-item-section>正在加载服务访问…</q-item-section>
+            <q-item-section>正在加载 MCP 配置…</q-item-section>
           </q-item>
-          <q-item v-else-if="!principals.length">
-            <q-item-section>暂无服务主体</q-item-section>
+          <q-item v-else-if="!keys.length">
+            <q-item-section>暂无已生成的密钥</q-item-section>
           </q-item>
           <q-item
-            v-for="principal in principals"
-            :key="principal.id"
+            v-for="key in keys"
+            :key="key.credentialId"
           >
             <q-item-section>
-              <q-item-label>{{ principal.displayName }}</q-item-label>
+              <q-item-label>{{ key.displayName }}</q-item-label>
               <q-item-label caption>
-                {{ principal.purpose }} · {{ principal.state }} · {{ formatTime(principal.expiresAt) }}
+                <span class="mono">{{ key.secretPrefix }}…</span> · {{ formatTime(key.expiresAt) }}
               </q-item-label>
-              <q-item-label caption>
-                {{ principal.scopes.map(scopeLabel).join(' · ') }}
-              </q-item-label>
-              <div
-                v-for="credential in credentials[principal.id] ?? []"
-                :key="credential.id"
-                class="credential-row"
-              >
-                <span class="mono">{{ credential.secretPrefix }}...</span>
-                <span class="connectors-credential-time">{{ formatTime(credential.expiresAt) }}</span>
-                <q-btn
-                  v-if="!credential.revokedAt"
-                  flat
-                  round
-                  dense
-                  color="negative"
-                  icon="sym_o_key_off"
-                  title="撤销凭据"
-                  @click="revokeCredential(principal.id, credential.credentialId)"
-                />
-              </div>
             </q-item-section>
             <q-item-section side>
-              <div>
-                <q-btn
-                  v-if="activeCredential(principal.id)"
-                  flat
-                  round
-                  dense
-                  icon="sym_o_refresh"
-                  title="轮换"
-                  @click="rotateFirstCredential(principal)"
-                />
-                <q-btn
-                  flat
-                  round
-                  dense
-                  color="negative"
-                  icon="sym_o_delete"
-                  title="撤销"
-                  @click="revokePrincipal(principal.id)"
-                />
-              </div>
+              <q-btn
+                flat
+                round
+                dense
+                color="negative"
+                icon="sym_o_delete"
+                title="撤销"
+                @click="revokeKey(key.principalId)"
+              />
             </q-item-section>
           </q-item>
         </q-list>
@@ -275,13 +225,15 @@
 
 <script setup lang="ts">
 import type { components } from 'src/api/generated/schema'
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { copyToClipboard, useQuasar } from 'quasar'
 import { useRouter } from 'vue-router'
+import { useRecentAuth } from 'src/composables/recent-auth'
+import { useRequireLogin } from 'src/composables/require-login'
 import { useKbStore } from 'src/stores/knowledge-base'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { identityClient, session } from 'src/utils/identity-client'
-import { mcpHttpUrl } from 'src/utils/mcp-config'
+import { mcpHttpUrl, cursorMcpConfig, claudeDesktopMcpConfig, prettyJson } from 'src/utils/mcp-config'
 
 type ServicePrincipal = components['schemas']['ServicePrincipalResponse']
 type CredentialIssue = components['schemas']['CredentialIssueResponse']
@@ -298,11 +250,14 @@ const scopeOptions = [
 const kbStore = useKbStore()
 const $q = useQuasar()
 const router = useRouter()
+useRequireLogin()
+const { withRecentAuth } = useRecentAuth()
 
 const principals = ref<ServicePrincipal[]>([])
 const grants = ref<ConnectedGrant[]>([])
 const credentials = ref<Record<string, Credential[]>>({})
-const oneTime = ref<CredentialIssue | null>(null)
+const issued = ref<CredentialIssue | null>(null)
+const clientKind = ref<'cursor' | 'claude'>('cursor')
 const loading = ref(false)
 const creating = ref(false)
 const error = ref('')
@@ -312,12 +267,44 @@ const mcpUrl = mcpHttpUrl()
 // reach every knowledge base the creator is a member of, so every signed-in
 // user manages their own without per-library or folder scoping.
 const showJoin = computed(() => kbStore.kbsStatus === 'success' && (kbStore.kbs?.length ?? 0) === 0)
-const form = reactive({
-  displayName: '',
-  purpose: '',
-  expiresDays: 30,
-  scopes: ['mcp:knowledge:read'],
+type KeyRow = {
+  principalId: string
+  displayName: string
+  secretPrefix: string
+  expiresAt: string
+  credentialId: string
+}
+
+// Flat key list: one principal per generated key. Revoked or expired
+// credentials and revoked principals disappear; only the prefix is known
+// after a page refresh.
+const keys = computed<KeyRow[]>(() => {
+  const rows: KeyRow[] = []
+  for (const principal of principals.value) {
+    if (principal.state !== 'active') continue
+    for (const credential of credentials.value[principal.id] ?? []) {
+      if (credential.revokedAt) continue
+      if (new Date(credential.expiresAt).getTime() <= Date.now()) continue
+      rows.push({
+        principalId: principal.id,
+        displayName: principal.displayName,
+        secretPrefix: credential.secretPrefix,
+        expiresAt: credential.expiresAt,
+        credentialId: credential.id,
+      })
+    }
+  }
+  return rows
 })
+
+const configJson = computed(() => {
+  if (!issued.value) return ''
+  const secret = issued.value.secret
+  return clientKind.value === 'claude'
+    ? prettyJson(claudeDesktopMcpConfig(secret))
+    : prettyJson(cursorMcpConfig(secret))
+})
+
 let loadGeneration = 0
 
 function scopeLabel(scope: string) {
@@ -328,10 +315,10 @@ function formatTime(value: string) {
   return new Date(value).toLocaleString()
 }
 
-function activeCredential(principalId: string) {
-  return credentials.value[principalId]?.find(
-    credential => !credential.revokedAt && new Date(credential.expiresAt).getTime() > Date.now(),
-  )
+function localStamp() {
+  const now = new Date()
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
 }
 
 async function load() {
@@ -368,71 +355,46 @@ async function load() {
   }
 }
 
-async function createPrincipal() {
+async function generateConfig() {
   const ownerId = session.value.data?.user.id
   if (!ownerId || creating.value) return
   error.value = ''
-  oneTime.value = null
-  if (!form.displayName.trim() || !form.purpose.trim() || !form.scopes.length) {
-    error.value = '请填写必需的服务访问字段。'
-    return
-  }
   creating.value = true
-  const expiresDays = Math.min(90, Math.max(1, Number(form.expiresDays) || 1))
+  // Fixed payload: the page decides every parameter, the user fills nothing.
   const payload = {
-    displayName: form.displayName.trim(),
-    purpose: form.purpose.trim(),
+    displayName: `MCP 配置 ${localStamp()}`,
+    purpose: '连接器页面一键生成',
     ownerUserId: ownerId,
-    scopes: form.scopes,
-    expiresAt: new Date(Date.now() + expiresDays * 86400000).toISOString(),
+    scopes: scopeOptions,
+    expiresAt: new Date(Date.now() + 90 * 86400000).toISOString(),
     rateLimit: 300,
     concurrencyLimit: 10,
     cidrAllowlist: [],
   } satisfies ServicePrincipalCreate
   try {
-    const result = await identityClient.createServicePrincipal(payload)
+    // Sensitive op: a recent-auth 401 asks for the password once and retries;
+    // a dead session redirects to sign-in through the login watcher instead.
+    const result = await withRecentAuth(() => identityClient.createServicePrincipal(payload))
     if (result.data) {
-      oneTime.value = result.data
-      form.displayName = ''
-      form.purpose = ''
+      issued.value = result.data
       await load()
     } else {
-      error.value = apiErrorMessage(result.error, '无法创建服务主体')
+      error.value = apiErrorMessage(result.error, '无法生成 MCP 配置')
     }
   } finally {
     creating.value = false
   }
 }
 
-async function revokePrincipal(id: string) {
-  const result = await identityClient.revokeServicePrincipal(id)
-  if (result.error) error.value = apiErrorMessage(result.error, '无法撤销服务主体')
+async function revokeKey(principalId: string) {
+  const result = await identityClient.revokeServicePrincipal(principalId)
+  if (result.error) error.value = apiErrorMessage(result.error, '无法撤销密钥')
   else await load()
 }
 
 async function revokeGrant(id: string) {
   const result = await identityClient.revokeConnectedOAuthGrant(id)
   if (result.error) error.value = apiErrorMessage(result.error, '无法撤销连接')
-  else await load()
-}
-
-async function rotateFirstCredential(principal: ServicePrincipal) {
-  const credential = activeCredential(principal.id)
-  if (!credential) return
-  oneTime.value = null
-  const result = await identityClient.rotateServiceCredential(
-    principal.id,
-    credential.credentialId,
-    { expiresAt: principal.expiresAt, overlapExpiresAt: null },
-  )
-  if (result.data) oneTime.value = result.data
-  else error.value = apiErrorMessage(result.error, '无法轮换凭据')
-  await load()
-}
-
-async function revokeCredential(principalId: string, credentialId: string) {
-  const result = await identityClient.revokeServiceCredential(principalId, credentialId)
-  if (result.error) error.value = apiErrorMessage(result.error, '无法撤销凭据')
   else await load()
 }
 
@@ -450,12 +412,17 @@ async function copy(value: string) {
   $q.notify({ message: '已复制', type: 'positive' })
 }
 
+async function copyConfig() {
+  await copyToClipboard(configJson.value)
+  $q.notify({ message: '已复制', type: 'positive' })
+}
+
 watch(
   () => session.value.data?.user.id,
   (userId, previous) => {
     if (!userId || userId === previous) return
     loadGeneration += 1
-    oneTime.value = null
+    issued.value = null
     principals.value = []
     credentials.value = {}
     grants.value = []
@@ -463,7 +430,7 @@ watch(
   },
   { immediate: true },
 )
-onBeforeUnmount(() => { oneTime.value = null })
+onBeforeUnmount(() => { issued.value = null })
 </script>
 
 <style scoped>
@@ -486,16 +453,10 @@ onBeforeUnmount(() => { oneTime.value = null })
   color: var(--tk-danger);
 }
 
-.connectors-secret {
+.connectors-hint {
   margin: var(--tk-space-2) var(--tk-space-4) 0;
   background-color: var(--tk-accent-soft);
   color: var(--tk-text);
-}
-
-.connectors-secret strong,
-.connectors-secret code {
-  display: block;
-  margin-bottom: var(--tk-space-1);
 }
 
 .mono,
@@ -504,31 +465,28 @@ code {
   overflow-wrap: anywhere;
 }
 
-.create-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--tk-space-3);
-  padding: var(--tk-space-4) var(--tk-space-4) 0;
+.connectors-toggle {
+  margin: var(--tk-space-3) var(--tk-space-4) 0;
 }
 
-.scopes {
-  grid-column: 1 / -1;
+.connectors-config {
+  margin: var(--tk-space-3) var(--tk-space-4) 0;
+  padding: var(--tk-space-3);
+  border: 1px solid var(--tk-border);
+  border-radius: var(--tk-radius);
+  background-color: var(--tk-surface-deep);
+  overflow: auto;
+  max-height: 320px;
+}
+
+.connectors-config code {
+  white-space: pre;
+}
+
+.connectors-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--tk-space-1) 14px;
-}
-
-.credential-row {
-  display: grid;
-  grid-template-columns: minmax(100px, 1fr) minmax(140px, auto) 40px;
-  align-items: center;
-  gap: var(--tk-space-2);
-  margin-top: var(--tk-space-2);
-}
-
-.connectors-credential-time {
-  color: var(--tk-text-secondary);
-  font-size: 13px;
+  justify-content: flex-end;
+  padding: var(--tk-space-2) var(--tk-space-4) 0;
 }
 
 .join-row {
@@ -543,23 +501,6 @@ code {
 }
 
 @media (max-width: 640px) {
-  .create-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .scopes {
-    grid-column: auto;
-    flex-direction: column;
-  }
-
-  .credential-row {
-    grid-template-columns: 1fr 40px;
-  }
-
-  .credential-row span:nth-child(2) {
-    grid-column: 1;
-  }
-
   .join-row {
     flex-direction: column;
     align-items: stretch;

@@ -525,8 +525,7 @@ import { identityClient, session } from 'src/utils/identity-client'
 import { apiErrorCode, apiErrorMessage } from 'src/utils/api-error'
 import ModelAvatar from '../components/ModelAvatar.vue'
 import PaneEmptyState from 'src/components/PaneEmptyState.vue'
-import ReauthDialog from '../components/ReauthDialog.vue'
-import VerifyTotpDialog from 'src/components/VerifyTotpDialog.vue'
+import { useRecentAuth } from 'src/composables/recent-auth'
 import { CAPABILITY_LABELS, KNOWN_DIMENSIONS, guessCapability } from 'src/admin/model-catalog'
 import type { Capability } from 'src/admin/model-catalog'
 
@@ -619,31 +618,7 @@ function maskedUrl(url: string | null | undefined) {
 }
 
 // ---------- 敏感操作的近期认证 ----------
-type MutationResult<T> = { data?: T, error?: { code?: string, message: string } }
-
-function reauthenticate(): Promise<boolean> {
-  return new Promise(resolve => {
-    $q.dialog({ component: ReauthDialog, persistent: true })
-      .onOk((challenge?: string) => {
-        if (!challenge) {
-          resolve(true)
-          return
-        }
-        $q.dialog({ component: VerifyTotpDialog, componentProps: { challenge }, persistent: true })
-          .onOk(() => resolve(true))
-          .onCancel(() => resolve(false))
-      })
-      .onCancel(() => resolve(false))
-  })
-}
-
-async function withRecentAuth<T>(action: () => Promise<MutationResult<T>>): Promise<MutationResult<T>> {
-  let result = await action()
-  if (result.error && apiErrorCode(result.error) === 'HTTP_401' && await reauthenticate()) {
-    result = await action()
-  }
-  return result
-}
+const { withRecentAuth } = useRecentAuth()
 
 // ---------- 服务商 ----------
 const gatewayDialog = reactive({ show: false, editId: '', saving: false })

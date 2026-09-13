@@ -108,6 +108,28 @@ test.describe('local identity journeys', () => {
     await expect(page.getByText('活跃会话', { exact: true })).toBeVisible()
   })
 
+  test('session revoked behind the page redirects to sign-in on the next action', async ({ page }) => {
+    await page.goto('/auth/sign-in')
+    await page.getByLabel('电子邮件').fill(accounts.ordinary[0])
+    await page.getByLabel('密码').fill(accounts.ordinary[1])
+    const signInResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/auth/sign-in') && response.request().method() === 'POST')
+    await page.getByRole('button', { name: /登录/ }).click()
+    expect((await signInResponse).ok()).toBeTruthy()
+
+    await page.goto('/settings')
+    await expect(page.getByTestId('settings-security')).toBeVisible()
+
+    // Expire the session behind the page's back: the SPA keeps a dead cookie
+    // and a stale in-memory session ref.
+    const revoke = await page.request.delete('/api/v1/account/sessions', { headers: await csrfHeaders(page) })
+    expect(revoke.ok()).toBeTruthy()
+
+    // The next in-page API call 401s; the client must re-check the session and
+    // route to sign-in without a reload.
+    await page.getByTestId('settings-revoke-all').click()
+    await expect(page).toHaveURL(/auth\/sign-in/)
+  })
+
   test('super admin can manage roles, knowledge bases, and audit', async ({ page }) => {
     await login(page, accounts.super[0], accounts.super[1])
     await page.goto('/admin/users')

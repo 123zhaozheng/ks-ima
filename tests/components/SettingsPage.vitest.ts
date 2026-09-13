@@ -115,8 +115,18 @@ describe('Settings single page', () => {
   })
 
   test('shows an error banner when sessions cannot be loaded', async () => {
-    globalThis.fetch = vi.fn(() =>
-      Promise.resolve(new Response(JSON.stringify({ detail: 'Session expired' }), { status: 401 }))) as unknown as typeof fetch
+    // A 401 now also triggers a session re-check; the re-check must succeed
+    // so the sessions-list failure still renders as its error banner.
+    globalThis.fetch = vi.fn((input: string) => {
+      const path = String(input)
+      if (path.includes('/account/sessions')) {
+        return Promise.resolve(new Response(JSON.stringify({ detail: 'Session expired' }), { status: 401 }))
+      }
+      if (path.includes('/auth/session')) {
+        return Promise.resolve(new Response(JSON.stringify({ id: 'u1', email: 'user@test', displayName: 'Test User', platformRoles: [], isActive: true }), { status: 200 }))
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }))
+    }) as unknown as typeof fetch
     const wrapper = mountSettings()
     await flushPromises()
     expect(wrapper.text()).toContain('Session expired')

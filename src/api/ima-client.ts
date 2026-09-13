@@ -1,4 +1,5 @@
 import type { components } from 'src/api/generated/schema'
+import { revalidateSession } from '../utils/identity-client'
 
 type BuildInfo = components['schemas']['BuildInfo']
 type ProblemDetails = components['schemas']['ProblemDetails']
@@ -24,6 +25,8 @@ export class IMAClient {
     const response = await fetch(`${this.origin}${path}`, { ...init, headers, credentials: 'include' })
     if (!response.ok) {
       const problem = await response.json() as ProblemDetails
+      // Same mid-visit expiry handling as identityClient: re-check the session.
+      if (response.status === 401) revalidateSession()
       throw new IMAApiError(problem)
     }
     if (response.status === 204) return undefined as T

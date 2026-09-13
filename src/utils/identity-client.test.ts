@@ -1,6 +1,12 @@
 import { afterAll, describe, expect, mock, test } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
-import { identityClient } from './identity-client'
+import { IMAApiError, imaClient } from '../api/ima-client'
+import { identityClient, session } from './identity-client'
+
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input
+  return input instanceof URL ? input.href : input.url
+}
 
 const originalFetch = globalThis.fetch
 GlobalRegistrator.register()
@@ -45,5 +51,61 @@ describe('identity client', () => {
     const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(call[0]).toBe('/api/v1/service-principals')
     expect(new Headers(call[1].headers).get('X-CSRF-Token')).toBe('test-csrf')
+  })
+
+  test('re-checks the session on 401 and clears it when expired', async () => {
+    session.value = { isPending: false, error: null, data: { user: { id: 'u1' } as never } }
+    const fetchMock = mock(() => Promise.resolve(
+      new Response(JSON.stringify({ detail: 'Authentication is required', code: 'HTTP_401' }), { status: 401 }),
+    ))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+    await identityClient.profile()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const calls = fetchMock.mock.calls as unknown as [RequestInfo | URL][]
+    expect(calls.some(call => requestUrl(call[0]).includes('/auth/session'))).toBe(true)
+    expect(session.value.data).toBeNull()
+  })
+
+  test('keeps a still-valid session when the 401 only demands recent auth', async () => {
+    session.value = { isPending: false, error: null, data: { user: { id: 'u1' } as never } }
+    globalThis.fetch = mock((input: RequestInfo | URL) => Promise.resolve(
+      requestUrl(input).includes('/auth/session')
+        ? new Response(JSON.stringify({ id: 'u1' }), { status: 200 })
+        : new Response(JSON.stringify({ detail: 'Recent authentication is required', code: 'HTTP_401' }), { status: 401 }),
+    )) as unknown as typeof fetch
+    await identityClient.profile()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(session.value.data?.user.id).toBe('u1')
+  })
+
+  test('concurrent 401 responses share one session re-check', async () => {
+    session.value = { isPending: false, error: null, data: { user: { id: 'u1' } as never } }
+    const fetchMock = mock(() => Promise.resolve(
+      new Response(JSON.stringify({ detail: 'Authentication is required', code: 'HTTP_401' }), { status: 401 }),
+    ))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+    await Promise.all([identityClient.profile(), identityClient.listSessions()])
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const calls = fetchMock.mock.calls as unknown as [RequestInfo | URL][]
+    expect(calls.filter(call => requestUrl(call[0]).includes('/auth/session'))).toHaveLength(1)
+    expect(session.value.data).toBeNull()
+  })
+
+  test('ima client 401 re-checks the session as well', async () => {
+    session.value = { isPending: false, error: null, data: { user: { id: 'u1' } as never } }
+    globalThis.fetch = mock((input: RequestInfo | URL) => Promise.resolve(
+      requestUrl(input).includes('/auth/session')
+        ? new Response(JSON.stringify({ detail: 'Authentication is required' }), { status: 401 })
+        : new Response(JSON.stringify({ detail: 'Authentication is required', code: 'HTTP_401' }), { status: 401 }),
+    )) as unknown as typeof fetch
+    let thrown: unknown
+    try {
+      await imaClient.request('/api/v1/conversations')
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(IMAApiError)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(session.value.data).toBeNull()
   })
 })

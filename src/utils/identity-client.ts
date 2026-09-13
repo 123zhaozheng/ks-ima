@@ -78,6 +78,10 @@ async function request<T>(path: string, init: RequestInit = {}, prefix = '/api/v
     if (csrf) headers.set('X-CSRF-Token', decodeURIComponent(csrf))
   }
   const response = await fetch(`${prefix}${path}`, { ...init, headers, credentials: 'include' })
+  // A 401 can mean the cookie session died mid-visit: re-check it so the
+  // useRequireLogin watchers redirect to sign-in. A still-valid session
+  // (recent-auth 401) survives the re-check; '/auth/session' itself must not loop.
+  if (response.status === 401 && path !== '/auth/session') revalidateSession()
   const body = await response.json().catch(() => ({})) as T & { detail?: string, code?: string }
   return response.ok ? { data: body } : { error: { code: body.code, message: body.detail ?? 'Request failed' } }
 }
@@ -90,6 +94,16 @@ export async function getSession(): Promise<Result<IdentityUser>> {
   return result
 }
 getSession().catch(() => undefined)
+
+let sessionRevalidation: Promise<void> | null = null
+/** Debounced session re-check fired by any 401 response. */
+export function revalidateSession(): Promise<void> {
+  sessionRevalidation ??= getSession()
+    .then(() => undefined)
+    .catch(() => undefined)
+    .finally(() => { sessionRevalidation = null })
+  return sessionRevalidation
+}
 
 export const identityClient = {
   getSession,

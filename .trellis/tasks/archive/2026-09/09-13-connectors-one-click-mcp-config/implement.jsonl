@@ -1,0 +1,6 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/oauth-mcp-contracts.md", "reason": "MCP Bearer 鉴权、审计、限流与 scope 契约"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "OAuth 端点错误形态与 RFC 9457 边界"}
+{"file": ".trellis/spec/frontend/ux-design-language.md", "reason": "页面设计语言、token 与 testid 约定"}
+{"file": ".trellis/spec/frontend/identity-admin-contracts.md", "reason": "identity client、一次性凭据安全契约与测试要求"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量门与禁用模式"}

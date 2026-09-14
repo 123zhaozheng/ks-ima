@@ -364,6 +364,7 @@ import { useRequireLogin } from 'src/composables/require-login'
 import { useFolderContents } from 'src/composables/use-knowledge'
 import { useKbListSort } from 'src/composables/use-kb-list-sort'
 import type { KbListGroup, KbListSort } from 'src/api/knowledge-client'
+import { knowledgeClient } from 'src/api/knowledge-client'
 import { useKbStore } from 'src/stores/knowledge-base'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { pageFhStyle } from 'src/utils/functions'
@@ -371,6 +372,7 @@ import { identityClient, session } from 'src/utils/identity-client'
 
 type Folder = components['schemas']['Folder']
 type Document = components['schemas']['DocumentResponse']
+type ContentRow = components['schemas']['ContentRow']
 
 useRequireLogin()
 
@@ -407,13 +409,17 @@ const treeRef = useTemplateRef<InstanceType<typeof FolderTree>>('treeRef')
 const narrowQuery = window.matchMedia('(max-width: 999px)')
 const isNarrow = ref(narrowQuery.matches)
 const treeCollapsed = ref(false)
+let previewableLookupAbort: AbortController | undefined
 
 function onNarrowChange(event: MediaQueryListEvent) {
   isNarrow.value = event.matches
 }
 
 narrowQuery.addEventListener('change', onNarrowChange)
-onBeforeUnmount(() => narrowQuery.removeEventListener('change', onNarrowChange))
+onBeforeUnmount(() => {
+  narrowQuery.removeEventListener('change', onNarrowChange)
+  previewableLookupAbort?.abort()
+})
 
 // The tree owns the folder map; read the current folder's title for the list
 // header breadcrumb (empty at the knowledge base root).
@@ -491,8 +497,9 @@ watch(documentId, id => {
 }, { immediate: true })
 
 // Default-preview: when the current folder has documents but the URL has no
-// ?doc=, select the first previewable row so the pane never opens empty.
-// Shares the list's query via the same queryKey (no extra request).
+// ?doc=, prefer a document the server says the client can actually render.
+// ContentRow intentionally omits mimeType, so file candidates are checked
+// against the authoritative document response before selecting one.
 const folderContents = useFolderContents(
   () => folderId.value || null,
   () => ({ sort: listSort.sort, group: listSort.group }),
@@ -506,10 +513,62 @@ watch(previewCollapsed, collapsed => {
 watch(folderId, () => {
   previewDismissed.value = false
 })
-const firstPreviewableId = computed(() => {
-  const items = folderContents.data.value?.items ?? []
-  return items.find(item => item.kind !== 'folder')?.id ?? null
-})
+
+const INLINE_PREVIEW_MIMES = new Set([
+  'text/plain',
+  'text/markdown',
+  'application/json',
+  'application/pdf',
+])
+const OFFICE_PREVIEW_MIMES = new Set([
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+])
+const firstPreviewableId = ref<string | null>(null)
+let previewableLookupId = 0
+
+function canPreviewDocument(value: Document) {
+  if (value.kind === 'note') return true
+  if (value.fileState !== 'ready' || !value.mimeType) return false
+  return INLINE_PREVIEW_MIMES.has(value.mimeType) ||
+    value.mimeType.startsWith('image/') ||
+    OFFICE_PREVIEW_MIMES.has(value.mimeType)
+}
+
+async function resolveFirstPreviewableId(items: ContentRow[]) {
+  previewableLookupAbort?.abort()
+  const controller = new AbortController()
+  previewableLookupAbort = controller
+  const lookupId = ++previewableLookupId
+  const fallbackId = items.find(item => item.kind !== 'folder')?.id ?? null
+  firstPreviewableId.value = null
+
+  for (const item of items) {
+    if (item.kind === 'note') {
+      if (previewableLookupId === lookupId && !controller.signal.aborted) firstPreviewableId.value = item.id
+      return
+    }
+    if (item.kind !== 'file' || item.fileState !== 'ready') continue
+    try {
+      const value = await knowledgeClient.document(item.id, controller.signal)
+      if (canPreviewDocument(value)) {
+        if (previewableLookupId === lookupId && !controller.signal.aborted) firstPreviewableId.value = item.id
+        return
+      }
+    } catch {
+      if (controller.signal.aborted) return
+    }
+  }
+
+  if (previewableLookupId === lookupId && !controller.signal.aborted) firstPreviewableId.value = fallbackId
+}
+
+watch([folderId, () => folderContents.data.value?.items], ([, items]) => {
+  resolveFirstPreviewableId(items ?? [])
+}, { immediate: true })
+
 watch([documentId, firstPreviewableId, () => folderContents.isSuccess.value], ([docId, firstId, loaded]) => {
   if (docId || !loaded || !firstId || previewDismissed.value) return
   router.replace({ query: { ...route.query, doc: firstId } })

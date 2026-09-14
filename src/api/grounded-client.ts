@@ -1,7 +1,8 @@
 import type { components } from 'src/api/generated/schema'
 import { IMAApiError, imaClient } from './ima-client'
+import { authenticatedFetch } from 'src/utils/identity-client'
 
-type AskRequest = components['schemas']['AskRequest']
+type AskRequest = Omit<components['schemas']['AskRequest'], 'agent'> & { agent?: boolean }
 type AskScope = components['schemas']['AskScope']
 type Citation = components['schemas']['CitationResponse']
 type Conversation = components['schemas']['ConversationDetail']
@@ -34,25 +35,45 @@ async function toProblem(response: Response): Promise<ProblemDetails> {
 function streamRequest(url: string, body: Record<string, unknown>, signal: AbortSignal, onEvent: StreamHandler) {
   return async () => {
     const headers = new Headers({ Accept: 'text/event-stream', 'Content-Type': 'application/json' })
-    const csrf = document.cookie.split('; ').find(value => value.startsWith('ima_csrf='))?.split('=').slice(1).join('=')
-    if (csrf) headers.set('X-CSRF-Token', decodeURIComponent(csrf))
-    const response = await fetch(url, { method: 'POST', credentials: 'include', headers, body: JSON.stringify(body), signal })
+    const response = await authenticatedFetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal })
     if (!response.ok || !response.body) throw new IMAApiError(await toProblem(response))
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let pending = ''
+
+    const dispatch = (frame: string) => {
+      const event = frame.match(/^event:\s*(.+)$/m)?.[1]?.trim()
+      const data = frame.match(/^data:\s*(.+)$/m)?.[1]?.trim()
+      if (!event || !data) return
+      try {
+        onEvent(event, JSON.parse(data) as Record<string, unknown>)
+      } catch {
+        // Ignore a malformed upstream frame; the terminal error frame owns
+        // the user-visible failure state and raw gateway text never renders.
+      }
+    }
+
+    const drain = (flush = false) => {
+      while (true) {
+        const separator = pending.match(/\r?\n\r?\n/)
+        if (!separator || separator.index === undefined) break
+        dispatch(pending.slice(0, separator.index))
+        pending = pending.slice(separator.index + separator[0].length)
+      }
+      if (flush && pending.trim()) {
+        dispatch(pending)
+        pending = ''
+      }
+    }
+
     while (true) {
       const next = await reader.read()
       if (next.done) break
       pending += decoder.decode(next.value, { stream: true })
-      const frames = pending.split('\n\n')
-      pending = frames.pop() ?? ''
-      for (const frame of frames) {
-        const event = frame.match(/^event: (.+)$/m)?.[1]
-        const data = frame.match(/^data: (.+)$/m)?.[1]
-        if (event && data) onEvent(event, JSON.parse(data) as Record<string, unknown>)
-      }
+      drain()
     }
+    pending += decoder.decode()
+    drain(true)
   }
 }
 
@@ -72,6 +93,9 @@ export const groundedClient = {
   updateConversation: (kbId: string, conversationId: string, body: ConversationPatch) => imaClient.request<ConversationResponse>(`/api/v1/knowledge-bases/${path(kbId)}/conversations/${path(conversationId)}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteConversation: (kbId: string, conversationId: string, expectedVersion: number) => imaClient.request<void>(`/api/v1/knowledge-bases/${path(kbId)}/conversations/${path(conversationId)}?expectedVersion=${path(expectedVersion)}`, { method: 'DELETE' }),
   citation: (kbId: string, messageId: string, ordinal: number, signal?: AbortSignal) => imaClient.request<Citation>(`/api/v1/knowledge-bases/${path(kbId)}/messages/${path(messageId)}/citations/${path(ordinal)}`, { signal }),
-  ask: (kbId: string, request: AskRequest, signal: AbortSignal, onEvent: StreamHandler) => streamRequest(`/api/v1/knowledge-bases/${path(kbId)}/ask`, request, signal, onEvent)(),
-  retry: (kbId: string, conversationId: string, messageId: string, expectedVersion: number, scope: AskScope | null | undefined, signal: AbortSignal, onEvent: StreamHandler) => streamRequest(`/api/v1/knowledge-bases/${path(kbId)}/conversations/${path(conversationId)}/retry`, { messageId, expectedVersion, ...(scope ? { scope } : {}) }, signal, onEvent)(),
+  // Keep the transport's omission/default semantics intact. The Ask
+  // composable opts into the agent loop explicitly; other callers can still
+  // exercise the compatibility path with no agent field or agent=false.
+  ask: (kbId: string, request: AskRequest, signal: AbortSignal, onEvent: StreamHandler) => streamRequest(`/api/v1/knowledge-bases/${path(kbId)}/ask`, { ...request }, signal, onEvent)(),
+  retry: (kbId: string, conversationId: string, messageId: string, expectedVersion: number, scope: AskScope | null | undefined, signal: AbortSignal, onEvent: StreamHandler, agent = false) => streamRequest(`/api/v1/knowledge-bases/${path(kbId)}/conversations/${path(conversationId)}/retry`, { messageId, expectedVersion, agent, ...(scope ? { scope } : {}) }, signal, onEvent)(),
 }

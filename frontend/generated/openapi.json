@@ -182,6 +182,11 @@
       "AskRequest": {
         "additionalProperties": false,
         "properties": {
+          "agent": {
+            "default": false,
+            "title": "Agent",
+            "type": "boolean"
+          },
           "conversationId": {
             "anyOf": [
               {
@@ -916,6 +921,11 @@
       "ContentRow": {
         "additionalProperties": false,
         "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
           "fileState": {
             "anyOf": [
               {
@@ -981,7 +991,8 @@
           "title",
           "orderKey",
           "version",
-          "lifecycle"
+          "lifecycle",
+          "createdAt"
         ],
         "title": "ContentRow",
         "type": "object"
@@ -1185,6 +1196,11 @@
       "ConversationRetryRequest": {
         "additionalProperties": false,
         "properties": {
+          "agent": {
+            "default": false,
+            "title": "Agent",
+            "type": "boolean"
+          },
           "expectedVersion": {
             "exclusiveMinimum": 0.0,
             "title": "Expectedversion",
@@ -8985,6 +9001,28 @@
               ],
               "title": "Kind"
             }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "manual",
+              "pattern": "^(manual|name_asc|name_desc|created_asc|created_desc)$",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group",
+            "required": false,
+            "schema": {
+              "default": "folders_first",
+              "pattern": "^(folders_first|files_first)$",
+              "title": "Group",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -9437,8 +9475,10 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
             "description": "Successful Response"
@@ -9708,8 +9748,10 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
             "description": "Successful Response"

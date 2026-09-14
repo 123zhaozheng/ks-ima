@@ -315,7 +315,14 @@ async def test_fake_upstream_executes_discovery_chat_embedding_and_rerank(
             if url.endswith("/chat/completions"):
                 return Response({"choices": [{"message": {"content": "OK"}}]})
             if url.endswith("/embeddings"):
-                return Response({"data": [{"embedding": [0.1, 0.2]} for _ in json["input"]]})
+                return Response(
+                    {
+                        "data": [
+                            {"index": index, "embedding": [0.1 + index, 0.2 + index]}
+                            for index in reversed(range(len(json["input"])))
+                        ]
+                    }
+                )
             return Response({"results": [{"index": 0, "relevance_score": 0.9}]})
 
     async def allowed(*_args: object, **_kwargs: object) -> tuple[str, ...]:
@@ -329,7 +336,7 @@ async def test_fake_upstream_executes_discovery_chat_embedding_and_rerank(
     assert (await client.chat_completion(base_url, "chat", {"messages": []}))["choices"]
     assert await client.embeddings(base_url, "embedding", ["one", "two"]) == (
         (0.1, 0.2),
-        (0.1, 0.2),
+        (1.1, 1.2),
     )
     assert await client.rerank(base_url, "rerank", "query", ["one", "two"]) == ((0, 0.9),)
     assert requests[0][1]["trust_env"] is False

@@ -307,9 +307,18 @@ class GuardedGatewayClient:
         )
         if not isinstance(value, dict) or not isinstance(value.get("data"), list):
             raise GatewayError("INVALID_EMBEDDING_RESPONSE")
-        vectors: list[tuple[float, ...]] = []
+        indexed_vectors: dict[int, tuple[float, ...]] = {}
         for item in cast(list[Any], value["data"]):
             if not isinstance(item, dict) or not isinstance(item.get("embedding"), list):
+                raise GatewayError("INVALID_EMBEDDING_RESPONSE")
+            index = item.get("index")
+            if (
+                not isinstance(index, int)
+                or isinstance(index, bool)
+                or index < 0
+                or index >= len(inputs)
+                or index in indexed_vectors
+            ):
                 raise GatewayError("INVALID_EMBEDDING_RESPONSE")
             try:
                 vector = tuple(float(number) for number in item["embedding"])
@@ -319,10 +328,10 @@ class GuardedGatewayClient:
                 number != number or number in {float("inf"), float("-inf")} for number in vector
             ):
                 raise GatewayError("INVALID_EMBEDDING_RESPONSE")
-            vectors.append(vector)
-        if len(vectors) != len(inputs):
+            indexed_vectors[index] = vector
+        if set(indexed_vectors) != set(range(len(inputs))):
             raise GatewayError("INVALID_EMBEDDING_RESPONSE")
-        return tuple(vectors)
+        return tuple(indexed_vectors[index] for index in range(len(inputs)))
 
     async def rerank(
         self,

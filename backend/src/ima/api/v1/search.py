@@ -141,6 +141,8 @@ async def delete_conversation(
 @router.post(
     "/knowledge-bases/{kb_id}/conversations/{conversation_id}/retry",
     operation_id="retryGroundedConversation",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"text/event-stream": {"schema": {"type": "string"}}}}},
 )
 async def retry_conversation(
     kb_id: str,
@@ -158,6 +160,7 @@ async def retry_conversation(
         payload.message_id,
         payload.expected_version,
         request_scope(payload.scope),
+        payload.agent,
     )
     return StreamingResponse(
         stream,
@@ -166,14 +169,24 @@ async def retry_conversation(
     )
 
 
-@router.post("/knowledge-bases/{kb_id}/ask", operation_id="streamGroundedAsk")
+@router.post(
+    "/knowledge-bases/{kb_id}/ask",
+    operation_id="streamGroundedAsk",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"text/event-stream": {"schema": {"type": "string"}}}}},
+)
 async def ask(
     kb_id: str, payload: AskRequest, request: Request, current: Current
 ) -> StreamingResponse:
     session, actor = current
     check_csrf(request, session)
     stream = await service(request).ask(
-        actor.id, kb_id, payload.question, payload.conversation_id, request_scope(payload.scope)
+        actor.id,
+        kb_id,
+        payload.question,
+        payload.conversation_id,
+        request_scope(payload.scope),
+        payload.agent,
     )
     return StreamingResponse(
         stream,

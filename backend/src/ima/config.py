@@ -79,8 +79,12 @@ class Settings(BaseSettings):
     ingestion_queue: str = "ingestion"
     ingestion_max_text_bytes: int = 5 * 1024 * 1024
     ingestion_max_chunks: int = 10000
+    # Chunk size is a mixed-language token budget; the legacy names remain for
+    # environment compatibility while the chunker records the effective config.
     ingestion_chunk_size: int = 1200
     ingestion_chunk_overlap: int = 160
+    ingestion_chunk_overlap_blocks: int = 1
+    ingestion_chunker_version: str = "structure-aware-v1"
     # OAuth/MCP protected-resource controls.  Duration values are caps; a
     # deployment may shorten but never exceed them.  The canonical resource is
     # always the public origin plus the fixed `/mcp` path.
@@ -260,7 +264,12 @@ class Settings(BaseSettings):
             raise ValueError("storage and ingestion limits must be between 1 and 536870912")
         return value
 
-    @field_validator("storage_presign_seconds", "storage_retention_seconds", "ingestion_max_chunks")
+    @field_validator(
+        "storage_presign_seconds",
+        "storage_retention_seconds",
+        "ingestion_max_chunks",
+        "ingestion_chunk_overlap_blocks",
+    )
     @classmethod
     def validate_positive_limits(cls, value: int) -> int:
         if value < 1:
@@ -297,6 +306,8 @@ class Settings(BaseSettings):
             )
         if self.ingestion_chunk_overlap >= self.ingestion_chunk_size:
             raise ValueError("ingestion_chunk_overlap must be less than ingestion_chunk_size")
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", self.ingestion_chunker_version):
+            raise ValueError("ingestion_chunker_version is invalid")
         if self.environment == "production":
             if not self.public_origin.startswith("https://"):
                 raise ValueError("production public_origin must use HTTPS")

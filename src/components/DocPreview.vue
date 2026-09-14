@@ -122,7 +122,7 @@
               v-if="document?.kind === 'file'"
               clickable
               :disable="!document"
-              @click="reloadPreview"
+              @click="reloadPreview()"
             >
               <q-item-section avatar>
                 <q-icon name="sym_o_refresh" />
@@ -164,6 +164,15 @@
         class="bg-negative text-white"
       >
         该文档不可用，或访问权限已被撤销。
+        <template #action>
+          <q-btn
+            flat
+            dense
+            label="重试"
+            data-testid="doc-metadata-retry"
+            @click="query.refetch()"
+          />
+        </template>
       </q-banner>
       <q-banner
         v-if="conflict"
@@ -288,14 +297,26 @@
       >
         版本 {{ document.currentContentVersion }}
       </div>
+      <div
+        v-if="previewUrl && isPdf && !previewFailure"
+        class="doc-preview-pdf"
+        flex-1
+        min-h-0
+      >
+        <PdfPreview
+          :src="previewUrl"
+          :title="document.title"
+          @error="handlePdfError"
+        />
+      </div>
       <iframe
-        v-if="previewUrl"
+        v-else-if="previewUrl && !isPdf"
         :src="previewUrl"
         class="doc-preview-iframe"
         :title="document.title"
       />
       <div
-        v-else-if="officeFormat"
+        v-else-if="officeFormat && !previewFailure"
         class="doc-preview-office"
         flex-1
         min-h-0
@@ -322,6 +343,21 @@
         />
       </div>
       <div
+        v-else-if="previewLoading"
+        class="doc-preview-loading"
+        flex
+        flex-1
+        items-center
+        justify-center
+        gap-2
+      >
+        <q-spinner
+          color="primary"
+          size="32px"
+        />
+        <span>正在加载预览…</span>
+      </div>
+      <div
         v-else-if="previewFailure === 'error'"
         flex
         flex-1
@@ -340,7 +376,7 @@
               icon="sym_o_refresh"
               label="重试"
               data-testid="doc-preview-retry"
-              @click="reloadPreview"
+              @click="reloadPreview()"
             />
           </template>
         </pane-empty-state>
@@ -449,11 +485,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import DOMPurify from 'dompurify'
 import { Notify, useQuasar } from 'quasar'
 import PaneEmptyState from 'src/components/PaneEmptyState.vue'
+import PdfPreview from 'src/components/PdfPreview.vue'
 import { useFileVersions, useKnowledgeDocument, useKnowledgeIngestion, useKnowledgeMutations, useKnowledgeVersions } from 'src/composables/use-knowledge'
 import { knowledgeClient } from 'src/api/knowledge-client'
 import { IMAApiError } from 'src/api/ima-client'
@@ -502,6 +539,8 @@ const previewUrl = ref<string>()
 // retryable.
 const previewFailure = ref<'unsupported' | 'error'>()
 const previewLoading = ref(false)
+let previewAbort: AbortController | undefined
+let previewRequestId = 0
 
 // Office formats render in-page from the authorized bytes (see task
 // 09-12-kb-light-file-preview); the backend preview endpoint only serves
@@ -520,6 +559,8 @@ const officeFormat = computed<OfficeFormat | undefined>(() => {
 const officeContainer = ref<HTMLElement>()
 const officeHtml = ref<string>()
 const officeRendering = ref(false)
+const officeRenderHosts = new Map<number, HTMLElement>()
+const isPdf = computed(() => document.value?.mimeType === 'application/pdf' || document.value?.title.toLowerCase().endsWith('.pdf'))
 const replacementInput = ref<HTMLInputElement>()
 const replacementProgress = ref(0)
 const replacing = ref(false)
@@ -532,65 +573,134 @@ watch(document, value => {
   markdown.value = value.markdown ?? ''
 }, { immediate: true })
 
+function clearOfficePreview() {
+  officeHtml.value = undefined
+  for (const [requestId, host] of officeRenderHosts) {
+    host.remove()
+    officeRenderHosts.delete(requestId)
+  }
+}
+
+function removeOfficeRenderHost(requestId: number) {
+  const host = officeRenderHosts.get(requestId)
+  if (!host) return
+  host.remove()
+  officeRenderHosts.delete(requestId)
+}
+
+function cancelPreviewRequest() {
+  previewRequestId += 1
+  previewAbort?.abort()
+  previewAbort = undefined
+  previewLoading.value = false
+  officeRendering.value = false
+  clearOfficePreview()
+}
+
+function isCurrentPreview(documentId: string, requestId: number) {
+  return previewRequestId === requestId &&
+    props.documentId === documentId &&
+    document.value?.id === documentId
+}
+
+function beginPreview(value: NonNullable<typeof document.value>) {
+  cancelPreviewRequest()
+  const requestId = previewRequestId
+  const controller = new AbortController()
+  previewAbort = controller
+  previewUrl.value = undefined
+  previewFailure.value = undefined
+  clearOfficePreview()
+  previewLoading.value = true
+  return { requestId, controller, documentId: value.id }
+}
+
 // Opening another document resets draft state; new notes land in the editor.
-watch(() => props.documentId, () => {
+// This is the single source of truth for starting a file preview. The
+// immediate run also handles a document that was already in the query cache.
+watch([() => props.documentId, document], ([documentId, value]) => {
   abortReplacement()
   dirty.value = false
   conflict.value = false
+  cancelPreviewRequest()
   previewUrl.value = undefined
   previewFailure.value = undefined
-  officeHtml.value = undefined
-  if (officeContainer.value) officeContainer.value.innerHTML = ''
+  clearOfficePreview()
   mode.value = props.startInEdit ? 'edit' : 'read'
+
+  if (value?.kind === 'file' && value.id === documentId) reloadPreview(value)
 }, { immediate: true })
 
-watch(document, value => {
-  if (value?.kind === 'file' && !previewUrl.value) reloadPreview()
-})
-
-function reloadPreview() {
-  const format = officeFormat.value
-  if (format) renderOffice(format)
-  else loadPreviewUrl()
+function reloadPreview(value = document.value) {
+  if (!value || value.kind !== 'file' || value.id !== props.documentId) return
+  const format = OFFICE_MIMES[value.mimeType ?? '']
+  if (format) renderOffice(value, format)
+  else loadPreviewUrl(value)
 }
 
 // Fetches the authorized bytes (presigned download URL) and renders Office
 // formats in-page. Renderers load lazily so the main bundle stays unchanged.
-async function renderOffice(format: OfficeFormat) {
-  if (!document.value) return
+async function renderOffice(value: NonNullable<typeof document.value>, format: OfficeFormat) {
+  const { requestId, controller, documentId } = beginPreview(value)
   officeRendering.value = true
-  previewFailure.value = undefined
   try {
-    const { url } = await knowledgeClient.download(document.value.id)
-    const res = await fetch(url)
+    const { url } = await knowledgeClient.download(documentId, controller.signal)
+    if (!isCurrentPreview(documentId, requestId)) return
+    const res = await fetch(url, { signal: controller.signal })
     if (!res.ok) throw new Error(`download failed: ${res.status}`)
     const bytes = await res.arrayBuffer()
+    if (!isCurrentPreview(documentId, requestId)) return
     if (format === 'xlsx') {
       const XLSX = await import('xlsx')
       const workbook = XLSX.read(bytes, { type: 'array' })
       const firstSheet = workbook.SheetNames[0]
       if (!firstSheet) throw new Error('empty workbook')
+      if (!isCurrentPreview(documentId, requestId)) return
       officeHtml.value = DOMPurify.sanitize(XLSX.utils.sheet_to_html(workbook.Sheets[firstSheet]))
       return
     }
+    await nextTick()
+    if (!isCurrentPreview(documentId, requestId)) return
     const container = officeContainer.value
     if (!container) return
-    container.innerHTML = ''
+    const host = globalThis.document.createElement('div')
+    host.className = 'doc-preview-office-render-host'
+    officeRenderHosts.set(requestId, host)
     if (format === 'docx') {
       const { renderAsync } = await import('docx-preview')
-      await renderAsync(bytes, container)
+      await renderAsync(bytes, host)
+      if (!isCurrentPreview(documentId, requestId)) {
+        removeOfficeRenderHost(requestId)
+        return
+      }
+      container.append(host)
       return
     }
     const { init } = await import('pptx-preview')
-    const previewer = init(container, {
+    if (!isCurrentPreview(documentId, requestId)) {
+      removeOfficeRenderHost(requestId)
+      return
+    }
+    const previewer = init(host, {
       width: container.clientWidth || 960,
       height: container.clientHeight || 540,
     })
     await previewer.preview(bytes)
+    if (!isCurrentPreview(documentId, requestId)) {
+      removeOfficeRenderHost(requestId)
+      return
+    }
+    container.append(host)
   } catch {
+    removeOfficeRenderHost(requestId)
+    if (!isCurrentPreview(documentId, requestId) || controller.signal.aborted) return
     previewFailure.value = 'error'
   } finally {
-    officeRendering.value = false
+    if (isCurrentPreview(documentId, requestId)) {
+      officeRendering.value = false
+      previewLoading.value = false
+      previewAbort = undefined
+    }
   }
 }
 
@@ -640,7 +750,10 @@ function abortReplacement() {
   replacementAbort = undefined
 }
 
-onBeforeUnmount(abortReplacement)
+onBeforeUnmount(() => {
+  cancelPreviewRequest()
+  abortReplacement()
+})
 
 async function download() {
   if (!document.value) return
@@ -651,18 +764,28 @@ async function download() {
   }
 }
 
-async function loadPreviewUrl() {
-  if (!document.value) return
-  previewLoading.value = true
-  previewFailure.value = undefined
+async function loadPreviewUrl(value: NonNullable<typeof document.value>) {
+  const { requestId, controller, documentId } = beginPreview(value)
   try {
-    previewUrl.value = (await knowledgeClient.preview(document.value.id)).url
+    const response = await knowledgeClient.preview(documentId, controller.signal)
+    if (!isCurrentPreview(documentId, requestId)) return
+    previewUrl.value = response.url
   } catch (error) {
+    if (!isCurrentPreview(documentId, requestId) || controller.signal.aborted) return
     previewUrl.value = undefined
     previewFailure.value = error instanceof IMAApiError && error.problem?.code === 'PREVIEW_UNAVAILABLE' ? 'unsupported' : 'error'
   } finally {
-    previewLoading.value = false
+    if (isCurrentPreview(documentId, requestId)) {
+      previewLoading.value = false
+      previewAbort = undefined
+    }
   }
+}
+
+function handlePdfError() {
+  if (!document.value || document.value.id !== props.documentId) return
+  previewUrl.value = undefined
+  previewFailure.value = 'error'
 }
 
 async function retryIngestion() {
@@ -805,6 +928,16 @@ function confirmDelete() {
   border: 1px solid var(--tk-border);
   border-radius: var(--tk-radius);
   background-color: var(--tk-surface);
+}
+
+.doc-preview-pdf {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.doc-preview-loading {
+  color: var(--tk-text-secondary);
 }
 
 .doc-preview-office {

@@ -40,6 +40,17 @@ class _Engine:
         return _Context(self.connection)
 
 
+class _Rows:
+    def __init__(self, rows: list[dict[str, object]]) -> None:
+        self.rows = rows
+
+    def mappings(self) -> "_Rows":
+        return self
+
+    def all(self) -> list[dict[str, object]]:
+        return self.rows
+
+
 class _BoundedSearch(SearchService):
     def __init__(self) -> None:
         self.engine = cast(Any, _Engine())
@@ -80,7 +91,12 @@ class _BoundedSearch(SearchService):
         }
 
     async def _profile(self, *_: object, **__: object) -> object:
-        return SimpleNamespace(retrieval_mode="keyword", top_k=8)
+        return SimpleNamespace(
+            retrieval_mode="keyword",
+            top_k=8,
+            score_threshold=0.35,
+            max_context_chars=120,
+        )
 
     async def search(self, *_: object, **__: object) -> dict[str, object]:
         return {"items": [self.citation]}
@@ -98,6 +114,8 @@ class _BoundedSearch(SearchService):
 def test_search_sql_keeps_kb_inside_fts_and_vector_predicates() -> None:
     source = Path("src/ima/application/search.py").read_text(encoding="utf-8")
     assert "c.kb_id=:kb AND d.kb_id=:kb" in source
+    assert "JOIN ima.document_file_versions fv" in source
+    assert "c.generation=fv.generation" in source
     assert 'kb_literal = kb_id.replace("\'", "\'\'")' in source
     assert "WHERE kb_id='{kb_literal}' AND embedding_status='ready'" in source
     assert "pg_advisory_xact_lock(hashtextextended(:key, 0))" in source
@@ -115,6 +133,95 @@ def test_fusion_normalizes_and_is_deterministic() -> None:
     scores = fuse_scores({first: 4.0, second: 2.0}, {second: 8.0}, 0.5)
     assert scores[first] == 0.5
     assert scores[second] == 0.75
+
+
+def test_invalid_model_uuid_is_rejected_before_ddl() -> None:
+    from ima.application.search import _validated_model_uuid
+
+    with pytest.raises(SearchError) as exc:
+        _validated_model_uuid("not-a-uuid")
+    assert (exc.value.status_code, exc.value.code) == (503, "INVALID_MODEL_METADATA")
+
+
+class _VectorTieSearch(SearchService):
+    def __init__(self, candidate_orders: list[list[dict[str, object]]]) -> None:
+        self.engine = cast(Any, _Engine())
+        self.connection = cast(Any, self.engine.connection)
+        self.candidate_orders = iter(candidate_orders)
+        self.calls: list[tuple[str, object]] = []
+
+        async def execute(statement: object, *args: object) -> _Rows:
+            sql = str(statement)
+            parameters = args[0] if args else {}
+            self.calls.append((sql, parameters))
+            if "SELECT DISTINCT c.version,c.generation" in sql:
+                return _Rows([{"version": 1, "generation": 1}])
+            if "SELECT c.document_id,c.version,c.generation" in sql:
+                rows = next(self.candidate_orders)
+                limit = int(cast(dict[str, object], parameters)["limit"])
+                return _Rows(rows[:limit])
+            return _Rows([])
+
+        self.connection.execute = AsyncMock(side_effect=execute)
+        self.models = SimpleNamespace(
+            managed_embeddings=AsyncMock(return_value=[[0.1, 0.2, 0.3]]),
+        )
+
+    async def _profile(self, *_: object, **__: object) -> object:
+        return SimpleNamespace(
+            embedding_model_id="00000000-0000-0000-0000-000000000099",
+            vector_weight=0.5,
+            rerank_model_id=None,
+            top_k=4,
+        )
+
+    async def _require_kb(self, *_: object, **__: object) -> str:
+        return "Knowledge"
+
+    async def _vector_target(self, *_: object, **__: object) -> dict[str, object]:
+        return {
+            "model_id": "00000000-0000-0000-0000-000000000099",
+            "model_version": 1,
+            "embedding_dimension": 3,
+        }
+
+
+def _vector_candidate(index: int) -> dict[str, object]:
+    return {
+        "document_id": f"00000000-0000-0000-0000-{index:012d}",
+        "version": 1,
+        "generation": 1,
+        "ordinal": 0,
+        "content_digest": f"digest-{index:02d}",
+        "quote": f"quote-{index}",
+        "title": "Source",
+        "score": 0.5,
+    }
+
+
+@pytest.mark.asyncio
+async def test_vector_ties_overfetch_and_stably_select_final_top_k() -> None:
+    candidates = [_vector_candidate(index) for index in range(1, 22)]
+    # Put the lexicographically first chunk at the arbitrary HNSW cutoff. A
+    # non-overfetched LIMIT of 20 would discard it before stable ordering.
+    first_order = candidates[1:] + candidates[:1]
+    second_order = list(reversed(candidates[1:])) + candidates[:1]
+    service = _VectorTieSearch([first_order, second_order])
+
+    first = await service.search("actor", "kb", "same distance", mode="vector", top_k=4)
+    second = await service.search("actor", "kb", "same distance", mode="vector", top_k=4)
+
+    expected_ids = [str(candidate["document_id"]) for candidate in candidates[:4]]
+    assert [
+        item["documentId"] for item in cast(list[dict[str, object]], first["items"])
+    ] == expected_ids
+    assert first["items"] == second["items"]
+    vector_limits = [
+        int(cast(dict[str, object], parameters)["limit"])
+        for sql, parameters in service.calls
+        if "ORDER BY c.embedding::vector" in sql
+    ]
+    assert vector_limits == [40, 40]
 
 
 def test_search_migration_has_kb_identity_and_immutable_citations() -> None:
@@ -182,6 +289,7 @@ async def test_ask_bounded_uses_non_streaming_gateway_and_persists_citations() -
     assert service.statuses[-1] == ("completed", "Grounded answer")
     assert search.await_count == 3
     assert all(call.kwargs["action"] is KbAction.ASK for call in search.await_args_list)
+    assert all(call.kwargs["threshold"] == 0.35 for call in search.await_args_list)
 
 
 @pytest.mark.asyncio
@@ -274,6 +382,31 @@ def test_ask_scope_contract_is_mutually_exclusive() -> None:
         ConversationRetryRequest(messageId=uuid4(), expectedVersion=1, scope=scoped).scope == scoped
     )
     assert ConversationRetryRequest(messageId=uuid4(), expectedVersion=1).scope is None
+
+
+def test_deltas_preserve_data_lines_split_across_http_chunks() -> None:
+    buffer = bytearray()
+    assert SearchService._deltas(b'data: {"choices":[{"delta":{"content":"to', buffer) == ()
+    assert SearchService._deltas(b'ken"}}]}\n\ndata: [DONE]\n\n', buffer) == ("token",)
+
+
+@pytest.mark.asyncio
+async def test_ask_emits_legacy_frames_before_retrieval_starts() -> None:
+    service = _ScopedSearch()
+    search = AsyncMock(return_value={"items": []})
+    cast(Any, service).search = search
+
+    stream = await service.ask("user-1", "kb-1", "Question?", None)
+    first = await anext(stream)
+    second = await anext(stream)
+
+    assert "event: conversation" in first.decode()
+    assert "event: message" in second.decode()
+    search.assert_not_awaited()
+
+    third = await anext(stream)
+    assert "event: knowledge_gap" in third.decode()
+    search.assert_awaited_once()
 
 
 def test_conversation_scope_migration_persists_jsonb_with_exclusive_check() -> None:

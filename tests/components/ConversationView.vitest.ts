@@ -3,6 +3,7 @@ import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { createPinia } from 'pinia'
 import type * as Quasar from 'quasar'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { nextTick } from 'vue'
 import ConversationView from 'src/pages/ConversationView.vue'
 
 /*
@@ -198,12 +199,72 @@ describe('ConversationView', () => {
 
     await vi.waitFor(() => expect(mocks.ask).toHaveBeenCalledWith(
       'kb-1',
-      { question: 'Follow up question', conversationId: 'conv-1' },
+      { question: 'Follow up question', conversationId: 'conv-1', agent: true },
       expect.any(AbortSignal),
       expect.any(Function),
     ))
     // Optimistic user bubble shows while the stream is in flight.
     expect(wrapper.text()).toContain('Follow up question')
+  })
+
+  test('shows retrieval progress until the first answer delta', async () => {
+    let onEvent: ((event: string, payload: Record<string, unknown>) => void) | undefined
+    mocks.ask.mockImplementation((_kb: string, _body: unknown, _signal: AbortSignal, handler: typeof onEvent) => {
+      onEvent = handler
+      return new Promise<void>(() => undefined)
+    })
+    const wrapper = mountView()
+    await vi.waitFor(() => expect(wrapper.text()).toContain('What is the policy?'))
+
+    const textarea = wrapper.get('textarea')
+    await textarea.setValue('Retrieval progress')
+    await textarea.trigger('keydown', { key: 'Enter' })
+    await vi.waitFor(() => expect(onEvent).toBeDefined())
+
+    onEvent?.('retrieving', { conversationId: 'conv-1', messageId: 'live-1' })
+    await nextTick()
+    expect(wrapper.find('[data-testid="ask-retrieving"]').text()).toContain('正在检索…')
+
+    onEvent?.('citations', { conversationId: 'conv-1', messageId: 'live-1', citations: [citation1] })
+    await nextTick()
+    expect(wrapper.find('[data-testid="ask-retrieving"]').exists()).toBe(true)
+
+    onEvent?.('delta', { conversationId: 'conv-1', messageId: 'live-1', delta: 'Answer' })
+    await nextTick()
+    expect(wrapper.find('[data-testid="ask-retrieving"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Answer')
+    wrapper.unmount()
+  })
+
+  test('renders tool calls in the collapsed retrieval trace', async () => {
+    let onEvent: ((event: string, payload: Record<string, unknown>) => void) | undefined
+    mocks.ask.mockImplementation((_kb: string, _body: unknown, _signal: AbortSignal, handler: typeof onEvent) => {
+      onEvent = handler
+      return new Promise<void>(() => undefined)
+    })
+    const wrapper = mountView()
+    await vi.waitFor(() => expect(wrapper.text()).toContain('What is the policy?'))
+
+    const textarea = wrapper.get('textarea')
+    await textarea.setValue('Trace this')
+    await textarea.trigger('keydown', { key: 'Enter' })
+    await vi.waitFor(() => expect(onEvent).toBeDefined())
+    onEvent?.('tool_call', {
+      conversationId: 'conv-1',
+      messageId: 'live-1',
+      name: 'search_knowledge',
+      arguments: { query: 'policy' },
+      hitCount: 2,
+      round: 1,
+    })
+    await nextTick()
+
+    const trace = wrapper.find('[data-testid="ask-tool-trace"]')
+    expect(trace.exists()).toBe(true)
+    expect(trace.find('.ask-tool-trace-list').exists()).toBe(false)
+    await trace.find('.ask-tool-trace-toggle').trigger('click')
+    expect(trace.find('.ask-tool-trace-list').text()).toContain('policy')
+    wrapper.unmount()
   })
 
   test('shows the pinned scope chip and echoes the scope on follow-up', async () => {
@@ -221,7 +282,7 @@ describe('ConversationView', () => {
 
     await vi.waitFor(() => expect(mocks.ask).toHaveBeenCalledWith(
       'kb-1',
-      { question: 'Scoped follow up', conversationId: 'conv-1', scope: { folderId: 'folder-1' } },
+      { question: 'Scoped follow up', conversationId: 'conv-1', scope: { folderId: 'folder-1' }, agent: true },
       expect.any(AbortSignal),
       expect.any(Function),
     ))
@@ -272,6 +333,23 @@ describe('ConversationView', () => {
       { folderId: 'folder-1' },
       expect.any(AbortSignal),
       expect.any(Function),
+      false,
+    ))
+  })
+
+  test('offers regenerate for a completed answer', async () => {
+    const wrapper = mountView()
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="answer-regenerate"]').exists()).toBe(true))
+    await wrapper.find('[data-testid="answer-regenerate"]').trigger('click')
+    await vi.waitFor(() => expect(mocks.retry).toHaveBeenCalledWith(
+      'kb-1',
+      'conv-1',
+      'msg-u1',
+      1,
+      undefined,
+      expect.any(AbortSignal),
+      expect.any(Function),
+      true,
     ))
   })
 })

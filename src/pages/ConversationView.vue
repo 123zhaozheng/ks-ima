@@ -73,6 +73,10 @@
                 v-else
                 class="cv-row cv-row-assistant"
               >
+                <ask-tool-trace
+                  v-if="message.id === grounded.messageId.value && liveToolCalls.length"
+                  :calls="liveToolCalls"
+                />
                 <div
                   v-if="message.status === 'completed'"
                   class="cv-answer"
@@ -91,6 +95,14 @@
                       label="保存为笔记"
                       data-testid="save-as-note"
                       @click="openSaveNote(message, message.content, [])"
+                    />
+                    <q-btn
+                      flat
+                      dense
+                      icon="sym_o_refresh"
+                      label="重新生成"
+                      data-testid="answer-regenerate"
+                      @click="retryAfter(message, true)"
                     />
                   </div>
                 </div>
@@ -139,8 +151,23 @@
               v-if="showLive"
               class="cv-row cv-row-assistant"
             >
+              <ask-tool-trace
+                v-if="liveToolCalls.length"
+                :calls="liveToolCalls"
+              />
               <div
-                v-if="liveStatus === 'streaming'"
+                v-if="grounded.retrieving.value"
+                class="cv-retrieving"
+                data-testid="ask-retrieving"
+              >
+                <q-spinner
+                  size="18px"
+                  color="primary"
+                />
+                <span>正在检索…</span>
+              </div>
+              <div
+                v-else-if="liveStatus === 'streaming'"
                 class="cv-answer"
                 data-live-answer
               >
@@ -179,6 +206,14 @@
                     data-testid="save-as-note"
                     @click="openSaveNote(null, grounded.answer.value, liveCitations)"
                   />
+                  <q-btn
+                    flat
+                    dense
+                    icon="sym_o_refresh"
+                    label="重新生成"
+                    data-testid="answer-regenerate"
+                    @click="retryLastUser(true)"
+                  />
                 </div>
               </div>
               <div
@@ -200,7 +235,7 @@
                   color="primary"
                   label="重试"
                   data-testid="answer-retry"
-                  @click="retryLastUser"
+                  @click="retryLastUser(false)"
                 />
               </div>
             </div>
@@ -245,6 +280,7 @@ import { computed, inject, onMounted, onUnmounted, ref, watch, watchEffect } fro
 import { useRoute } from 'vue-router'
 import { Notify } from 'quasar'
 import AskComposer from 'src/components/AskComposer.vue'
+import AskToolTrace from 'src/components/AskToolTrace.vue'
 import CitationSources from 'src/components/CitationSources.vue'
 import DocPreview from 'src/components/DocPreview.vue'
 import SaveAnswerDialog from 'src/components/SaveAnswerDialog.vue'
@@ -255,7 +291,7 @@ import { topbarTitleOverride } from 'src/composables/topbar'
 import { useKbStore } from 'src/stores/knowledge-base'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { pageFhStyle } from 'src/utils/functions'
-import { citationMarkerRanks, injectCitationMarks, renderMarkdown } from 'src/utils/markdown'
+import { citationMarkerRanks, injectCitationMarks, renderMarkdown, sanitizeCitationMarkers } from 'src/utils/markdown'
 
 type Message = components['schemas']['MessageResponse']
 type Citation = components['schemas']['CitationResponse'] & { title?: string }
@@ -301,6 +337,7 @@ const citationKbId = computed(() => grounded.conversationKbId.value ?? kbStore.i
 const liveStatus = computed(() => grounded.status.value)
 const streaming = computed(() => liveStatus.value === 'streaming')
 const liveCitations = computed(() => grounded.citations.value as Citation[])
+const liveToolCalls = computed(() => grounded.toolCalls.value)
 
 // The page owns the live overlay only for streams it observed starting (or
 // already streaming on mount, e.g. arriving from the Ask home).
@@ -325,12 +362,14 @@ const showLive = computed(() => {
   return !persisted
 })
 
-const liveHtml = computed(() =>
-  injectCitationMarks(renderMarkdown(grounded.answer.value), liveCitations.value.map(citation => citation.rank)))
+const liveHtml = computed(() => {
+  const ranks = liveCitations.value.map(citation => citation.rank)
+  return injectCitationMarks(renderMarkdown(sanitizeCitationMarkers(grounded.answer.value, ranks)), ranks)
+})
 
 function answerHtml(message: Message): string {
   const ranks = citationMarkerRanks(message.content)
-  return injectCitationMarks(renderMarkdown(message.content), ranks)
+  return injectCitationMarks(renderMarkdown(sanitizeCitationMarkers(message.content, ranks)), ranks)
 }
 
 // Optimistic user bubble while the follow-up stream is in flight.
@@ -350,19 +389,20 @@ async function followUp(question: string, scope: components['schemas']['AskScope
   }
 }
 
-function retryAfter(message: Message) {
+function retryAfter(message: Message, agent = false) {
   const index = messages.value.findIndex(item => item.id === message.id)
   const user = [...messages.value.slice(0, index)].reverse().find(item => item.role === 'user')
   if (!user) return
-  grounded.retry(user).catch(error => {
+  grounded.retry(user, agent).catch(error => {
     Notify.create({ type: 'negative', message: apiErrorMessage(error, '重试失败') })
   })
 }
 
-function retryLastUser() {
+async function retryLastUser(agent = false) {
+  if (pendingQuestion.value) await grounded.conversation.refetch()
   const user = [...messages.value].reverse().find(item => item.role === 'user')
   if (!user) return
-  grounded.retry(user).catch(error => {
+  grounded.retry(user, agent).catch(error => {
     Notify.create({ type: 'negative', message: apiErrorMessage(error, '重试失败') })
   })
 }
@@ -490,6 +530,7 @@ onMounted(() => scrollToBottom(true))
 }
 
 .cv-row-assistant {
+  flex-direction: column;
   justify-content: flex-start;
 }
 
@@ -547,6 +588,15 @@ onMounted(() => scrollToBottom(true))
 
 .cv-pending {
   padding: var(--tk-space-2) var(--tk-space-3);
+}
+
+.cv-retrieving {
+  display: flex;
+  align-items: center;
+  gap: var(--tk-space-2);
+  color: var(--tk-text-secondary);
+  padding: var(--tk-space-2) var(--tk-space-3);
+  font-size: 14px;
 }
 
 .cv-composer {

@@ -2020,6 +2020,11 @@ export interface components {
         };
         /** AskRequest */
         AskRequest: {
+            /**
+             * Agent
+             * @default false
+             */
+            agent: boolean;
             /** Conversationid */
             conversationId?: string | null;
             /** Question */
@@ -2307,6 +2312,11 @@ export interface components {
         };
         /** ContentRow */
         ContentRow: {
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
             /** Filestate */
             fileState?: ("pending" | "ready" | "failed") | null;
             /** Id */
@@ -2414,6 +2424,11 @@ export interface components {
         };
         /** ConversationRetryRequest */
         ConversationRetryRequest: {
+            /**
+             * Agent
+             * @default false
+             */
+            agent: boolean;
             /** Expectedversion */
             expectedVersion: number;
             /**
@@ -6574,6 +6589,8 @@ export interface operations {
                 cursor?: string | null;
                 limit?: number;
                 kind?: string | null;
+                sort?: string;
+                group?: string;
             };
             header?: never;
             path: {
@@ -6914,7 +6931,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "text/event-stream": string;
                 };
             };
             /** @description Validation Error */
@@ -7081,7 +7098,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "text/event-stream": string;
                 };
             };
             /** @description Validation Error */

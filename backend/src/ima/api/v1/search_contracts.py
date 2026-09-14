@@ -85,6 +85,9 @@ class ConversationPage(ContractModel):
 class AskRequest(ContractModel):
     question: str = Field(min_length=1, max_length=20000)
     conversation_id: UUID | None = Field(default=None, alias="conversationId")
+    # Agent tool calling is opt-in at the HTTP boundary so existing clients
+    # retain the single-shot event sequence.
+    agent: bool = False
     # Scope pins a new conversation; on follow-ups it must match the pinned one.
     scope: AskScope | None = None
 
@@ -98,6 +101,7 @@ class ConversationPatchRequest(ContractModel):
 class ConversationRetryRequest(ContractModel):
     message_id: UUID = Field(alias="messageId")
     expected_version: int = Field(alias="expectedVersion", gt=0)
+    agent: bool = False
     # Optional scope echo; the conversation's pinned scope stays authoritative.
     scope: AskScope | None = None
 

@@ -40,9 +40,14 @@ export function renderMarkdown(markdown: string | null | undefined, highlight?: 
  * and create bare <sup> elements.
  */
 export function injectCitationMarks(html: string, ranks: number[]): string {
-  if (!html || ranks.length === 0) return html
+  if (!html) return html
   const rankSet = new Set(ranks)
   const doc = new DOMParser().parseFromString(html, 'text/html')
+  for (const link of Array.from(doc.querySelectorAll('a'))) {
+    if (citationMarkers(link.textContent ?? '').length) {
+      link.replaceWith(doc.createTextNode(sanitizeCitationMarkers(link.textContent ?? '', ranks)))
+    }
+  }
   const textNodes: Text[] = []
   const collect = (node: Node) => {
     for (const child of Array.from(node.childNodes)) {
@@ -52,35 +57,136 @@ export function injectCitationMarks(html: string, ranks: number[]): string {
   }
   collect(doc.body)
   for (const node of textNodes) {
-    if (!/\[\d+\]/.test(node.data)) continue
     if (node.parentElement?.closest('pre, code')) continue
+    const source = canonicalCitationSyntax(node.data)
+    const markers = citationMarkers(source)
+    if (!markers.length) continue
     const fragment = doc.createDocumentFragment()
     let cursor = 0
-    node.data.replace(/\[(\d+)\]/g, (match, digits: string, offset: number) => {
-      const rank = Number(digits)
-      if (!rankSet.has(rank)) return match
-      fragment.append(node.data.slice(cursor, offset))
-      const sup = doc.createElement('sup')
-      sup.className = 'citation-mark'
-      sup.setAttribute('data-citation', digits)
-      sup.setAttribute('data-testid', 'citation-mark')
-      sup.setAttribute('role', 'button')
-      sup.setAttribute('tabindex', '0')
-      sup.textContent = digits
-      fragment.append(sup)
-      cursor = offset + match.length
-      return match
-    })
-    if (cursor === 0) continue
-    fragment.append(node.data.slice(cursor))
+    for (const marker of markers) {
+      fragment.append(source.slice(cursor, marker.start))
+      if (!rankSet.has(marker.rank)) {
+        fragment.append(source.slice(marker.start, marker.end))
+      } else {
+        const sup = doc.createElement('sup')
+        sup.className = 'citation-mark'
+        sup.setAttribute('data-citation', String(marker.rank))
+        sup.setAttribute('data-testid', 'citation-mark')
+        sup.setAttribute('role', 'button')
+        sup.setAttribute('tabindex', '0')
+        sup.textContent = String(marker.rank)
+        fragment.append(sup)
+      }
+      cursor = marker.end
+    }
+    fragment.append(source.slice(cursor))
     node.replaceWith(fragment)
   }
   return doc.body.innerHTML
 }
 
-/** Extract the distinct `[n]` marker ranks that appear in answer text. */
+type CitationMarker = { start: number, markerEnd: number, end: number, rank: number, linked: boolean }
+
+const citationMarkerPattern = /\[(?:\[([0-9０-９]+)\]|([0-9０-９]+))\]/g
+const bracketEntityPattern = /&(?:#(?:91|93);|#x(?:5b|5d);|(?:lbrack|rbrack|lsqb|rsqb);)/gi
+const numericEntityPattern = /&#(?:x([0-9a-f]+)|([0-9]+));/gi
+
+function canonicalCitationSyntax(content: string): string {
+  const brackets = content
+    .replace(/\\(?=[\x5B\x5D])/g, '')
+    .replace(bracketEntityPattern, entity => {
+      const token = entity.toLowerCase()
+      return token === '&#91;' || token === '&#x5b;' || token === '&lbrack;' || token === '&lsqb;'
+        ? '['
+        : ']'
+    })
+  return brackets.replace(numericEntityPattern, (entity, hexadecimal: string | undefined, decimal: string | undefined) => {
+    const codePoint = hexadecimal ? Number.parseInt(hexadecimal, 16) : Number.parseInt(decimal ?? '', 10)
+    return (codePoint >= 48 && codePoint <= 57) || (codePoint >= 0xff10 && codePoint <= 0xff19)
+      ? String.fromCodePoint(codePoint)
+      : entity
+  })
+}
+
+function canonicalCitationDigits(value: string): string {
+  return [...value].map(char => {
+    const codePoint = char.codePointAt(0) ?? 0
+    return codePoint >= 0xff10 && codePoint <= 0xff19
+      ? String.fromCodePoint(codePoint - 0xff10 + 48)
+      : char
+  }).join('')
+}
+
+function optionalCitationLinkEnd(content: string, markerEnd: number): number | null {
+  let cursor = markerEnd
+  while (cursor < content.length && /[ \t\r\n]/.test(content[cursor])) cursor += 1
+  if (cursor >= content.length || content[cursor] !== '(') return markerEnd
+  let depth = 0
+  while (cursor < content.length) {
+    const char = content[cursor]
+    if (char === '\\') {
+      cursor += 2
+      continue
+    }
+    if (char === '(') depth += 1
+    else if (char === ')') {
+      depth -= 1
+      if (depth === 0) return cursor + 1
+    }
+    cursor += 1
+  }
+  return null
+}
+
+function citationMarkers(content: string): CitationMarker[] {
+  const markers: CitationMarker[] = []
+  const source = canonicalCitationSyntax(content)
+  const pattern = new RegExp(citationMarkerPattern.source, 'g')
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(source)) !== null) {
+    const start = match.index ?? 0
+    const markerEnd = start + match[0].length
+    let end = markerEnd
+    let linked = false
+    let linkCursor = markerEnd
+    while (linkCursor < source.length && /[ \t\r\n]/.test(source[linkCursor])) linkCursor += 1
+    if (source[linkCursor] === '(') {
+      linked = true
+      end = optionalCitationLinkEnd(source, markerEnd) ?? markerEnd
+    }
+    markers.push({
+      start,
+      markerEnd,
+      end,
+      rank: Number(canonicalCitationDigits(match[1] ?? match[2] ?? '0')),
+      linked,
+    })
+    if (end > markerEnd) pattern.lastIndex = end
+  }
+  return markers
+}
+
+/** Normalize accepted marker variants and keep only ranks backed by citations. */
+export function sanitizeCitationMarkers(content: string, ranks: number[]): string {
+  const allowed = new Set(ranks)
+  const source = canonicalCitationSyntax(content)
+  const markers = citationMarkers(source)
+  if (markers.length === 0) return content
+  let result = ''
+  let cursor = 0
+  for (const marker of markers) {
+    result += source.slice(cursor, marker.start)
+    if (allowed.has(marker.rank)) result += `[${marker.rank}]`
+    cursor = marker.end
+  }
+  return result + source.slice(cursor)
+}
+
+/** Extract distinct ranks from every accepted citation marker variant. */
 export function citationMarkerRanks(content: string): number[] {
   const ranks = new Set<number>()
-  for (const match of content.matchAll(/\[(\d+)\]/g)) ranks.add(Number(match[1]))
+  for (const marker of citationMarkers(content)) {
+    ranks.add(marker.rank)
+  }
   return [...ranks].sort((a, b) => a - b)
 }

@@ -11,6 +11,13 @@ type ConversationScope = components['schemas']['ConversationScope']
 type AskScope = components['schemas']['AskScope']
 type SearchMode = 'keyword' | 'vector' | 'hybrid'
 
+export type AskToolCall = {
+  name: string
+  arguments: Record<string, unknown>
+  hitCount: number
+  round: number
+}
+
 export type GroundedKnowledge = ReturnType<typeof useGroundedKnowledge>
 
 /**
@@ -24,6 +31,8 @@ export function useGroundedKnowledge(kbId: () => string | null) {
   const controller = ref<AbortController | null>(null)
   const answer = ref('')
   const citations = ref<Citation[]>([])
+  const toolCalls = ref<AskToolCall[]>([])
+  const retrieving = ref(false)
   const status = ref<'idle' | 'streaming' | 'completed' | 'knowledge_gap' | 'failed' | 'cancelled'>('idle')
   const conversationId = ref<string | null>(null)
   const messageId = ref<string | null>(null)
@@ -31,6 +40,7 @@ export function useGroundedKnowledge(kbId: () => string | null) {
   // conversation detail reloads.
   const streamScope = ref<ConversationScope | null>(null)
   const kb = computed(kbId)
+  let streamGeneration = 0
 
   // The server pins the scope on the conversation; strip the read-time title
   // before echoing it back in ask/retry request bodies.
@@ -62,59 +72,99 @@ export function useGroundedKnowledge(kbId: () => string | null) {
     enabled: computed(() => Boolean(conversationKbId.value && conversationId.value)),
   })
 
-  function applyEvent(event: string, payload: Record<string, unknown>) {
+  function applyEvent(generation: number, event: string, payload: Record<string, unknown>) {
+    if (generation !== streamGeneration) return
     if (typeof payload.conversationId === 'string') conversationId.value = payload.conversationId
     if (typeof payload.messageId === 'string') messageId.value = payload.messageId
+    if (event === 'retrieving') retrieving.value = true
+    if (event === 'tool_call') {
+      const name = typeof payload.name === 'string' ? payload.name : '未知工具'
+      const argumentsValue = payload.arguments ?? payload.argumentsSummary
+      const args = argumentsValue && typeof argumentsValue === 'object' && !Array.isArray(argumentsValue)
+        ? argumentsValue as Record<string, unknown>
+        : {}
+      toolCalls.value.push({
+        name,
+        arguments: args,
+        hitCount: typeof payload.hitCount === 'number' ? payload.hitCount : 0,
+        round: typeof payload.round === 'number' ? payload.round : 0,
+      })
+      retrieving.value = true
+    }
     if (event === 'citations' && Array.isArray(payload.citations)) citations.value = payload.citations as Citation[]
-    if (event === 'delta' && typeof payload.delta === 'string') answer.value += payload.delta
-    if (event === 'completed') status.value = 'completed'
+    if (event === 'delta' && typeof payload.delta === 'string') {
+      retrieving.value = false
+      answer.value += payload.delta
+    }
+    if (event === 'completed') {
+      retrieving.value = false
+      status.value = 'completed'
+    }
     if (event === 'knowledge_gap') {
+      retrieving.value = false
       status.value = 'knowledge_gap'
       answer.value = typeof payload.answer === 'string' ? payload.answer : ''
     }
-    if (event === 'cancelled') status.value = 'cancelled'
-    if (event === 'error') status.value = 'failed'
+    if (event === 'cancelled') {
+      retrieving.value = false
+      status.value = 'cancelled'
+    }
+    if (event === 'error') {
+      retrieving.value = false
+      status.value = 'failed'
+    }
   }
 
   function cancel() {
+    streamGeneration += 1
     controller.value?.abort()
     controller.value = null
+    retrieving.value = false
     if (status.value === 'streaming') status.value = 'cancelled'
   }
 
-  async function stream(run: (signal: AbortSignal) => Promise<void>) {
-    cancel()
+  async function stream(run: (signal: AbortSignal, onEvent: (event: string, payload: Record<string, unknown>) => void) => Promise<void>) {
+    const generation = ++streamGeneration
+    controller.value?.abort()
+    controller.value = null
     answer.value = ''
     citations.value = []
+    toolCalls.value = []
+    retrieving.value = false
     messageId.value = null
     status.value = 'streaming'
     const next = new AbortController()
     controller.value = next
+    const current = () => generation === streamGeneration
     try {
-      await run(next.signal)
+      await run(next.signal, (event, payload) => applyEvent(generation, event, payload))
     } catch (error) {
+      if (!current()) return
       status.value = next.signal.aborted ? 'cancelled' : 'failed'
       throw error
     } finally {
-      if (controller.value === next) controller.value = null
-      await client.invalidateQueries({ queryKey: ['grounded', 'conversations'] })
-      if (conversationId.value && conversationKbId.value) {
-        await client.invalidateQueries({ queryKey: ['grounded', 'conversation', conversationKbId.value, conversationId.value] })
+      if (current()) {
+        controller.value = null
+        await client.invalidateQueries({ queryKey: ['grounded', 'conversations'] })
+        if (current() && conversationId.value && conversationKbId.value) {
+          await client.invalidateQueries({ queryKey: ['grounded', 'conversation', conversationKbId.value, conversationId.value] })
+        }
       }
     }
   }
 
   async function ask(question: string, scope?: ConversationScope | AskScope | null) {
     if (!kb.value) return
-    streamScope.value = requestScope(scope) ?? (conversationId.value ? (conversation.data.value?.scope ?? null) : null)
-    await stream(signal => groundedClient.ask(kb.value!, { question, conversationId: conversationId.value, scope: requestScope(scope) }, signal, applyEvent))
+    const requestedScope = requestScope(scope)
+    streamScope.value = requestedScope ?? (conversationId.value ? (conversation.data.value?.scope ?? null) : null)
+    await stream((signal, onEvent) => groundedClient.ask(kb.value!, { question, conversationId: conversationId.value, agent: true, ...(requestedScope ? { scope: requestedScope } : {}) }, signal, onEvent))
   }
 
-  async function retry(message: Conversation['messages'][number]) {
+  async function retry(message: Conversation['messages'][number], agent = false) {
     if (!conversationKbId.value || !conversationId.value || message.role !== 'user') return
     const scope = conversation.data.value?.scope ?? null
     streamScope.value = scope
-    await stream(signal => groundedClient.retry(conversationKbId.value!, conversationId.value!, message.id, message.version, requestScope(scope), signal, applyEvent))
+    await stream((signal, onEvent) => groundedClient.retry(conversationKbId.value!, conversationId.value!, message.id, message.version, requestScope(scope), signal, onEvent, agent))
   }
 
   async function search(query: string, mode: SearchMode, signal?: AbortSignal) {
@@ -147,6 +197,13 @@ export function useGroundedKnowledge(kbId: () => string | null) {
       client.cancelQueries({ queryKey: ['grounded', 'kb', previous] })
       client.removeQueries({ queryKey: ['grounded', 'kb', previous] })
     }
+    client.cancelQueries({ queryKey: ['grounded', 'conversation'] })
+    client.removeQueries({ queryKey: ['grounded', 'conversation'] })
+    answer.value = ''
+    citations.value = []
+    toolCalls.value = []
+    retrieving.value = false
+    status.value = 'idle'
     conversationId.value = null
     messageId.value = null
     streamScope.value = null
@@ -157,5 +214,5 @@ export function useGroundedKnowledge(kbId: () => string | null) {
   })
 
   onScopeDispose(cancel)
-  return { answer, archive, ask, cancel, citations, conversation, conversationId, conversationKbId, conversations, messageId, remove, rename, resetForKbSwitch, retry, search, status, streamScope }
+  return { answer, archive, ask, cancel, citations, conversation, conversationId, conversationKbId, conversations, messageId, remove, rename, resetForKbSwitch, retrieving, retry, search, status, streamScope, toolCalls }
 }

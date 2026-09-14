@@ -23,7 +23,10 @@ from ima.application.identity import new_legacy_id
 from ima.application.maintenance import MaintenanceService
 from ima.config import get_settings
 from ima.infrastructure.db.engine import create_engine
-from ima.infrastructure.tasks.app import create_task_app
+from ima.infrastructure.tasks.app import (
+    configure_procrastinate_function_search_path,
+    create_task_app,
+)
 
 
 def main() -> None:
@@ -164,9 +167,10 @@ def _run_migrations() -> None:
             "SELECT to_regclass(%s)", (f"{settings.task_schema}.procrastinate_jobs",)
         ).fetchone()
         task_schema_exists = task_schema_row[0] if task_schema_row else None
-    if task_schema_exists is None:
-        with task_app.open():
+    with task_app.open():
+        if task_schema_exists is None:
             task_app.schema_manager.apply_schema()
+        configure_procrastinate_function_search_path(task_app)
 
 
 async def _run_worker() -> None:

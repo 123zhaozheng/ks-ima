@@ -141,7 +141,7 @@ def test_model_governance_migration_is_fresh_and_repeatable() -> None:
     with psycopg.connect(SYNC_URL) as connection:
         assert (
             connection.execute("SELECT version_num FROM ima.alembic_version").fetchone()[0]
-            == "20260912_0014"
+            == "20260914_0015"
         )
         for table in (
             "model_gateway_secrets",
@@ -156,9 +156,7 @@ def test_model_governance_migration_is_fresh_and_repeatable() -> None:
             assert connection.execute("SELECT to_regclass(%s)", (f"ima.{table}",)).fetchone()[0]
         # Scene-only resolution: the assignment table is gone for good.
         assert (
-            connection.execute(
-                "SELECT to_regclass('ima.kb_profile_assignments')"
-            ).fetchone()[0]
+            connection.execute("SELECT to_regclass('ima.kb_profile_assignments')").fetchone()[0]
             is None
         )
 

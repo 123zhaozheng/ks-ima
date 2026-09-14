@@ -23,26 +23,27 @@ const routes: RouteRecordRaw[] = [
         path: '/',
         component: MainLayout,
         children: [
-          { path: '/', component: AskHome, meta: { title: '提问' } },
-          { path: '/ask/:conversationId', component: ConversationView, meta: { title: '提问' } },
-          { path: '/kb', component: KnowledgeBase, meta: { title: '知识库' } },
+          { path: '/', component: AskHome, meta: { title: '提问', requiresAuth: true } },
+          { path: '/ask/:conversationId', component: ConversationView, meta: { title: '提问', requiresAuth: true } },
+          { path: '/kb', component: KnowledgeBase, meta: { title: '知识库', requiresAuth: true } },
         ],
       },
       {
         path: '/history',
         component: HistoryPage,
-        meta: { title: '历史' },
+        meta: { title: '历史', requiresAuth: true },
       },
       {
         path: '/connectors',
         component: ConnectorsPage,
-        meta: { title: '连接器' },
+        meta: { title: '连接器', requiresAuth: true },
       },
       {
         path: '/settings',
         component: SettingsLayout,
         meta: {
           title: '设置',
+          requiresAuth: true,
         },
       },
       // Accepting a knowledge base share link replaces the old invitation flow.
@@ -58,7 +59,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: '/admin',
         component: () => import('src/admin/layouts/AdminShell.vue'),
-        meta: { requiresAdmin: true },
+        meta: { requiresAuth: true, requiresAdmin: true },
         children: [
           { path: '', component: () => import('src/admin/pages/EmptyPage.vue'), meta: { title: '管理控制台' } },
           { path: 'users', component: () => import('src/admin/pages/UsersPage.vue'), meta: { title: '用户' } },

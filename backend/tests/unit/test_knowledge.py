@@ -5,10 +5,41 @@ from ima.domain.knowledge import ListingCursor, markdown_digest, normalize_name
 
 
 def test_knowledge_cursor_round_trip_is_opaque_and_typed() -> None:
-    cursor = ListingCursor("root", 7, 3, "note", "document-id")
+    cursor = ListingCursor(
+        parent_id="root",
+        children_version=7,
+        sort="name_asc",
+        group="note",
+        last_value="document title",
+        item_id="document-id",
+    )
     encoded = cursor.encode()
     assert "root" not in encoded
     assert ListingCursor.decode(encoded) == cursor
+
+
+def test_knowledge_cursor_binds_sort_context() -> None:
+    manual_cursor = ListingCursor(
+        parent_id="root",
+        children_version=7,
+        sort="manual",
+        group="note",
+        last_value="7",
+        item_id="document-id",
+    )
+    name_cursor = ListingCursor(
+        parent_id="root",
+        children_version=7,
+        sort="name_asc",
+        group="note",
+        last_value="7",
+        item_id="document-id",
+    )
+
+    assert manual_cursor.encode() != name_cursor.encode()
+    assert ListingCursor.decode(manual_cursor.encode()) != ListingCursor.decode(
+        name_cursor.encode()
+    )
 
 
 def test_titles_normalize_and_markdown_digests_are_sensitive() -> None:

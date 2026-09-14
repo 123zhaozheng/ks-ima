@@ -76,7 +76,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         app.state.model_governance_service = ModelGovernanceService(engine, app_settings)
         app.state.knowledge_service = KnowledgeService(engine, service)
-        app.state.search_service = SearchService(engine, app.state.model_governance_service)
+        app.state.search_service = SearchService(
+            engine,
+            app.state.model_governance_service,
+            app.state.kb_service,
+            app.state.knowledge_service,
+        )
         app.state.storage_service = StorageService(app_settings, engine, service)
         mcp_runtime["value"] = McpRuntime(
             authorization=app.state.mcp_authorization_service,

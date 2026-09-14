@@ -70,18 +70,37 @@ type Result<T> = { data?: T, error?: { code?: string, message: string } }
  */
 export type KnowledgeBaseSummary = KnowledgeBase & { owned: boolean }
 
-async function request<T>(path: string, init: RequestInit = {}, prefix = '/api/v1'): Promise<Result<T>> {
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input
+  return input instanceof URL ? input.href : input.url
+}
+
+function isSessionRequest(input: RequestInfo | URL): boolean {
+  return requestUrl(input).split('?')[0].endsWith('/auth/session')
+}
+
+/**
+ * Shared cookie/CSRF transport for authenticated browser requests.
+ *
+ * A 401 is revalidated rather than immediately clearing the session because
+ * sensitive endpoints also use 401 for their recent-auth challenge.
+ */
+export async function authenticatedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers)
-  headers.set('Content-Type', 'application/json')
-  if (!['GET', 'HEAD'].includes(init.method ?? 'GET')) {
+  if (!headers.has('Accept')) headers.set('Accept', 'application/json')
+  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  const method = (init.method ?? 'GET').toUpperCase()
+  if (!['GET', 'HEAD'].includes(method)) {
     const csrf = document.cookie.split('; ').find(value => value.startsWith('ima_csrf='))?.split('=').slice(1).join('=')
     if (csrf) headers.set('X-CSRF-Token', decodeURIComponent(csrf))
   }
-  const response = await fetch(`${prefix}${path}`, { ...init, headers, credentials: 'include' })
-  // A 401 can mean the cookie session died mid-visit: re-check it so the
-  // useRequireLogin watchers redirect to sign-in. A still-valid session
-  // (recent-auth 401) survives the re-check; '/auth/session' itself must not loop.
-  if (response.status === 401 && path !== '/auth/session') revalidateSession()
+  const response = await fetch(input, { ...init, headers, credentials: 'include' })
+  if (response.status === 401 && !isSessionRequest(input)) revalidateSession()
+  return response
+}
+
+async function request<T>(path: string, init: RequestInit = {}, prefix = '/api/v1'): Promise<Result<T>> {
+  const response = await authenticatedFetch(`${prefix}${path}`, init)
   const body = await response.json().catch(() => ({})) as T & { detail?: string, code?: string }
   return response.ok ? { data: body } : { error: { code: body.code, message: body.detail ?? 'Request failed' } }
 }

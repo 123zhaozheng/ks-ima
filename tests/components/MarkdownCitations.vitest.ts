@@ -1,14 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
-import { citationMarkerRanks, injectCitationMarks, renderMarkdown } from 'src/utils/markdown'
+import { citationMarkerRanks, injectCitationMarks, renderMarkdown, sanitizeCitationMarkers } from 'src/utils/markdown'
 
 /*
  * DOMPurify does not run under happy-dom; the stub mirrors the contract from
  * MarkdownRender.vitest.ts so marked output flows through sanitize() before
  * reaching v-html.
  */
-const sanitize = vi.hoisted(() => vi.fn((html: string, _config?: { ADD_TAGS: string[] }) => html
-  .replace(/<script\b[\s\S]*?<\/script>/gi, '')
-  .replace(/\son\w+="[^"]*"/gi, '')))
+const sanitize = vi.hoisted(() => vi.fn((html: string, config: { ADD_TAGS: string[] }) => {
+  const sanitized = html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+  return config.ADD_TAGS.includes('mark') ? sanitized : sanitized.replace(/<\/?mark>/gi, '')
+}))
 
 vi.mock('dompurify', () => ({
   default: { sanitize },
@@ -72,6 +75,26 @@ describe('injectCitationMarks', () => {
     const html = injectCitationMarks('<p>a [1] b [2] c [1]</p>', [1, 2])
     expect(html.match(/data-citation="1"/g)).toHaveLength(2)
     expect(html.match(/data-citation="2"/g)).toHaveLength(1)
+  })
+
+  it('normalizes numeric Markdown links before citation rendering', () => {
+    expect(sanitizeCitationMarkers('[1](https://attacker.invalid) and [2]', [2]))
+      .toBe(' and [2]')
+    expect(citationMarkerRanks('[1](https://attacker.invalid) and [2]')).toEqual([1, 2])
+    const html = injectCitationMarks('<p><a href="https://attacker.invalid">[9]</a></p>', [9])
+    expect(html).not.toContain('href=')
+    expect(html).toContain('data-citation="9"')
+  })
+
+  it.each([
+    ['[１]', '[1]'],
+    ['[[1]]', '[1]'],
+    ['[1] (https://attacker.invalid)', '[1]'],
+    ['&#91;１&#93;', '[1]'],
+    [String.raw`\[1\]`, '[1]'],
+  ])('canonicalizes citation marker variant %s', (input, expected) => {
+    expect(sanitizeCitationMarkers(input, [1])).toBe(expected)
+    expect(citationMarkerRanks(input)).toEqual([1])
   })
 })
 

@@ -54,3 +54,7 @@ yarn-error.log*
 /test-results/
 /playwright-report/
 /blob-report/
+
+# Ad-hoc debug/scratch artifacts
+scripts/tmp-*
+backend/tmp_*

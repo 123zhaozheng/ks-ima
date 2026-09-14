@@ -52,7 +52,6 @@ const routes: RouteRecordRaw[] = [
         props: true,
         meta: { title: '加入知识库' },
       },
-      authRoute,
       { path: '/oauth/consent', component: OAuthConsentPage, meta: { title: '连接智能体' } },
       // The admin console shares this shell (compact rail + 56px TopBar); its
       // section chrome and pages stay lazy so users never download them.
@@ -79,6 +78,10 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
+  // The auth flow renders full-screen without the app shell (no side rail or
+  // TopBar): AuthLayout supplies its own split-screen brand layout, so it must
+  // sit at the top level alongside AppShell rather than nested inside it.
+  authRoute,
 ]
 
 export default routes

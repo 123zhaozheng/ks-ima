@@ -17,6 +17,8 @@
           v-model="totp"
           :label="recoveryMode ? '恢复码' : 'TOTP 代码'"
           :type="recoveryMode ? 'text' : 'number'"
+          outlined
+          autocomplete="one-time-code"
         />
       </q-card-section>
       <q-card-actions>

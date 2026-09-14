@@ -26,28 +26,45 @@
         :rules="[
           val => val.length >= 2 || '名称至少 2 个字符'
         ]"
-        filled
-      />
+        outlined
+        autocomplete="name"
+      >
+        <template #prepend>
+          <q-icon
+            name="sym_o_person"
+            size="20px"
+          />
+        </template>
+      </q-input>
       <q-input
         label="电子邮件"
         type="email"
         v-model="input.email"
         required
-        filled
-        class="mt-2"
-      />
+        outlined
+        autocomplete="email"
+        class="mt-4"
+      >
+        <template #prepend>
+          <q-icon
+            name="sym_o_mail"
+            size="20px"
+          />
+        </template>
+      </q-input>
       <set-password-inputs
         v-model="input.password"
-        mt-6
-        filled
+        mt-4
+        outlined
       />
       <q-btn
         label="注册"
         :loading
         type="submit"
         unelevated
+        no-caps
         color="primary"
-        mt-4
+        mt-6
         w-full
         h="40px"
         data-testid="sign-up-button"

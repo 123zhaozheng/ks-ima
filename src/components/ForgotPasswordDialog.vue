@@ -19,6 +19,8 @@
             label="电子邮件"
             type="email"
             required
+            outlined
+            autocomplete="email"
           />
         </q-card-section>
         <q-card-actions align="right">

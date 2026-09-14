@@ -24,6 +24,8 @@
   --tk-accent: #1677e8;
   --tk-accent-hover: #2d85ea;
   --tk-accent-active: #146dd5;
+  --tk-accent-deep: #0b4cad;    /* auth brand panel gradient */
+  --tk-accent-deeper: #073a86;  /* auth brand panel gradient, deepest end */
   --tk-accent-soft: rgba(22, 119, 232, 0.08);          /* selected/active fills */
   --tk-accent-soft-stronger: rgba(22, 119, 232, 0.12); /* selected borders */
   --tk-link: #1269cf;

@@ -5,16 +5,18 @@
   >
     <set-password-inputs
       v-model="password"
-      filled
+      outlined
     />
     <q-btn
       label="重置密码"
       :loading
       type="submit"
       unelevated
+      no-caps
       color="primary"
-      mt-4
+      mt-6
       w-full
+      h="40px"
     />
   </q-form>
   <div

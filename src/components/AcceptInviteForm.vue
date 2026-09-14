@@ -4,24 +4,42 @@
       v-model="displayName"
       label="显示名称"
       required
-      filled
-    />
+      outlined
+      autocomplete="name"
+    >
+      <template #prepend>
+        <q-icon
+          name="sym_o_person"
+          size="20px"
+        />
+      </template>
+    </q-input>
     <q-input
       v-model="password"
       label="密码"
       type="password"
       required
-      filled
+      outlined
+      autocomplete="new-password"
       class="mt-4"
-    />
+    >
+      <template #prepend>
+        <q-icon
+          name="sym_o_lock"
+          size="20px"
+        />
+      </template>
+    </q-input>
     <q-btn
       label="接受邀请"
       :loading="loading"
       type="submit"
       unelevated
+      no-caps
       color="primary"
-      mt-4
+      mt-6
       w-full
+      h="40px"
     />
   </q-form>
 </template>

@@ -179,8 +179,14 @@ async def contents(
     cursor: str | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     kind: Annotated[str | None, Query(pattern="^(folder|file|note)$")] = None,
+    sort: Annotated[
+        str, Query(pattern="^(manual|name_asc|name_desc|created_asc|created_desc)$")
+    ] = "manual",
+    group_order: Annotated[str, Query(alias="group", pattern="^(folders_first|files_first)$")] = "folders_first",
 ) -> dict[str, object]:
-    return await service(request).list_contents(current[1].id, folder_id, cursor, limit, kind)
+    return await service(request).list_contents(
+        current[1].id, folder_id, cursor, limit, kind, sort, group_order
+    )
 
 
 @router.post(

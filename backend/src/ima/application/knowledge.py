@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -26,6 +27,60 @@ from ima.infrastructure.tasks.service import JobService
 
 def now() -> datetime:
     return datetime.now(UTC)
+
+
+# Whitelisted sort keys for the folder-contents listing. ``keys`` lists the
+# sort-key SQL fragments (with direction) applied after the folder/file grouping
+# and before the ``id`` tiebreak; ``fields`` are the row keys, in the same
+# order, whose values are captured into the pagination cursor. Everything is
+# hardcoded — no request input is interpolated — so the dynamic SQL is safe.
+_SORT_SPECS: dict[str, dict[str, Any]] = {
+    # Manual order keeps the historical (order_key, casefolded title) ordering.
+    "manual": {"keys": ["order_key ASC", "lower(title) ASC"], "fields": ("order_key", "title")},
+    "name_asc": {"keys": ["lower(title) ASC"], "fields": ("title",)},
+    "name_desc": {"keys": ["lower(title) DESC"], "fields": ("title",)},
+    "created_asc": {"keys": ["created_at ASC"], "fields": ("created_at",)},
+    "created_desc": {"keys": ["created_at DESC"], "fields": ("created_at",)},
+}
+_GROUP_SPECS = {"folders_first", "files_first"}
+
+
+def _sql_literal(value: object) -> str:
+    """Render a cursor-captured value as an escaped SQL string literal."""
+    if isinstance(value, datetime):
+        value = value.isoformat()
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+# Cast applied to a cursor literal so its type matches the column expression it
+# is compared against (asyncpg will not implicitly coerce a text literal to
+# timestamptz / integer). id is selected as id::text in the listing CTE, so its
+# literal stays plain text.
+_CASTS = {"created_at": "::timestamptz", "order_key": "::integer"}
+
+
+def _keyset_where(keys: list[str], values: list[Any], item_id: str) -> str:
+    """Build the "rows after the cursor position" predicate.
+
+    Lexicographic expansion over (key1, key2, ..., id): the first key uses its
+    own direction's strict comparison; each later key allows the earlier keys to
+    be equal and applies its own comparison. id is always ASC and always ">".
+    Values come from our own cursor (not the request) and are single-quote
+    escaped, so this is injection-safe.
+    """
+    exprs = [key.rsplit(" ", 1)[0] for key in keys]
+    dirs = [key.rsplit(" ", 1)[1] for key in keys]
+    cmp_for = {"ASC": ">", "DESC": "<"}
+    cols = exprs + ["id"]
+    cmps = [cmp_for[d] for d in dirs] + [">"]
+    raw = list(values) + [item_id]
+    lits = [_sql_literal(v) + _CASTS.get(col, "") for col, v in zip(cols, raw, strict=True)]
+    last = len(cols) - 1
+    clauses = [
+        "(" + " AND ".join(f"{cols[i]} = {lits[i]}" for i in range(j)) + (" AND " if j else "") + f"{cols[j]} {cmps[j]} {lits[j]}" + ")"
+        for j in range(last + 1)
+    ]
+    return "WHERE (" + " OR ".join(clauses) + ")"
 
 
 class KnowledgeError(Exception):
@@ -153,8 +208,14 @@ class KnowledgeService:
         cursor: str | None,
         limit: int,
         kind: str | None = None,
+        sort: str = "manual",
+        group: str = "folders_first",
     ) -> dict[str, Any]:
         limit = max(1, min(limit, 100))
+        if sort not in _SORT_SPECS:
+            raise KnowledgeError(400, "INVALID_SORT", "Sort is not supported")
+        if group not in _GROUP_SPECS:
+            raise KnowledgeError(400, "INVALID_GROUP", "Group is not supported")
         async with self.engine.connect() as conn:
             folder = await self._folder(conn, folder_id)
             await self._authorize_folder(conn, actor, folder, KbAction.VIEW_METADATA)
@@ -165,23 +226,15 @@ class KnowledgeService:
                     decoded = ListingCursor.decode(cursor)
                 except ValueError as exc:
                     raise KnowledgeError(400, "INVALID_CURSOR", "Cursor is invalid") from exc
-                if decoded.parent_id != folder_id or decoded.children_version != current_version:
+                if (
+                    decoded.parent_id != folder_id
+                    or decoded.children_version != current_version
+                    or decoded.sort != sort
+                    or decoded.group != group
+                ):
                     raise KnowledgeError(
                         409, "LISTING_CHANGED", "Folder contents changed; restart pagination"
                     )
-            params: dict[str, Any] = {
-                "kb": folder["kb_id"],
-                "folder": folder_id,
-                "limit": limit + 1,
-            }
-            if decoded:
-                params.update(
-                    {
-                        "after_order": decoded.order_key,
-                        "after_name": decoded.normalized_name,
-                        "after_id": decoded.item_id,
-                    }
-                )
             # Folder rows and document rows are separate arms of the mixed
             # listing.  A folder-only request must not accidentally return all
             # documents merely because the document arm has no folder kind.
@@ -189,31 +242,49 @@ class KnowledgeService:
             document_kind_filter = (
                 "" if not kind else "AND kind=:kind" if kind in {"file", "note"} else "AND false"
             )
+            spec = _SORT_SPECS[sort]
+            params: dict[str, Any] = {
+                "kb": folder["kb_id"],
+                "folder": folder_id,
+                "limit": limit + 1,
+            }
             if kind:
                 params["kind"] = kind
-            params["has_after"] = decoded is not None
-            params.setdefault("after_order", 0)
-            params.setdefault("after_name", "")
-            params.setdefault("after_id", "")
+            group_expr = "(CASE WHEN kind='folder' THEN 0 ELSE 1 END)"
+            group_dir = "ASC" if group == "folders_first" else "DESC"
+            keys = spec["keys"]  # e.g. ["order_key ASC", "lower(title) ASC"]
+            order_by = f"{group_expr} {group_dir}, " + ", ".join(keys) + ", id ASC"
+
+            # Keyset pagination: rows after the cursor position. The cursor
+            # carries the last row's sort-key values as a JSON list plus its id;
+            # _keyset_where expands the (key1, key2, ..., id) lexicographic
+            # comparison honouring each key's direction (manual is multi-key).
+            where_after = ""
+            if decoded is not None:
+                try:
+                    after_values = json.loads(decoded.last_value)
+                    if not isinstance(after_values, list):
+                        raise ValueError
+                except (ValueError, json.JSONDecodeError) as exc:
+                    raise KnowledgeError(400, "INVALID_CURSOR", "Cursor is invalid") from exc
+                where_after = _keyset_where(keys, after_values, decoded.item_id)
             rows = (
                 (
                     await conn.execute(
                         text(
                             f"""WITH content AS (
-                          SELECT id::text AS id,'folder' AS kind,name AS title,order_key,version,lifecycle,NULL::varchar AS file_state
+                          SELECT id::text AS id,'folder' AS kind,name AS title,order_key,version,lifecycle,created_at,NULL::varchar AS file_state
                            FROM ima.folders
                            WHERE kb_id=:kb AND parent_id=:folder AND lifecycle='active'
                              {folder_kind_filter}
                            UNION ALL
-                           SELECT d.id::text,d.kind,d.title,d.order_key,d.version,d.lifecycle,d.file_state
+                           SELECT d.id::text,d.kind,d.title,d.order_key,d.version,d.lifecycle,d.created_at,d.file_state
                              FROM ima.documents d
                             WHERE d.kb_id=:kb AND d.folder_id=:folder AND d.lifecycle='active' {document_kind_filter}
                         )
                         SELECT * FROM content
-                         WHERE NOT :has_after OR (order_key > :after_order
-                           OR (order_key=:after_order AND lower(title)>:after_name)
-                           OR (order_key=:after_order AND lower(title)=:after_name AND id>:after_id))
-                        ORDER BY order_key,lower(title),id LIMIT :limit"""
+                         {where_after}
+                        ORDER BY {order_by} LIMIT :limit"""
                         ),
                         params,
                     )
@@ -226,11 +297,24 @@ class KnowledgeService:
             if len(payload) > limit:
                 payload = payload[:limit]
                 last = payload[-1]
+                # Capture the sort-key values (in spec field order) as the cursor's
+                # keyset position. Title sorts use the casefolded form to match
+                # lower(title); created_at serialises to ISO for stable comparison.
+                last_values = [
+                    (
+                        row_value.isoformat()
+                        if isinstance(row_value, datetime)
+                        else (row_value.casefold() if field == "title" else row_value)
+                    )
+                    for field in spec["fields"]
+                    for row_value in [last[field]]
+                ]
                 next_cursor = ListingCursor(
                     folder_id,
                     current_version,
-                    int(last["order_key"]),
-                    str(last["title"]).casefold(),
+                    sort,
+                    group,
+                    json.dumps(last_values, separators=(",", ":")),
                     str(last["id"]),
                 ).encode()
             return {
@@ -242,6 +326,7 @@ class KnowledgeService:
                         "orderKey": row["order_key"],
                         "version": row["version"],
                         "lifecycle": row["lifecycle"],
+                        "createdAt": row["created_at"],
                         "fileState": row["file_state"],
                     }
                     for row in payload

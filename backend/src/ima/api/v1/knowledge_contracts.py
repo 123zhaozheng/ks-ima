@@ -90,6 +90,7 @@ class ContentRow(ContractModel):
     order_key: int = Field(alias="orderKey")
     version: int
     lifecycle: Literal["active"]
+    created_at: datetime = Field(alias="createdAt")
     file_state: Literal["pending", "ready", "failed"] | None = Field(
         default=None, alias="fileState"
     )

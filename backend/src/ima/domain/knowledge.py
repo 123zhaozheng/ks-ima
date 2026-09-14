@@ -25,18 +25,24 @@ def markdown_digest(markdown: str) -> str:
 class ListingCursor:
     parent_id: str
     children_version: int
-    order_key: int
-    normalized_name: str
+    # v2: the sort context is part of the cursor so a page from one ordering is
+    # never silently applied to another. ``last_value`` is the string form of
+    # the active sort key's value on the last returned row (order_key for
+    # manual, casefolded title for name, ISO timestamp for created_at).
+    sort: str
+    group: str
+    last_value: str
     item_id: str
 
     def encode(self) -> str:
         raw = json.dumps(
             {
-                "v": 1,
+                "v": 2,
                 "parentId": self.parent_id,
                 "childrenVersion": self.children_version,
-                "orderKey": self.order_key,
-                "name": self.normalized_name,
+                "sort": self.sort,
+                "group": self.group,
+                "lastValue": self.last_value,
                 "id": self.item_id,
             },
             separators=(",", ":"),
@@ -49,15 +55,17 @@ class ListingCursor:
         try:
             padded = value + "=" * (-len(value) % 4)
             payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
-            if payload.get("v") != 1 or not all(
-                key in payload for key in ("parentId", "childrenVersion", "orderKey", "name", "id")
+            if payload.get("v") != 2 or not all(
+                key in payload
+                for key in ("parentId", "childrenVersion", "sort", "group", "lastValue", "id")
             ):
                 raise ValueError
             return cls(
                 str(payload["parentId"]),
                 int(payload["childrenVersion"]),
-                int(payload["orderKey"]),
-                str(payload["name"]),
+                str(payload["sort"]),
+                str(payload["group"]),
+                str(payload["lastValue"]),
                 str(payload["id"]),
             )
         except (ValueError, TypeError, KeyError, json.JSONDecodeError, UnicodeDecodeError) as exc:

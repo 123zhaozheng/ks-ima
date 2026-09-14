@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "lint/单测/e2e 契约不变的检查基线"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "schema 重生成后 createdAt/sort 类型安全"}
+{"file": ".trellis/spec/frontend/openapi-client-contracts.md", "reason": "校验客户端与后端契约一致(createdAt、sort/group 参数)"}
+{"file": ".trellis/spec/frontend/kb-authorization-contracts.md", "reason": "确认只读/已归档语义未被破坏"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端参数化测试与回归检查"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "校验 keyset 分页在任意排序下不重不漏、游标跨排序失效"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "LISTING_CHANGED/INVALID_CURSOR 错误路径符合错误处理规范"}

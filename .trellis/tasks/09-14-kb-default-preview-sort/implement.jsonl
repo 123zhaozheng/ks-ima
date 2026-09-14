@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/frontend/kb-authorization-contracts.md", "reason": "KB 视图/只读角色语义，排序与默认预览对 viewer 也须遵守"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "排序状态用 store/composable + localStorage 的既有约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "排序按钮 q-menu、KnowledgeBase/KnowledgeList 改动遵循组件规范"}
+{"file": ".trellis/spec/frontend/openapi-client-contracts.md", "reason": "contents 接口加参数、schema 重生成、ContentRow.createdAt 的客户端契约"}
+{"file": ".trellis/spec/frontend/ux-design-language.md", "reason": "排序控件与默认预览交互符合 ima 式 UX 语言"}
+{"file": ".trellis/spec/backend/kb-authorization-contracts.md", "reason": "list_contents 授权(VIEW_METADATA)与 KB 行为约束"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "list_contents 动态 ORDER BY/keyset 分页/索引的数据库规范"}
+{"file": ".trellis/spec/backend/python-foundation-contracts.md", "reason": "后端契约 ContentRow/ListingCursor 改动遵循 Python 基础约定"}

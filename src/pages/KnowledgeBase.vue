@@ -172,11 +172,74 @@
               data-testid="kb-upload"
               @click="activeDialog = 'upload'"
             />
+            <q-btn
+              flat
+              dense
+              round
+              icon="sym_o_swap_vert"
+              title="排序"
+              aria-label="排序"
+              data-testid="kb-sort"
+            >
+              <q-menu>
+                <q-list dense>
+                  <q-item-label header>
+                    分组
+                  </q-item-label>
+                  <q-item
+                    v-for="opt in groupOptions"
+                    :key="opt.value"
+                    v-close-popup
+                    clickable
+                    :data-testid="`kb-sort-group-${opt.value}`"
+                    @click="listSort.group = opt.value"
+                  >
+                    <q-item-section
+                      avatar
+                      min-w-0
+                    >
+                      <q-icon
+                        v-if="listSort.group === opt.value"
+                        name="sym_o_check"
+                        color="primary"
+                      />
+                    </q-item-section>
+                    <q-item-section>{{ opt.label }}</q-item-section>
+                  </q-item>
+                  <q-separator />
+                  <q-item-label header>
+                    排序
+                  </q-item-label>
+                  <q-item
+                    v-for="opt in sortOptions"
+                    :key="opt.value"
+                    v-close-popup
+                    clickable
+                    :data-testid="`kb-sort-by-${opt.value}`"
+                    @click="listSort.sort = opt.value"
+                  >
+                    <q-item-section
+                      avatar
+                      min-w-0
+                    >
+                      <q-icon
+                        v-if="listSort.sort === opt.value"
+                        name="sym_o_check"
+                        color="primary"
+                      />
+                    </q-item-section>
+                    <q-item-section>{{ opt.label }}</q-item-section>
+                  </q-item>
+                </q-list>
+              </q-menu>
+            </q-btn>
           </div>
           <knowledge-list
             :folder-id="folderId"
             :selected-id="documentId"
             :readonly="!canWrite"
+            :sort="listSort.sort"
+            :group="listSort.group"
           />
         </section>
         <div
@@ -298,6 +361,9 @@ import PaneEmptyState from 'src/components/PaneEmptyState.vue'
 import NewFolderDialog from 'src/components/NewFolderDialog.vue'
 import UploadDialog from 'src/components/UploadDialog.vue'
 import { useRequireLogin } from 'src/composables/require-login'
+import { useFolderContents } from 'src/composables/use-knowledge'
+import { useKbListSort } from 'src/composables/use-kb-list-sort'
+import type { KbListGroup, KbListSort } from 'src/api/knowledge-client'
 import { useKbStore } from 'src/stores/knowledge-base'
 import { apiErrorMessage } from 'src/utils/api-error'
 import { pageFhStyle } from 'src/utils/functions'
@@ -369,6 +435,21 @@ const previewCollapsed = ref(true)
 // One-shot: a freshly created note opens straight in the editor.
 const editDocId = ref<string>()
 
+// Folder-list sort preference (persisted); drives both the list and the
+// default-preview ordering so they never disagree.
+const listSort = useKbListSort()
+const groupOptions: { value: KbListGroup, label: string }[] = [
+  { value: 'folders_first', label: '文件夹优先' },
+  { value: 'files_first', label: '文件优先' },
+]
+const sortOptions: { value: KbListSort, label: string }[] = [
+  { value: 'manual', label: '默认排序' },
+  { value: 'name_asc', label: '名称 A→Z' },
+  { value: 'name_desc', label: '名称 Z→A' },
+  { value: 'created_desc', label: '最新上传' },
+  { value: 'created_asc', label: '最早上传' },
+]
+
 function joinWithLink() {
   $q.dialog({
     title: '加入知识库',
@@ -407,6 +488,31 @@ async function createKb() {
 
 watch(documentId, id => {
   if (id) previewCollapsed.value = false
+}, { immediate: true })
+
+// Default-preview: when the current folder has documents but the URL has no
+// ?doc=, select the first previewable row so the pane never opens empty.
+// Shares the list's query via the same queryKey (no extra request).
+const folderContents = useFolderContents(
+  () => folderId.value || null,
+  () => ({ sort: listSort.sort, group: listSort.group }),
+)
+// Closing the preview is sticky for the folder being viewed; switching folders
+// re-arms the auto-preview.
+const previewDismissed = ref(false)
+watch(previewCollapsed, collapsed => {
+  if (collapsed) previewDismissed.value = true
+})
+watch(folderId, () => {
+  previewDismissed.value = false
+})
+const firstPreviewableId = computed(() => {
+  const items = folderContents.data.value?.items ?? []
+  return items.find(item => item.kind !== 'folder')?.id ?? null
+})
+watch([documentId, firstPreviewableId, () => folderContents.isSuccess.value], ([docId, firstId, loaded]) => {
+  if (docId || !loaded || !firstId || previewDismissed.value) return
+  router.replace({ query: { ...route.query, doc: firstId } })
 }, { immediate: true })
 
 watch(() => kbStore.id, (id, previous) => {

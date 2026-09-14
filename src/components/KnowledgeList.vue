@@ -143,6 +143,7 @@ import { Notify, useQuasar } from 'quasar'
 import { computed, ref, watch } from 'vue'
 import StatusBadge from 'src/components/StatusBadge.vue'
 import { knowledgeClient } from 'src/api/knowledge-client'
+import type { KbListGroup, KbListSort } from 'src/api/knowledge-client'
 import { IMAApiError } from 'src/api/ima-client'
 import { useFolderContents, useKnowledgeMutations } from 'src/composables/use-knowledge'
 import { apiErrorMessage } from 'src/utils/api-error'
@@ -154,11 +155,13 @@ const props = withDefaults(defineProps<{
   folderId: string
   selectedId?: string | null
   readonly?: boolean
-}>(), { selectedId: null, readonly: false })
+  sort?: KbListSort
+  group?: KbListGroup
+}>(), { selectedId: null, readonly: false, sort: 'manual', group: 'folders_first' })
 
 const $q = useQuasar()
 const cursor = ref<string>()
-const query = useFolderContents(() => props.folderId)
+const query = useFolderContents(() => props.folderId, () => ({ sort: props.sort, group: props.group }))
 const extraItems = ref<ContentRow[]>([])
 const items = computed(() => [...(query.data.value?.items ?? []), ...extraItems.value])
 const nextCursor = ref<string>()
@@ -190,7 +193,7 @@ async function loadMore() {
   if (!next) return
   cursor.value = next
   try {
-    const page = await knowledgeClient.contents(props.folderId, { cursor: next })
+    const page = await knowledgeClient.contents(props.folderId, { cursor: next, sort: props.sort, group: props.group })
     extraItems.value.push(...page.items)
     nextCursor.value = page.nextCursor ?? undefined
   } catch (error) {

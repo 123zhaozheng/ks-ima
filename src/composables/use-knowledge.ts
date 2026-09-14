@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { knowledgeClient } from 'src/api/knowledge-client'
+import type { KbListGroup, KbListSort } from 'src/api/knowledge-client'
 import { computed } from 'vue'
 
 async function digestFile(file: File, signal?: AbortSignal) {
@@ -32,7 +33,7 @@ function putWithProgress(url: string, file: File, mimeType: string, checksum: st
 export const knowledgeKeys = {
   all: ['knowledge'] as const,
   kb: (kbId: string) => [...knowledgeKeys.all, 'kb', kbId] as const,
-  contents: (folderId: string, options: { kind?: string } = {}) => [...knowledgeKeys.all, 'contents', folderId, options] as const,
+  contents: (folderId: string, options: { kind?: string, sort?: KbListSort, group?: KbListGroup } = {}) => [...knowledgeKeys.all, 'contents', folderId, options] as const,
   document: (documentId: string) => [...knowledgeKeys.all, 'document', documentId] as const,
   versions: (documentId: string) => [...knowledgeKeys.all, 'versions', documentId] as const,
   ingestion: (documentId: string) => [...knowledgeKeys.all, 'ingestion', documentId] as const,
@@ -43,10 +44,10 @@ export function useKnowledgeCapabilities(kbId: () => string | null) {
   return useQuery({ queryKey: computed(() => [...knowledgeKeys.all, 'capabilities', kbId()]), queryFn: ({ signal }) => knowledgeClient.capabilities(kbId()!, signal), enabled: computed(() => Boolean(kbId())) })
 }
 
-export function useFolderContents(folderId: () => string | null, options: () => { kind?: 'folder' | 'file' | 'note' } = () => ({})) {
+export function useFolderContents(folderId: () => string | null, options: () => { kind?: 'folder' | 'file' | 'note', sort?: KbListSort, group?: KbListGroup } = () => ({})) {
   return useQuery({
-    queryKey: computed(() => knowledgeKeys.contents(folderId()!, { kind: options().kind })),
-    queryFn: ({ signal }) => knowledgeClient.contents(folderId()!, { kind: options().kind, signal }),
+    queryKey: computed(() => knowledgeKeys.contents(folderId()!, { kind: options().kind, sort: options().sort, group: options().group })),
+    queryFn: ({ signal }) => knowledgeClient.contents(folderId()!, { kind: options().kind, sort: options().sort, group: options().group, signal }),
     enabled: computed(() => Boolean(folderId())),
     // Uploads land as `fileState === 'pending'`; keep the list fresh until the
     // worker flips every file row to `ready`/`failed` so 处理中 becomes 已就绪.
